@@ -19,9 +19,6 @@ import { useAppKitNetwork } from "@reown/appkit/react";
 import { ADDRESS, ChainId } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 import AppPageHeader from "@components/AppPageHeader";
-import EarnChainRecommendation from "@components/PageSavings/EarnChainRecommendation";
-import useZCHFChainBalances from "../hooks/useZCHFChainBalances";
-import { WAGMI_CHAINS } from "../app.config";
 import AppNotice from "@components/AppNotice";
 
 export default function SavingsPage() {
@@ -31,7 +28,6 @@ export default function SavingsPage() {
 	const router = useRouter();
 	const AppKitNetwork = useAppKitNetwork();
 	const chainId = useChainId() as ChainId;
-	const chainBalances = useZCHFChainBalances();
 
 	const queryAddress: Address = normalizeAddress(String(router.query.address));
 	const account = isAddress(queryAddress) ? queryAddress : address ?? zeroAddress;
@@ -68,12 +64,6 @@ export default function SavingsPage() {
 		setTargetChainName(targetChain.name);
 	}, [chainId, queryChain, AppKitNetwork, targetChainName]);
 
-	const onSwitchRecommended = () => {
-		if (!chainBalances.recommended) return;
-		const target = WAGMI_CHAINS.find((c) => c.id === chainBalances.recommended?.chainId);
-		if (target) AppKitNetwork.switchNetwork(target);
-	};
-
 	return (
 		<>
 			<Head>
@@ -89,15 +79,6 @@ export default function SavingsPage() {
 					message={`Already more than ${Math.floor(totalBalance / 1000000)} million ZCHF saved across supported chains.`}
 				/>
 			</AppPageHeader>
-
-			{chainBalances.recommended ? (
-				<EarnChainRecommendation
-					chainName={chainBalances.recommended.chainName}
-					balance={chainBalances.recommended.balance}
-					onSwitch={onSwitchRecommended}
-					hasAnyBalance={chainBalances.hasAnyBalance}
-				/>
-			) : null}
 
 			<AppHeroSteps
 				steps={[
