@@ -1,7 +1,6 @@
-import AppButtonSecondary from "@components/AppButtonSecondary";
-import { formatCurrency, getChain } from "@utils";
+import AppButton from "@components/AppButton";
+import { formatCurrency } from "@utils";
 import { ChainId } from "@frankencoin/zchf";
-import { mainnet } from "viem/chains";
 import { useMemo, useState } from "react";
 
 export type ChainAction = {
@@ -14,11 +13,10 @@ export type ChainRow = {
 	chainId: ChainId;
 	name: string;
 	isCurrent: boolean;
-	status: "Current network" | "Savings detected" | "No ZCHF activity" | "Data unavailable";
+	status: "Current network" | "No ZCHF activity" | "Data unavailable";
 	walletZchf?: number | null;
 	savingsZchf?: number | null;
 	claimableInterestZchf?: number | null;
-	borrowedZchf?: number | null;
 	fpsHoldings?: number | null;
 	badges: string[];
 	actions: ChainAction[];
@@ -27,6 +25,8 @@ export type ChainRow = {
 interface Props {
 	rows: ChainRow[];
 	currentChainId: ChainId;
+	isConnected: boolean;
+	dataUnavailable?: boolean;
 	suggestion?: {
 		message: string;
 		action?: ChainAction;
@@ -34,128 +34,140 @@ interface Props {
 	onAction: (action: ChainAction) => void;
 }
 
-export default function DetectedAcrossChainsPanel({ rows, currentChainId, suggestion, onAction }: Props) {
+export default function DetectedAcrossChainsPanel({ rows, isConnected, dataUnavailable, suggestion, onAction }: Props) {
 	const [showAll, setShowAll] = useState(false);
 
-	const detectedRows = useMemo(
-		() => rows.filter((row) => row.badges.includes("Savings active") || row.badges.includes("Interest available")),
+	const activeRows = useMemo(
+		() =>
+			rows.filter((row) => {
+				if (row.isCurrent) return true;
+				return (
+					hasPositive(row.walletZchf) ||
+					hasPositive(row.savingsZchf) ||
+					hasPositive(row.claimableInterestZchf) ||
+					hasPositive(row.fpsHoldings)
+				);
+			}),
 		[rows]
 	);
-	const currentRow = useMemo(() => rows.find((row) => row.isCurrent), [rows]);
-	const ethereumRow = useMemo(() => rows.find((row) => row.chainId === mainnet.id), [rows]);
-	const collapsedIds = new Set<ChainId>([
-		...(currentRow ? [currentRow.chainId] : []),
-		...detectedRows.map((row) => row.chainId),
-		...(ethereumRow ? [ethereumRow.chainId] : []),
-	]);
-	const collapsedRows = rows.filter((row) => collapsedIds.has(row.chainId));
-	const otherChainNames = rows.filter((row) => !collapsedIds.has(row.chainId)).map((row) => row.name);
-	const visibleRows = showAll ? rows : collapsedRows;
+
+	const visibleRows = showAll ? rows : activeRows;
+	const quietChains = rows.filter((row) => !activeRows.some((activeRow) => activeRow.chainId === row.chainId)).map((row) => row.name);
 
 	return (
-		<section className="rounded-2xl border border-menu-separator bg-card-content-secondary p-4">
-			<div className="flex items-start justify-between gap-3 border-b border-menu-separator pb-3">
-				<div>
-					<h3 className="text-sm font-semibold uppercase tracking-wide text-text-subheader">Chain awareness</h3>
-					<p className="mt-1 text-sm text-text-secondary">Current network, detected savings, and FPS context.</p>
-				</div>
-				<button
-					type="button"
-					className="text-xs font-medium text-card-content-highlight hover:text-text-primary"
-					onClick={() => setShowAll((prev) => !prev)}
-				>
-					{showAll ? "Hide chains" : "Show all chains"}
-				</button>
-			</div>
+		<div className="space-y-3">
 			{suggestion ? (
-				<div className="mt-3 rounded-lg border border-card-content-highlight/40 bg-layout-footer px-3 py-2">
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<p className="text-sm text-text-primary">{suggestion.message}</p>
+				<section className="relative overflow-hidden rounded-xl border border-[#d7c28a]/70 bg-[#fff8ea] px-4 py-3 shadow-sm dark:border-[#8a7448]/60 dark:bg-[#1b2230]">
+					<div className="pointer-events-none absolute inset-0 opacity-[0.03] [background-image:radial-gradient(#0b1f3a_0.8px,transparent_0.8px)] [background-size:7px_7px]" />
+					<div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+						<div className="flex items-start gap-3">
+							<div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#c4a75f]/50 bg-[#f4ead4] text-[#9b7625] dark:border-[#8a7448] dark:bg-[#242b38] dark:text-[#e5c978]">
+								*
+							</div>
+							<div>
+								<div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9b7625] dark:text-[#e5c978]">
+									Suggested next action
+								</div>
+								<p className="mt-1 text-base font-medium text-text-primary">{suggestion.message}</p>
+							</div>
+						</div>
 						{suggestion.action ? (
-							<AppButtonSecondary size="small" width="w-auto" className="h-8 px-3 text-xs" onClick={() => onAction(suggestion.action!)}>
+							<AppButton
+								size="small"
+								width="w-auto"
+								className="h-10 px-4 text-sm"
+								onClick={() => onAction(suggestion.action!)}
+							>
 								{suggestion.action.label}
-							</AppButtonSecondary>
+							</AppButton>
 						) : null}
 					</div>
+				</section>
+			) : null}
+
+			<section className="rounded-xl border border-[#e0d4bd] bg-[#fffbf2] p-4 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<h3 className="text-sm font-semibold text-text-primary">Active locations</h3>
+					{rows.length > activeRows.length ? (
+						<button
+							type="button"
+							className="text-xs font-semibold text-[#8a6a22] underline-offset-4 hover:underline dark:text-[#e5c978]"
+							onClick={() => setShowAll((prev) => !prev)}
+						>
+							{showAll ? "Hide chains" : "View all chains"}
+						</button>
+					) : null}
 				</div>
-			) : null}
-			<div className="mt-3 space-y-2">
-				{visibleRows.map((row) => (
-					<div key={row.chainId} className="rounded-lg border border-menu-separator bg-card-body-primary px-3 py-2">
-						<div className="flex flex-wrap items-center justify-between gap-2">
-							<div>
-								<div className="text-sm font-medium text-text-primary">{row.name}</div>
-								<div className="text-xs text-text-secondary">{row.status}</div>
-							</div>
-							{row.isCurrent ? (
-								<span
-									className="inline-flex items-center rounded-full border border-menu-separator px-2 py-1 text-[10px] font-medium text-text-secondary"
-									title="Your wallet is currently connected to this network."
-								>
-									Current
-								</span>
-							) : null}
+
+				<div className="mt-3 flex flex-col gap-2 xl:flex-row xl:flex-wrap">
+					{visibleRows.map((row) => (
+						<div
+							key={row.chainId}
+							className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg border border-[#e5dac6] bg-card-content-secondary px-3 py-2 text-sm text-text-secondary dark:border-menu-separator"
+						>
+							<span className="font-semibold text-text-primary">{row.name}</span>
+							{row.isCurrent ? <LocationPill>Current</LocationPill> : null}
+							{dataUnavailable && !row.isCurrent ? <LocationFact label="Data unavailable" /> : <LocationFacts row={row} />}
+							{showAll && !hasAnyLocationData(row) && !dataUnavailable ? <LocationFact label="No ZCHF activity" /> : null}
 						</div>
-						<div className="mt-2 flex flex-wrap gap-1">
-							{row.badges.map((badge) => (
-								<span key={`${row.chainId}-${badge}`} className="rounded-full border border-card-content-highlight/40 px-2 py-1 text-[10px] text-text-secondary">
-									{badge}
-								</span>
-							))}
-						</div>
-						<div className="mt-2 grid grid-cols-1 gap-1 text-xs text-text-secondary sm:grid-cols-2">
-							<div>
-								Wallet ZCHF:{" "}
-								<span className="font-medium text-text-primary">
-									{row.walletZchf === null || row.walletZchf === undefined ? "—" : `${formatCurrency(row.walletZchf, 2, 2)} ZCHF`}
-								</span>
-							</div>
-							<div>
-								Savings balance:{" "}
-								<span className="font-medium text-text-primary">
-									{row.savingsZchf === null || row.savingsZchf === undefined ? "—" : `${formatCurrency(row.savingsZchf, 2, 2)} ZCHF`}
-								</span>
-							</div>
-							<div>
-								Claimable interest:{" "}
-								<span className="font-medium text-text-primary">
-									{row.claimableInterestZchf === null || row.claimableInterestZchf === undefined
-										? "—"
-										: `${formatCurrency(row.claimableInterestZchf, 2, 2)} ZCHF`}
-								</span>
-							</div>
-							<div>
-								Borrowed:{" "}
-								<span className="font-medium text-text-primary">
-									{row.borrowedZchf === null || row.borrowedZchf === undefined ? "—" : `${formatCurrency(row.borrowedZchf, 2, 2)} ZCHF`}
-								</span>
-							</div>
-							<div>
-								FPS:{" "}
-								<span className="font-medium text-text-primary">
-									{row.fpsHoldings === null || row.fpsHoldings === undefined ? "—" : formatCurrency(row.fpsHoldings, 2, 2)}
-								</span>
-							</div>
-						</div>
-						<div className="mt-2 flex flex-wrap gap-2">
-							{row.actions.map((action) => (
-								<AppButtonSecondary
-									key={`${row.chainId}-${action.label}`}
-									size="small"
-									width="w-auto"
-									className="h-8 px-3 text-xs"
-									onClick={() => onAction(action)}
-								>
-									{action.label}
-								</AppButtonSecondary>
-							))}
-						</div>
-					</div>
-				))}
-			</div>
-			{!showAll && otherChainNames.length > 0 ? (
-				<p className="mt-2 text-xs text-text-secondary">Other supported chains: {otherChainNames.join(", ")}</p>
-			) : null}
-		</section>
+					))}
+				</div>
+
+				{!showAll && quietChains.length > 0 ? (
+					<p className="mt-3 text-xs text-text-secondary">
+						{isConnected
+							? `Other supported chains: ${quietChains.join(", ")} - no ZCHF activity detected.`
+							: `Connect wallet to detect ZCHF activity on ${quietChains.join(", ")}.`}
+					</p>
+				) : null}
+			</section>
+		</div>
 	);
+}
+
+function LocationFacts({ row }: { row: ChainRow }) {
+	const facts = [
+		row.fpsHoldings !== null && row.fpsHoldings !== undefined ? `FPS ${formatCurrency(row.fpsHoldings, 2, 2)}` : null,
+		row.walletZchf !== null && row.walletZchf !== undefined ? `Wallet ZCHF ${formatCurrency(row.walletZchf, 2, 2)}` : null,
+		row.savingsZchf !== null && row.savingsZchf !== undefined && row.savingsZchf > 0
+			? `Savings ${formatCurrency(row.savingsZchf, 2, 2)} ZCHF`
+			: null,
+		row.claimableInterestZchf !== null && row.claimableInterestZchf !== undefined && row.claimableInterestZchf > 0
+			? `Interest ${formatCurrency(row.claimableInterestZchf, 2, 2)} ZCHF`
+			: null,
+	].filter(Boolean);
+
+	if (facts.length === 0) return <LocationFact label="No ZCHF activity" />;
+
+	return (
+		<>
+			{facts.map((fact) => (
+				<LocationFact key={fact} label={fact!} />
+			))}
+		</>
+	);
+}
+
+function LocationFact({ label }: { label: string }) {
+	return (
+		<span className="inline-flex items-center gap-2 text-xs text-text-secondary before:h-1 before:w-1 before:rounded-full before:bg-[#c4a75f]">
+			{label}
+		</span>
+	);
+}
+
+function LocationPill({ children }: { children: React.ReactNode }) {
+	return (
+		<span className="rounded-full border border-[#d7c28a] bg-[#f7ecd2] px-2 py-0.5 text-[11px] font-medium text-[#80601d] dark:border-[#8a7448] dark:bg-[#242b38] dark:text-[#e5c978]">
+			{children}
+		</span>
+	);
+}
+
+function hasPositive(value?: number | null) {
+	return typeof value === "number" && value > 0;
+}
+
+function hasAnyLocationData(row: ChainRow) {
+	return row.walletZchf !== null || row.savingsZchf !== null || row.claimableInterestZchf !== null || row.fpsHoldings !== null;
 }

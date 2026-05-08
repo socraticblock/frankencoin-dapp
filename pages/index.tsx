@@ -1,7 +1,7 @@
 import Head from "next/head";
 import AppActionCard from "@components/AppActionCard";
+import AppButton from "@components/AppButton";
 import AppButtonSecondary from "@components/AppButtonSecondary";
-import AppChainBadge from "@components/AppChainBadge";
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
 import DetectedAcrossChainsPanel, { ChainAction, ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
@@ -18,6 +18,20 @@ import { useServiceStatus } from "../hooks/useServiceStatus";
 import { SavingsBalance } from "@frankencoin/api";
 import { arbitrum, avalanche, base, gnosis, mainnet, optimism, polygon, sonic } from "viem/chains";
 import { useRouter } from "next/router";
+
+type CockpitCardTone = "brass" | "blue" | "violet" | "slate" | "green";
+
+type CockpitCardProps = {
+	title: string;
+	value: string;
+	subtitle?: string;
+	detail?: string;
+	help?: string;
+	action?: ChainAction;
+	secondary?: boolean;
+	tone: CockpitCardTone;
+	onAction: (action: ChainAction) => void;
+};
 
 export default function MainPage() {
 	const { address, isConnected } = useConnection();
@@ -93,10 +107,6 @@ export default function MainPage() {
 	}, [isConnected, address, openPositions]);
 
 	const savingsEntries = useMemo(() => getSavingsEntries(savingsBalance), [savingsBalance]);
-	const currentChainEntry = useMemo(
-		() => savingsEntries.find((entry) => entry.chainId === currentChainId),
-		[savingsEntries, currentChainId]
-	);
 
 	const walletZchf = useMemo(() => {
 		if (!isConnected || !address) return null;
@@ -105,18 +115,6 @@ export default function MainPage() {
 		if (typeof walletZchfRaw !== "bigint") return null;
 		return Number(formatUnits(walletZchfRaw, 18));
 	}, [isConnected, address, hasCurrentZchfAddress, walletZchfLoading, walletZchfRaw]);
-
-	const mySavings = useMemo(() => {
-		if (!isConnected || !address || !savingsLoaded) return null;
-		if (!currentChainEntry) return null;
-		return Number(formatUnits(currentChainEntry.balance, 18));
-	}, [isConnected, address, savingsLoaded, currentChainEntry]);
-
-	const claimableInterest = useMemo(() => {
-		if (!isConnected || !address || !savingsLoaded) return null;
-		if (!currentChainEntry) return null;
-		return Number(formatUnits(currentChainEntry.interest, 18));
-	}, [isConnected, address, savingsLoaded, currentChainEntry]);
 
 	const fpsHoldings = useMemo(() => {
 		if (!isConnected || !address) return null;
@@ -129,20 +127,38 @@ export default function MainPage() {
 	const apiStatus = serviceStatus.find((s) => s.id === "api")?.isLoaded ?? false;
 	const indexerStatus = serviceStatus.find((s) => s.id === "ponder")?.isLoaded ?? false;
 	const dataUnavailable = isConnected && address ? !savingsLoaded && (!apiStatus || !indexerStatus) : false;
+	const hasBorrowing = (myBorrowedZchf ?? 0) > 0;
+
 	const totalSavings = useMemo(() => {
-		if (!savingsLoaded) return null;
+		if (!isConnected || !address || !savingsLoaded) return null;
 		return savingsEntries.reduce((acc, entry) => acc + Number(formatUnits(entry.balance, 18)), 0);
-	}, [savingsLoaded, savingsEntries]);
+	}, [isConnected, address, savingsLoaded, savingsEntries]);
+
 	const totalClaimableInterest = useMemo(() => {
-		if (!savingsLoaded) return null;
+		if (!isConnected || !address || !savingsLoaded) return null;
 		return savingsEntries.reduce((acc, entry) => acc + Number(formatUnits(entry.interest, 18)), 0);
-	}, [savingsLoaded, savingsEntries]);
+	}, [isConnected, address, savingsLoaded, savingsEntries]);
+
+	const activeSavingsEntries = useMemo(
+		() => savingsEntries.filter((entry) => entry.balance > 0n || entry.interest > 0n),
+		[savingsEntries]
+	);
+
+	const primarySavingsEntry = useMemo(() => {
+		const withInterest = activeSavingsEntries.find((entry) => entry.interest > 0n);
+		return withInterest ?? activeSavingsEntries[0] ?? null;
+	}, [activeSavingsEntries]);
+
+	const savingsChainLabel = useMemo(() => {
+		if (!primarySavingsEntry) return undefined;
+		if (activeSavingsEntries.length > 1) return `across ${activeSavingsEntries.length} chains`;
+		return `on ${getChain(primarySavingsEntry.chainId).name}`;
+	}, [activeSavingsEntries, primarySavingsEntry]);
+
 	const knownZchfActivity = useMemo(() => {
 		if (walletZchf === null || totalSavings === null) return null;
 		return walletZchf + totalSavings;
 	}, [walletZchf, totalSavings]);
-	const estimatedYearlyInterest = null;
-	const hasBorrowing = (myBorrowedZchf ?? 0) > 0;
 
 	const runChainAction = async (action: ChainAction) => {
 		const targetChain = getChain(action.targetChainId);
@@ -156,23 +172,12 @@ export default function MainPage() {
 		await router.push(action.href);
 	};
 
-	const quickSwitchTargets = useMemo(() => {
-		const targets: ChainId[] = [];
-		if (fpsHoldings !== null && fpsHoldings > 0) targets.push(mainnet.id as ChainId);
-		if (savingsEntries.some((entry) => entry.chainId === base.id && (entry.balance > 0n || entry.interest > 0n))) targets.push(base.id as ChainId);
-		if (hasBorrowing || savingsEntries.some((entry) => entry.chainId === arbitrum.id && entry.balance > 0n)) targets.push(arbitrum.id as ChainId);
-		targets.push(polygon.id as ChainId, optimism.id as ChainId, gnosis.id as ChainId, avalanche.id as ChainId, sonic.id as ChainId);
-		return [...new Set(targets)].slice(0, 5);
-	}, [fpsHoldings, savingsEntries, hasBorrowing]);
-
 	const chainRows = useMemo<ChainRow[]>(() => {
 		const supportedChains = [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic];
 		const savingsByChain = new Map<ChainId, number>();
-		const checkedSavingsChains = new Set<ChainId>();
 		const interestByChain = new Map<ChainId, number>();
 
 		for (const entry of savingsEntries) {
-			checkedSavingsChains.add(entry.chainId);
 			savingsByChain.set(entry.chainId, Number(formatUnits(entry.balance, 18)));
 			interestByChain.set(entry.chainId, Number(formatUnits(entry.interest, 18)));
 		}
@@ -180,106 +185,171 @@ export default function MainPage() {
 		return supportedChains.map((chainItem) => {
 			const isCurrent = chainItem.id === currentChainId;
 			const chainKey = chainItem.id as ChainId;
-			const isSavingsChecked = savingsLoaded && isConnected && Boolean(address) && checkedSavingsChains.has(chainKey);
-			const knownSavings = isSavingsChecked ? savingsByChain.get(chainKey) ?? 0 : null;
-			const knownInterest = isSavingsChecked ? interestByChain.get(chainKey) ?? 0 : null;
+			const knownSavings = savingsLoaded && isConnected && address ? savingsByChain.get(chainKey) ?? 0 : null;
+			const knownInterest = savingsLoaded && isConnected && address ? interestByChain.get(chainKey) ?? 0 : null;
 			const knownWallet = isCurrent ? walletZchf : null;
-			const knownBorrowed = chainKey === mainnet.id ? myBorrowedZchf : null;
 			const knownFps = chainKey === mainnet.id ? fpsHoldings : null;
-			const hasWalletActivity = typeof knownWallet === "number" && knownWallet > 0;
-			const hasDetectedSavings = typeof knownSavings === "number" && knownSavings > 0;
-			const hasInterest = typeof knownInterest === "number" && knownInterest > 0;
-			const hasBorrowingActivity = typeof knownBorrowed === "number" && knownBorrowed > 0;
-			const hasFpsActivity = typeof knownFps === "number" && knownFps > 0;
-			const hasAnyActivity = hasWalletActivity || hasDetectedSavings || hasInterest || hasBorrowingActivity || hasFpsActivity;
 			const badges = [
 				...(isCurrent ? ["Current"] : []),
-				...(hasWalletActivity ? ["Wallet ZCHF"] : []),
-				...(hasDetectedSavings ? ["Savings active"] : []),
-				...(hasInterest ? ["Interest available"] : []),
-				...(hasBorrowingActivity ? ["Borrowing active"] : []),
-				...(chainKey === mainnet.id ? ["FPS on Ethereum"] : []),
+				...(hasPositive(knownWallet) ? ["Wallet ZCHF"] : []),
+				...(hasPositive(knownSavings) ? ["Savings"] : []),
+				...(hasPositive(knownInterest) ? ["Interest"] : []),
+				...(hasPositive(knownFps) ? ["FPS"] : []),
 			];
-			const actions: ChainAction[] = [];
-			if (chainKey === mainnet.id) {
-				actions.push({
-					label: isCurrent ? "Open Invest" : `Switch to ${chainItem.name} and open Invest`,
-					targetChainId: chainKey,
-					href: "/equity",
-				});
-			}
-			if (hasDetectedSavings || hasInterest || chainKey === currentChainId) {
-				actions.push({
-					label: isCurrent ? "Open Earn" : `Switch to ${chainItem.name} and open Earn`,
-					targetChainId: chainKey,
-					href: "/savings",
-				});
-			}
-			if (hasBorrowingActivity) {
-				actions.push({
-					label: isCurrent ? "Open Portfolio" : `Switch to ${chainItem.name} and open Portfolio`,
-					targetChainId: chainKey,
-					href: "/mypositions",
-				});
-			}
 
 			return {
 				chainId: chainKey,
 				name: chainItem.name,
 				isCurrent,
-				status: dataUnavailable
-					? "Data unavailable"
-					: isCurrent
-						? "Current network"
-						: hasDetectedSavings
-							? "Savings detected"
-							: hasAnyActivity
-								? "Current network"
-								: "No ZCHF activity",
+				status: dataUnavailable ? "Data unavailable" : isCurrent ? "Current network" : "No ZCHF activity",
 				walletZchf: knownWallet,
 				savingsZchf: knownSavings,
 				claimableInterestZchf: knownInterest,
-				borrowedZchf: knownBorrowed,
 				fpsHoldings: knownFps,
 				badges,
-				actions,
+				actions: [],
 			};
 		});
-	}, [savingsEntries, savingsLoaded, isConnected, address, currentChainId, walletZchf, myBorrowedZchf, fpsHoldings, dataUnavailable]);
+	}, [savingsEntries, savingsLoaded, isConnected, address, currentChainId, walletZchf, fpsHoldings, dataUnavailable]);
+
+	const relevantChainChips = useMemo(() => {
+		const targets = new Set<ChainId>([currentChainId as ChainId]);
+		if ((fpsHoldings ?? 0) > 0 || currentChainId !== mainnet.id) targets.add(mainnet.id as ChainId);
+		if (activeSavingsEntries.some((entry) => entry.chainId === base.id)) targets.add(base.id as ChainId);
+		if (activeSavingsEntries.some((entry) => entry.chainId === arbitrum.id)) targets.add(arbitrum.id as ChainId);
+		return [...targets];
+	}, [activeSavingsEntries, currentChainId, fpsHoldings]);
 
 	const suggestion = useMemo(() => {
-		const baseRow = chainRows.find((row) => row.chainId === base.id);
-		const ethRow = chainRows.find((row) => row.chainId === mainnet.id);
-		if ((baseRow?.claimableInterestZchf ?? 0) > 0) {
+		const interestEntry = activeSavingsEntries.find((entry) => entry.interest > 0n);
+		if (interestEntry) {
+			const target = interestEntry.chainId;
+			const targetName = getChain(target).name;
 			return {
-				message: "Claimable interest is available on Base.",
+				message: `Claimable interest is available on ${targetName}.`,
 				action: {
-					label: chain.id === base.id ? "Open Earn" : "Switch to Base and open Earn",
-					targetChainId: base.id as ChainId,
+					label: chain.id === target ? "Open Earn" : `Switch to ${targetName} and open Earn`,
+					targetChainId: target,
 					href: "/savings",
 				},
 			};
 		}
-		if (chain.id === mainnet.id && (baseRow?.savingsZchf ?? 0) > 0) {
+
+		const savingsElsewhere = activeSavingsEntries.find((entry) => entry.chainId !== chain.id && entry.balance > 0n);
+		if (savingsElsewhere) {
+			const targetName = getChain(savingsElsewhere.chainId).name;
 			return {
-				message: "Savings were detected on Base while your wallet is connected to Ethereum.",
-				action: { label: "Switch to Base", targetChainId: base.id as ChainId, href: "/savings" },
+				message: `Savings were detected on ${targetName} while your wallet is connected to ${chain.name}.`,
+				action: { label: `Switch to ${targetName}`, targetChainId: savingsElsewhere.chainId, href: "/savings" },
 			};
 		}
-		if (chain.id !== mainnet.id && (ethRow?.fpsHoldings ?? 0) > 0) {
+
+		if ((fpsHoldings ?? 0) > 0) {
 			return {
 				message: "FPS holdings are managed on Ethereum.",
-				action: { label: "Switch to Ethereum and open Invest", targetChainId: mainnet.id as ChainId, href: "/equity" },
+				action: {
+					label: chain.id === mainnet.id ? "Open Invest" : "Switch to Ethereum and open Invest",
+					targetChainId: mainnet.id as ChainId,
+					href: "/equity",
+				},
 			};
 		}
+
 		if (hasBorrowing) {
 			return {
-				message: "Borrowing activity detected. Review your position health.",
+				message: "Borrowing activity detected. Review your position.",
 				action: { label: "Open Portfolio", targetChainId: chain.id as ChainId, href: "/mypositions" },
 			};
 		}
-		return undefined;
-	}, [chainRows, chain.id, hasBorrowing]);
+
+		return {
+			message: "Your Desk is ready. Choose an action below to get started.",
+		};
+	}, [activeSavingsEntries, chain.id, chain.name, fpsHoldings, hasBorrowing]);
+
+	const cards = useMemo<CockpitCardProps[]>(() => {
+		const savingsTargetChain = primarySavingsEntry?.chainId ?? (base.id as ChainId);
+		const savingsTargetName = getChain(savingsTargetChain).name;
+		const savingsActionLabel = currentChainId === savingsTargetChain ? "Open Earn" : `Switch to ${savingsTargetName} and open Earn`;
+
+		return [
+			{
+				title: "FPS",
+				value: formatAmount(fpsHoldings, "FPS"),
+				subtitle: "on Ethereum",
+				help: "FPS is managed on Ethereum mainnet.",
+				action: {
+					label: currentChainId === mainnet.id ? "Open Invest" : "Switch to Ethereum and open Invest",
+					targetChainId: mainnet.id as ChainId,
+					href: "/equity",
+				},
+				tone: "brass",
+				onAction: runChainAction,
+			},
+			{
+				title: "Savings",
+				value: formatAmount(totalSavings, "ZCHF"),
+				subtitle: savingsChainLabel,
+				detail: hasPositive(totalClaimableInterest)
+					? `${formatCurrency(totalClaimableInterest!, 2, 2)} ZCHF interest available`
+					: undefined,
+				action: {
+					label: savingsActionLabel,
+					targetChainId: savingsTargetChain,
+					href: "/savings",
+				},
+				tone: "blue",
+				onAction: runChainAction,
+			},
+			{
+				title: "Borrowing",
+				value: hasBorrowing
+					? `${formatCurrency(myBorrowedZchf!, 2, 2)} ZCHF borrowed`
+					: myBorrowedZchf === null
+					? "\u2014"
+					: "No active borrowing",
+				action: {
+					label: hasBorrowing ? "Open Portfolio" : "View Portfolio",
+					targetChainId: currentChainId as ChainId,
+					href: "/mypositions",
+				},
+				tone: "violet",
+				onAction: runChainAction,
+			},
+			{
+				title: "Wallet ZCHF",
+				value: formatAmount(walletZchf, "ZCHF"),
+				subtitle: `on ${chain.name}`,
+				action: {
+					label: "Open Transfer",
+					targetChainId: currentChainId as ChainId,
+					href: "/transfer",
+				},
+				secondary: true,
+				tone: "slate",
+				onAction: runChainAction,
+			},
+			{
+				title: "Known ZCHF Activity",
+				value: formatAmount(knownZchfActivity, "ZCHF"),
+				subtitle: "Loaded wallet + savings activity across active chains.",
+				tone: "green",
+				onAction: runChainAction,
+			},
+		];
+	}, [
+		chain.name,
+		currentChainId,
+		fpsHoldings,
+		hasBorrowing,
+		knownZchfActivity,
+		myBorrowedZchf,
+		primarySavingsEntry?.chainId,
+		savingsChainLabel,
+		totalClaimableInterest,
+		totalSavings,
+		walletZchf,
+	]);
 
 	return (
 		<>
@@ -287,88 +357,85 @@ export default function MainPage() {
 				<title>ZCHF Desk</title>
 			</Head>
 
-			<AppPageHeader
-				eyebrow="DESK"
-				title="ZCHF Desk"
-				description="A clear desk for borrowing, earning, and managing ZCHF."
-			>
+			<AppPageHeader eyebrow="DESK" title="ZCHF Desk" description="A clear desk for borrowing, earning, and managing ZCHF.">
 				<AppNotice
 					variant="neutral"
 					message="ZCHF is Frankencoin's Swiss-franc stablecoin. Use this desk to get ZCHF, earn protocol interest, borrow against collateral, invest in FPS, and manage your account."
 				/>
 			</AppPageHeader>
 
-			<section className="rounded-2xl border border-menu-separator bg-card-body-primary p-6">
-				<div className="mb-4 rounded-xl border border-menu-separator bg-card-content-secondary px-4 py-3">
-					<div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-						{isConnected && address ? (
-							<>
-								<span>Wallet {shortenAddress(address)}</span>
-								<span>·</span>
-								<span>Current network {chain.name}</span>
-								<span>·</span>
-								<span>Protocol data {protocolLive ? "Live" : "Delayed"}</span>
-							</>
-						) : (
-							<span>Connect your wallet to load your cross-chain cockpit.</span>
-						)}
+			<section className="relative overflow-hidden rounded-2xl border border-[#dfd2bb] bg-[#fffaf0] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
+				<div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:radial-gradient(#0b1f3a_0.7px,transparent_0.7px)] [background-size:6px_6px] dark:opacity-[0.04]" />
+				<div className="relative space-y-5">
+					<div className="rounded-xl border border-[#e0d4bd] bg-[#fffdf8]/90 px-4 py-3 dark:border-menu-separator dark:bg-card-content-secondary">
+						<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+							<div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+								{isConnected && address ? (
+									<>
+										<StatusItem label="Wallet" value={shortenAddress(address)} />
+										<StatusDivider />
+										<StatusItem label="Current network" value={chain.name} />
+										<StatusDivider />
+										<StatusItem
+											label="Protocol data"
+											value={protocolLive ? "Live" : "Delayed"}
+											success={protocolLive}
+										/>
+									</>
+								) : (
+									<span className="font-medium text-text-primary">Wallet not connected</span>
+								)}
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								{relevantChainChips.map((target) => (
+									<ChainChip
+										key={`chain-chip-${target}`}
+										label={getChain(target).name}
+										active={target === currentChainId}
+										onClick={() => {
+											if (target !== currentChainId) appKitNetwork.switchNetwork(getChain(target));
+										}}
+									/>
+								))}
+								{!isConnected ? (
+									<div className="min-w-[170px]">
+										<WalletConnect />
+									</div>
+								) : null}
+							</div>
+						</div>
 					</div>
-					{isConnected && quickSwitchTargets.length > 0 ? (
-						<div className="mt-2 flex flex-wrap gap-2">
-							{quickSwitchTargets.map((target) => (
-								<AppButtonSecondary
-									key={`quick-${target}`}
-									size="small"
-									width="w-auto"
-									className="h-8 px-3 text-xs"
-									disabled={chain.id === target}
-									onClick={() => appKitNetwork.switchNetwork(getChain(target))}
-								>
-									{chain.id === target ? `${getChain(target).name} current` : `Switch to ${getChain(target).name}`}
-								</AppButtonSecondary>
+
+					<div>
+						<div className="flex flex-wrap items-end justify-between gap-2">
+							<h2 className="text-xl font-semibold text-text-primary">Desk Overview</h2>
+							<p className="text-sm text-text-secondary">
+								A concise cockpit of wallet, savings, FPS, and borrowing activity.
+							</p>
+						</div>
+						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+							{cards.map((card) => (
+								<CockpitCard key={card.title} {...card} />
 							))}
 						</div>
-					) : null}
-				</div>
-				{!isConnected ? (
-					<div className="mb-4 max-w-xs">
-						<WalletConnect />
 					</div>
-				) : null}
-				<div>
-					<h2 className="text-sm font-semibold tracking-wide text-text-subheader uppercase">Desk overview</h2>
-					<div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-						<MetricCard label="Wallet ZCHF" value={walletZchf} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" tooltip="Savings can exist on supported chains." />
-						<MetricCard label="Total Savings" value={totalSavings} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" tooltip="Savings can exist on supported chains." />
-						<MetricCard label="Claimable Interest" value={totalClaimableInterest} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" />
-						<MetricCard label="Borrowed ZCHF" value={myBorrowedZchf} unit="ZCHF" />
-						<MetricCard
-							label="FPS Holdings"
-							value={fpsHoldings}
-							unit="FPS"
-							ctaLabel="Open Invest"
-							ctaHref="/equity"
-							tooltip="FPS is managed on Ethereum mainnet."
-						/>
-						<MetricCard label="Current Network" value={chain.name} />
-						<MetricCard label="Known ZCHF activity" value={knownZchfActivity} unit="ZCHF" />
-						<MetricCard label="Estimated yearly interest" value={estimatedYearlyInterest} unit="ZCHF" />
-						<MetricCard label="Position health" value={"TODO"} />
-					</div>
-					<div className="mt-4">
-						<DetectedAcrossChainsPanel
-							rows={chainRows}
-							currentChainId={currentChainId as ChainId}
-							suggestion={suggestion}
-							onAction={runChainAction}
-						/>
-					</div>
+
+					<DetectedAcrossChainsPanel
+						rows={chainRows}
+						currentChainId={currentChainId as ChainId}
+						isConnected={Boolean(isConnected && address)}
+						dataUnavailable={dataUnavailable}
+						suggestion={suggestion}
+						onAction={runChainAction}
+					/>
 				</div>
 			</section>
 
 			<section className="rounded-2xl border border-menu-separator bg-card-body-primary p-6">
 				<h2 className="text-xl font-semibold text-text-primary">What do you want to do?</h2>
-				<p className="mt-1 text-sm text-text-secondary">Choose your path. Each action is designed to be clear before wallet confirmation.</p>
+				<p className="mt-1 text-sm text-text-secondary">
+					Choose your path. Each action is designed to be clear before wallet confirmation.
+				</p>
 				<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 					{intentCards.map((card) => (
 						<AppActionCard key={card.title} title={card.title} description={card.description}>
@@ -393,23 +460,45 @@ export default function MainPage() {
 
 				<AppActionCard title="Protocol status" description="Calm service visibility">
 					<ul className="space-y-2 text-sm text-text-secondary">
-						<li>Current network: <span className="text-text-primary font-medium">{chain.name}</span></li>
-						<li>Savings API: <span className={`font-medium ${apiStatus ? "text-text-success" : "text-text-warning"}`}>{apiStatus ? "Live" : "Delayed"}</span></li>
-						<li>Indexer: <span className={`font-medium ${indexerStatus ? "text-text-success" : "text-text-warning"}`}>{indexerStatus ? "Live" : "Delayed"}</span></li>
-						<li>Wallet: <span className={`font-medium ${isConnected ? "text-text-success" : "text-text-warning"}`}>{isConnected ? "Connected" : "Disconnected"}</span></li>
+						<li>
+							Current network: <span className="font-medium text-text-primary">{chain.name}</span>
+						</li>
+						<li>
+							Savings API:{" "}
+							<span className={`font-medium ${apiStatus ? "text-text-success" : "text-text-warning"}`}>
+								{apiStatus ? "Live" : "Delayed"}
+							</span>
+						</li>
+						<li>
+							Indexer:{" "}
+							<span className={`font-medium ${indexerStatus ? "text-text-success" : "text-text-warning"}`}>
+								{indexerStatus ? "Live" : "Delayed"}
+							</span>
+						</li>
+						<li>
+							Wallet:{" "}
+							<span className={`font-medium ${isConnected ? "text-text-success" : "text-text-warning"}`}>
+								{isConnected ? "Connected" : "Disconnected"}
+							</span>
+						</li>
 					</ul>
 				</AppActionCard>
 
 				<AppActionCard title="Before you sign" description="Trust and clarity first">
 					<p className="text-sm text-text-secondary">
-						ZCHF Desk explains important actions before your wallet opens, including amount, network, destination, and expected result.
+						ZCHF Desk explains important actions before your wallet opens, including amount, network, destination, and expected
+						result.
 					</p>
 					<div className="rounded-xl border border-menu-separator bg-card-content-primary p-3 text-sm">
 						<div className="grid grid-cols-2 gap-2 text-text-secondary">
-							<span>Action</span><span className="text-right text-text-primary">Deposit ZCHF</span>
-							<span>Amount</span><span className="text-right text-text-primary">500 ZCHF</span>
-							<span>Network</span><span className="text-right text-text-primary">Base</span>
-							<span>After confirmation</span><span className="text-right text-text-primary">Savings balance increases</span>
+							<span>Action</span>
+							<span className="text-right text-text-primary">Deposit ZCHF</span>
+							<span>Amount</span>
+							<span className="text-right text-text-primary">500 ZCHF</span>
+							<span>Network</span>
+							<span className="text-right text-text-primary">Base</span>
+							<span>After confirmation</span>
+							<span className="text-right text-text-primary">Savings balance increases</span>
 						</div>
 					</div>
 				</AppActionCard>
@@ -418,38 +507,86 @@ export default function MainPage() {
 	);
 }
 
-function MetricCard({
-	label,
-	value,
-	unit,
-	ctaLabel,
-	ctaHref,
-	tooltip,
-}: {
-	label: string;
-	value: number | string | null;
-	unit?: string;
-	ctaLabel?: string;
-	ctaHref?: string;
-	tooltip?: string;
-}) {
-	const isKnown = value !== null && value !== undefined;
+function CockpitCard({ title, value, subtitle, detail, help, action, secondary, tone, onAction }: CockpitCardProps) {
+	const toneClass = {
+		brass: "border-[#d6bd7c] bg-[#fffdf8] text-[#9b7625]",
+		blue: "border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300",
+		violet: "border-violet-200 bg-violet-50/60 text-violet-700 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-300",
+		slate: "border-slate-200 bg-slate-50/70 text-slate-700 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-300",
+		green: "border-emerald-200 bg-emerald-50/50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300",
+	}[tone];
+
 	return (
-		<div className="rounded-xl border border-menu-separator bg-card-content-secondary px-4 py-3">
-			<div className="text-xs uppercase tracking-wide text-text-subheader" title={tooltip}>
-				{label}
+		<article className="flex min-h-[220px] flex-col rounded-xl border border-[#dfd2bb] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+			<div className={`flex h-10 w-10 items-center justify-center rounded-full border ${toneClass}`} title={help}>
+				{cardIcon(title)}
 			</div>
-			<div className="mt-2 text-xl font-semibold text-text-primary">{typeof value === "number" ? formatCurrency(value, 2, 2) : value ?? "—"}</div>
-			{isKnown && unit ? <div className="mt-1 text-xs text-text-secondary">{unit}</div> : null}
-			{!isKnown && ctaLabel && ctaHref ? (
-				<div className="mt-2">
-					<AppButtonSecondary to={ctaHref} size="small" width="w-auto" className="h-8 px-3">
-						{ctaLabel}
-					</AppButtonSecondary>
+			<div className="mt-3 text-base font-semibold text-text-primary">{title}</div>
+			<div className="mt-4 text-2xl font-semibold leading-tight text-text-primary">{value}</div>
+			{subtitle ? <div className="mt-2 text-sm text-text-secondary">{subtitle}</div> : null}
+			{detail ? <div className="mt-2 text-sm font-semibold text-text-success">{detail}</div> : null}
+			<div className="flex-1" />
+			{action ? (
+				<div className="mt-4">
+					{secondary ? (
+						<AppButtonSecondary size="small" width="w-full" className="h-10" onClick={() => onAction(action)}>
+							{action.label}
+						</AppButtonSecondary>
+					) : (
+						<AppButton size="small" width="w-full" className="h-10" onClick={() => onAction(action)}>
+							{action.label}
+						</AppButton>
+					)}
 				</div>
 			) : null}
-		</div>
+		</article>
 	);
+}
+
+function ChainChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+	return (
+		<button
+			type="button"
+			disabled={active}
+			onClick={onClick}
+			className={`inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium transition ${
+				active
+					? "border-[#c4a75f] bg-button-default text-white dark:bg-card-content-primary dark:text-text-primary"
+					: "border-[#e0d4bd] bg-card-content-secondary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+			}`}
+		>
+			{label}
+		</button>
+	);
+}
+
+function StatusItem({ label, value, success }: { label: string; value: string; success?: boolean }) {
+	return (
+		<span>
+			{label} <span className={`font-semibold ${success ? "text-text-success" : "text-text-primary"}`}>{value}</span>
+		</span>
+	);
+}
+
+function StatusDivider() {
+	return <span className="text-[#c4a75f]">.</span>;
+}
+
+function cardIcon(title: string) {
+	if (title === "FPS") return "/";
+	if (title === "Savings") return "$";
+	if (title === "Borrowing") return "#";
+	if (title === "Wallet ZCHF") return "[]";
+	return "+";
+}
+
+function formatAmount(value: number | null, unit: string) {
+	if (value === null || value === undefined) return "\u2014";
+	return `${formatCurrency(value, 2, 2)} ${unit}`;
+}
+
+function hasPositive(value?: number | null) {
+	return typeof value === "number" && value > 0;
 }
 
 function getSavingsEntries(source: unknown): { chainId: ChainId; balance: bigint; interest: bigint }[] {
