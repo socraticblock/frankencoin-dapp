@@ -32,7 +32,7 @@ export default function BorrowTable() {
 	const uniquePositions: PositionQueryV2[] = Object.values(uniqueByCollateral);
 
 	const VCHF_Address: Address = normalizeAddress("0x79d4f0232A66c4c91b89c76362016A1707CFBF4f");
-	const VCHF_Price: number = coingecko[VCHF_Address].price.chf || 0;
+	const VCHF_Price: number = coingecko?.[VCHF_Address]?.price?.chf || 0;
 	const VCHF_Available: bigint = vchfBridge.bridgeLimit - vchfBridge.otherBridgeBal;
 	const VCHF_Bridge: PositionQueryV2 = {
 		version: 2,

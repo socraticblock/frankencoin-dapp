@@ -31,26 +31,34 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 	const { helpers } = useDelegationHelpers(account.address);
 	const rate = useSelector((state: RootState) => state.savings.leadrateRate.rate[chainId]);
 	const rates = useSelector((state: RootState) => state.savings.leadrateRate.list[chainId]);
+	const mintRateState = rate?.[MintModule];
+	const saveRateState = rate?.[SaveModule];
+	const mintApprovedRate = mintRateState?.approvedRate ?? 0;
+	const saveApprovedRate = saveRateState?.approvedRate ?? 0;
+	const mintCreated = mintRateState?.created ?? Math.floor(Date.now() / 1000);
+	const saveCreated = saveRateState?.created ?? Math.floor(Date.now() / 1000);
+	const mintRatesList = rates?.[MintModule] ?? [];
+	const saveRatesList = rates?.[SaveModule] ?? [];
 
-	const [newRateMint, setNewRateMint] = useState<bigint>(BigInt(rate[MintModule].approvedRate));
+	const [newRateMint, setNewRateMint] = useState<bigint>(BigInt(mintApprovedRate));
 	const [isHandlingMint, setHandlingMint] = useState<boolean>(false);
 	const [isHiddenMint, setHiddenMint] = useState<boolean>(false);
 	const [isDisabledMint, setDisabledMint] = useState<boolean>(true);
 
-	const [newRateSave, setNewRateSave] = useState<bigint>(BigInt(rate[SaveModule].approvedRate));
+	const [newRateSave, setNewRateSave] = useState<bigint>(BigInt(saveApprovedRate));
 	const [isHandlingSave, setHandlingSave] = useState<boolean>(false);
 	const [isHiddenSave, setHiddenSave] = useState<boolean>(false);
 	const [isDisabledSave, setDisabledSave] = useState<boolean>(true);
 
 	useEffect(() => {
-		if (newRateMint != BigInt(rate[MintModule].approvedRate)) setDisabledMint(false);
+		if (newRateMint != BigInt(mintApprovedRate)) setDisabledMint(false);
 		else setDisabledMint(true);
-	}, [newRateMint, rate]);
+	}, [newRateMint, mintApprovedRate]);
 
 	useEffect(() => {
-		if (newRateSave != BigInt(rate[SaveModule].approvedRate)) setDisabledSave(false);
+		if (newRateSave != BigInt(saveApprovedRate)) setDisabledSave(false);
 		else setDisabledSave(true);
-	}, [newRateSave, rate]);
+	}, [newRateSave, saveApprovedRate]);
 
 	const latestDefaultEntryMint: LeadrateRateQuery = {
 		chainId: mainnet.id,
@@ -58,7 +66,7 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 		count: 9999999999,
 		blockheight: 9999999999,
 		module: MintModule,
-		approvedRate: rate[MintModule].approvedRate,
+		approvedRate: mintApprovedRate,
 		txHash: "0xlatestDefaultEntryMintHash",
 	};
 
@@ -68,12 +76,12 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 		count: 9999999999,
 		blockheight: 9999999999,
 		module: SaveModule,
-		approvedRate: rate[SaveModule].approvedRate,
+		approvedRate: saveApprovedRate,
 		txHash: "0xlatestDefaultEntrySaveHash",
 	};
 
-	const matchingRatesMint = [latestDefaultEntryMint, ...rates[MintModule]];
-	const matchingRatesSave = [latestDefaultEntrySave, ...rates[SaveModule]];
+	const matchingRatesMint = [latestDefaultEntryMint, ...mintRatesList];
+	const matchingRatesSave = [latestDefaultEntrySave, ...saveRatesList];
 
 	// Bug in AbstractLeadrate.sol line 40: uint40 overflow in updateRate().
 	// ticksAnchor += (timeNow - anchorTime) * currentRatePPM overflows uint40
@@ -81,9 +89,10 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 	// Each rate change resets the countdown. After the deadline, any updateRate() call will revert.
 	const UINT40_MAX = 2n ** 40n - 1n;
 	const calcOverflowTimestamp = (module: Address) => {
-		const ratePPM = rate[module].approvedRate;
+		const selectedRate = rate?.[module];
+		const ratePPM = selectedRate?.approvedRate ?? 0;
 		if (ratePPM <= 0) return null;
-		const anchor = rate[module].created;
+		const anchor = selectedRate?.created ?? Math.floor(Date.now() / 1000);
 		const maxElapsed = Number(UINT40_MAX / BigInt(ratePPM));
 		return anchor + maxElapsed;
 	};
@@ -118,7 +127,7 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 			const toastContent = [
 				{
 					title: `From: `,
-					value: `${formatCurrency(rate[MintModule].approvedRate / 10000)}%`,
+					value: `${formatCurrency(mintApprovedRate / 10000)}%`,
 				},
 				{
 					title: `Proposing to: `,
@@ -165,7 +174,7 @@ export default function GovernanceLeadrateCurrent({}: Props) {
 			const toastContent = [
 				{
 					title: `From: `,
-					value: `${formatCurrency(rate[SaveModule].approvedRate / 10000)}%`,
+					value: `${formatCurrency(saveApprovedRate / 10000)}%`,
 				},
 				{
 					title: `Proposing to: `,

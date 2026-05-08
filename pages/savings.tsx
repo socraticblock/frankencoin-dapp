@@ -18,6 +18,11 @@ import { formatCurrency, getChainByName, normalizeAddress } from "@utils";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import { ADDRESS, ChainId } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
+import AppPageHeader from "@components/AppPageHeader";
+import EarnChainRecommendation from "@components/PageSavings/EarnChainRecommendation";
+import useZCHFChainBalances from "../hooks/useZCHFChainBalances";
+import { WAGMI_CHAINS } from "../app.config";
+import AppNotice from "@components/AppNotice";
 
 export default function SavingsPage() {
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
@@ -26,6 +31,7 @@ export default function SavingsPage() {
 	const router = useRouter();
 	const AppKitNetwork = useAppKitNetwork();
 	const chainId = useChainId() as ChainId;
+	const chainBalances = useZCHFChainBalances();
 
 	const queryAddress: Address = normalizeAddress(String(router.query.address));
 	const account = isAddress(queryAddress) ? queryAddress : address ?? zeroAddress;
@@ -62,18 +68,36 @@ export default function SavingsPage() {
 		setTargetChainName(targetChain.name);
 	}, [chainId, queryChain, AppKitNetwork, targetChainName]);
 
+	const onSwitchRecommended = () => {
+		if (!chainBalances.recommended) return;
+		const target = WAGMI_CHAINS.find((c) => c.id === chainBalances.recommended?.chainId);
+		if (target) AppKitNetwork.switchNetwork(target);
+	};
+
 	return (
 		<>
 			<Head>
 				<title>Frankencoin - Earn</title>
 			</Head>
 
-			<AppTitle title={`Earn`}>
-				<div className={`text-text-secondary`}>
-					Earn interest on your Frankencoins - supported on all eight chains. Already more than {" "}
-					{Math.floor(totalBalance / 1000000)} million ZCHF saved.
-				</div>
-			</AppTitle>
+			<AppPageHeader
+				title="Earn with ZCHF"
+				description="Deposit ZCHF into the savings module to earn protocol interest. Withdraw or collect interest anytime on supported chains."
+			>
+				<AppNotice
+					variant="neutral"
+					message={`Already more than ${Math.floor(totalBalance / 1000000)} million ZCHF saved across supported chains.`}
+				/>
+			</AppPageHeader>
+
+			{chainBalances.recommended ? (
+				<EarnChainRecommendation
+					chainName={chainBalances.recommended.chainName}
+					balance={chainBalances.recommended.balance}
+					onSwitch={onSwitchRecommended}
+					hasAnyBalance={chainBalances.hasAnyBalance}
+				/>
+			) : null}
 
 			<AppHeroSteps
 				steps={[

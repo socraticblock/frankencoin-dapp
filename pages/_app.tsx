@@ -14,8 +14,11 @@ import { store } from "../redux/redux.store";
 import { MORPHOGRAPH_CLIENT, PONDER_CLIENT } from "../app.config";
 import BlockUpdater from "@components/BlockUpdater";
 import USGovSanctionList from "@components/USGovSanctionList";
+import useThemeMode from "../hooks/useThemeMode";
 
 export default function App({ Component, pageProps }: AppProps) {
+	useThemeMode();
+
 	return (
 		<ReduxProvider store={store}>
 			<Web3ModalProvider>

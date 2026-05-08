@@ -191,6 +191,7 @@ export const isDateUpcoming = (timestamp: number | bigint): boolean => {
 };
 
 export function normalizeAddress(addr: string): Address {
+	if (!addr || typeof addr !== "string") return "0x0000000000000000000000000000000000000000" as Address;
 	return addr.toLowerCase() as Address;
 }
 

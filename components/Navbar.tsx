@@ -5,12 +5,14 @@ import { CONFIG } from "../app.config";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { useConnection } from "wagmi";
+import ThemeToggle from "./ThemeToggle";
+import useThemeMode from "../hooks/useThemeMode";
 
 const MAIN_ITEMS = [
 	{ to: "/mint", name: "Borrow" },
 	{ to: "/savings", name: "Earn" },
 	{ to: "/equity", name: "Invest" },
-	{ to: "/mypositions", name: "My Positions" },
+	{ to: "/mypositions", name: "Portfolio" },
 ];
 
 const MORE_ITEMS = [
@@ -42,7 +44,7 @@ function MoreDropdown() {
 					isActive ? "text-menu-textactive bg-menu-active font-semibold" : "text-menu-text"
 				}`}
 			>
-				More
+				Advanced
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
@@ -84,6 +86,7 @@ export function NavItems({ items }: { items: typeof MAIN_ITEMS }) {
 export default function Navbar() {
 	const [isNavBarOpen, setIsNavBarOpen] = useState(false);
 	const { address } = useConnection();
+	const { theme, toggleTheme } = useThemeMode();
 
 	let mainItems = MAIN_ITEMS;
 	if (!address) {
@@ -123,7 +126,10 @@ export default function Navbar() {
 					</div>
 
 					{/* Right: desktop wallet / mobile hamburger */}
-					<div className="flex justify-end items-center">
+					<div className="flex justify-end items-center gap-2">
+						<div className="hidden md:flex">
+							<ThemeToggle theme={theme} onToggle={toggleTheme} />
+						</div>
 						<div className="hidden md:flex">
 							<WalletConnect />
 						</div>
@@ -160,7 +166,10 @@ export default function Navbar() {
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
 						</svg>
 					</button>
-					<menu className="grid grid-cols-1 gap-2 mt-12" onClick={() => setIsNavBarOpen(false)}>
+					<div className="mt-12 mb-3">
+						<ThemeToggle theme={theme} onToggle={toggleTheme} />
+					</div>
+					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}>
 						<NavItems items={allItems} />
 					</menu>
 				</div>

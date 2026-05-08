@@ -12,9 +12,17 @@ import AppHeroSteps from "@components/AppHeroSteps";
 import { ContractUrl } from "@utils";
 import { ADDRESS } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
+import AppNotice from "@components/AppNotice";
+import AppPageHeader from "@components/AppPageHeader";
+import AppButtonSecondary from "@components/AppButtonSecondary";
+import AppTransactionPreview from "@components/AppTransactionPreview";
+import { useAppKitNetwork } from "@reown/appkit/react";
+import { useChainId } from "wagmi";
 
 export default function Equity() {
 	const { address } = useConnection();
+	const chainId = useChainId();
+	const appKitNetwork = useAppKitNetwork();
 	const fpsHistory = useFPSBalanceHistory(address || zeroAddress);
 	const fpsEarnings = useFPSEarningsHistory(address || zeroAddress);
 
@@ -24,13 +32,23 @@ export default function Equity() {
 				<title>Frankencoin - Invest</title>
 			</Head>
 
-			<AppTitle title={`Invest`}>
-				<div className="text-text-secondary">
-					Invest in or redeem your{" "}
-					<AppLink className="" label="Frankencoin Pool Shares" href={ContractUrl(ADDRESS[mainnet.id].equity)} external={true} />{" "}
-					(FPS) — the governance token of the Frankencoin Ecosystem.
-				</div>
-			</AppTitle>
+			<AppPageHeader
+				title="Invest in Frankencoin Pool Shares"
+				description="FPS represents participation in the Frankencoin reserve pool and governance. FPS transactions happen on Ethereum mainnet."
+			>
+				<AppNotice
+					variant="warning"
+					title="FPS is available on Ethereum mainnet only."
+					message="To buy or redeem Frankencoin Pool Shares, switch your wallet to Ethereum."
+				>
+					<div className="mt-3 max-w-xs">
+						<AppButtonSecondary onClick={() => appKitNetwork.switchNetwork(mainnet)}>Switch to Ethereum</AppButtonSecondary>
+					</div>
+				</AppNotice>
+				{chainId !== mainnet.id ? (
+					<p className="text-sm text-text-secondary">Current network is not Ethereum mainnet. FPS interactions require Ethereum.</p>
+				) : null}
+			</AppPageHeader>
 
 			<AppHeroSteps
 				steps={[
@@ -58,6 +76,13 @@ export default function Equity() {
 					<EquityFPSDetailsCard />
 				</section>
 			</div>
+			<AppTransactionPreview
+				action="Buy or redeem FPS"
+				network="Ethereum mainnet"
+				source="Your wallet"
+				destination="Frankencoin Pool Shares module"
+				outcome="Your FPS balance and attributable income view update after confirmation."
+			/>
 
 			<AppTitle title="Attributable Income">
 				<div className="text-text-secondary">

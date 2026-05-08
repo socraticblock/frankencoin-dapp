@@ -140,7 +140,12 @@ Avenir-Roman-12.ttf */
 }
 
 body {
-	@apply antialiased;
+	@apply antialiased bg-layout-primary text-text-primary;
+}
+
+.dark body {
+	background: #0d1117;
+	color: #f7f2ea;
 }
 
 .text-link,

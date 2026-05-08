@@ -7,6 +7,7 @@ import { fetchPositionsList } from "../../redux/slices/positions.slice";
 import AppTitle from "@components/AppTitle";
 import AppHeroSteps from "@components/AppHeroSteps";
 import AppButtonSecondary from "@components/AppButtonSecondary";
+import AppPageHeader from "@components/AppPageHeader";
 
 export default function Borrow() {
 	useEffect(() => {
@@ -19,28 +20,27 @@ export default function Borrow() {
 				<title>Frankencoin - Borrow</title>
 			</Head>
 
-			<AppTitle title="Borrow Frankencoins">
-				<div className="text-text-secondary">
-					Deposit a collateral and mint new Frankencoins against it. The collateral stays locked until you return the minted coins.
-				</div>
-			</AppTitle>
+			<AppPageHeader
+				title="Borrow ZCHF"
+				description="Use approved collateral to mint ZCHF. Review loan-to-value, interest, maturity, and risk before opening a position."
+			/>
 
 			<AppHeroSteps
 				steps={[
 					{
 						icon: 1,
-						title: "Choose a collateral",
-						description: "Choose a crypto asset to use as collateral.",
+						title: "Choose collateral",
+						description: "Select an approved asset to secure your position.",
 					},
 					{
 						icon: 2,
-						title: "Define terms",
-						description: "Adjust amount, maturity, and liquidation price to your liking.",
+						title: "Review terms",
+						description: "Check loan-to-value, interest, maturity, and liquidation conditions.",
 					},
 					{
 						icon: 3,
-						title: "Receive Frankencoins",
-						description: "Fresh Frankencoins are minted directly into your wallet.",
+						title: "Borrow ZCHF",
+						description: "Confirm the transaction in your wallet.",
 					},
 				]}
 			/>
@@ -50,7 +50,7 @@ export default function Borrow() {
 			</div>
 
 			<div className="flex items-center justify-center">
-				<Link href={"mint/create"}>
+				<Link href={"/mint/create"}>
 					<AppButtonSecondary>Propose New Position or Collateral</AppButtonSecondary>
 				</Link>
 			</div>

@@ -23,17 +23,17 @@ module.exports = {
 			},
 			colors: {
 				layout: {
-					primary: "#F7F7F7",
-					secondary: "#FFFFFF",
-					footer: "#272B38",
+					primary: "#F7F3EA",
+					secondary: "#FFFDF8",
+					footer: "#151C28",
 				},
 				menu: {
-					text: "#272B38",
-					textactive: "#272B38",
-					active: "#EEEEEE",
-					hover: "#E0E0E0",
-					back: "#F7F7F7",
-					separator: "#F7F7F7",
+					text: "#111827",
+					textactive: "#0B1F3A",
+					active: "#EFEAE0",
+					hover: "#F0ECE4",
+					back: "#FFFDF8",
+					separator: "#E4DED2",
 				},
 				card: {
 					input: {
@@ -60,13 +60,13 @@ module.exports = {
 					},
 				},
 				text: {
-					header: "#5D647B",
-					subheader: "#5D647B",
-					active: "#092F62",
-					primary: "#272B38",
-					secondary: "#5D647B",
-					warning: "#ef4444",
-					success: "#22c55e",
+					header: "#111827",
+					subheader: "#4B5563",
+					active: "#0B1F3A",
+					primary: "#101827",
+					secondary: "#4B5563",
+					warning: "#B42318",
+					success: "#0E7A4F",
 				},
 				table: {
 					header: {

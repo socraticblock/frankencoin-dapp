@@ -30,8 +30,10 @@ export default function PositionDetail() {
 	const challengesPositions = useSelector((state: RootState) => state.challenges.positions);
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
 
-	const position = positions.find((p) => normalizeAddress(p.position) === normalizeAddress(address));
-	const challengesActive = (challengesPositions.map[normalizeAddress(address)] || []).filter((c) => c.status === "Active");
+	const isReady = router.isReady && typeof address === "string" && address.length > 0;
+	const normalizedAddress = isReady ? normalizeAddress(address) : zeroAddress;
+	const position = positions.find((p) => normalizeAddress(p.position) === normalizedAddress);
+	const challengesActive = (challengesPositions.map[normalizedAddress] || []).filter((c) => c.status === "Active");
 
 	const positionExplorerUrl = useContractUrl(String(address));
 	const myPosLink = `/mypositions?address=${position?.owner || zeroAddress}`;
@@ -58,7 +60,7 @@ export default function PositionDetail() {
 		fetchAsync();
 	}, [position, chainId]);
 
-	if (!position) return null;
+	if (!isReady || !position) return null;
 
 	const isSubjectToCooldown = () => {
 		const now = BigInt(Math.floor(Date.now() / 1000));

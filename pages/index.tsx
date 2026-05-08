@@ -1,8 +1,12 @@
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter } from "next/router";
 
 export default function MainPage() {
 	const router = useRouter();
-	router.push("/mint");
+
+	useEffect(() => {
+		router.replace("/mint");
+	}, [router]);
 
 	return null;
 }

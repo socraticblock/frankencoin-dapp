@@ -1,21 +1,20 @@
 import { Hash } from "viem";
 import { ADDRESS, ChainId, SupportedChain, SupportedChains } from "@frankencoin/zchf";
 import { CONFIG, WAGMI_CHAIN, WAGMI_CHAINS } from "../app.config";
-import path from "path";
 import { toast } from "react-toastify";
 
 export const AppUrl = (url: string) => {
-	return path.join(CONFIG.app, url);
+	return new URL(url, CONFIG.app).toString();
 };
 
 export const ContractUrl = (address: string, chain: SupportedChain = SupportedChains["mainnet"]) => {
 	const explorerLink = chain?.blockExplorers?.default.url || "https://etherscan.io/";
-	return path.join(explorerLink, "address", address);
+	return new URL(`/address/${address}`, explorerLink).toString();
 };
 
 export const TxUrl = (hash: Hash, chain: SupportedChain = SupportedChains["mainnet"]) => {
 	const explorerLink = chain?.blockExplorers?.default.url || "https://etherscan.io/";
-	return path.join(explorerLink, "tx", hash);
+	return new URL(`/tx/${hash}`, explorerLink).toString();
 };
 
 export const MorphoMarketUrl = (id: string) => `https://app.morpho.org/ethereum/market/${id}`;
@@ -35,5 +34,17 @@ export const getChainByChainSelector = (selector: string | bigint) => {
 };
 
 export function showErrorToast({ module, message, error }: { module?: string; message: string; error: unknown }) {
-	toast.error(`${module ?? "API Error:"} ${message}\n${error}`, { position: "bottom-right" });
+	const lowerMessage = `${message} ${String(error ?? "")}`.toLowerCase();
+	let userMessage = "Something went wrong. No transaction was completed. Please try again.";
+
+	if (lowerMessage.includes("network") || lowerMessage.includes("rpc")) {
+		userMessage = "Network request failed. Your wallet or RPC provider did not respond. Please try again.";
+	} else if (lowerMessage.includes("axios") || lowerMessage.includes("status code")) {
+		userMessage = "Protocol data is temporarily unavailable. Your wallet and funds are not affected.";
+	} else if (lowerMessage.includes("rejected")) {
+		userMessage = "Transaction cancelled. No changes were made.";
+	}
+
+	const technical = process.env.NODE_ENV === "development" ? `\nDetails: ${String(error)}` : "";
+	toast.error(`${module ?? "Notice"}: ${userMessage}${technical}`, { position: "bottom-right" });
 }

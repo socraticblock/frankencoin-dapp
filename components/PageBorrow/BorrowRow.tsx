@@ -59,7 +59,7 @@ export default function BorrowRow({ headers, tab, position, vchfBridge, hideMyWa
 					onClick={() => navigate.push(isVCHF ? "/swap" : `/mint/${position.position}`)}
 					disabled={isPending}
 				>
-					{isVCHF ? "Swap" : "Borrow"}
+					{isVCHF ? "Swap" : "Review terms"}
 				</AppButton>
 			}
 		>

@@ -19,6 +19,8 @@ import { formatUnits } from "viem";
 
 export default function Governance() {
 	const stats = useFPSAverageStats();
+	const avgHoldingDuration = stats?.avgHoldingDuration ?? 0;
+	const fpsForVeto = stats?.fpsForVeto ?? 0n;
 
 	useEffect(() => {
 		store.dispatch(fetchLeadrate());
@@ -83,9 +85,9 @@ export default function Governance() {
 			<AppTitle title="Frankencoin Pool Share Holders">
 				<div className="text-text-secondary">
 					Voting power is proportional to both the number of FPS held as the holding duration. The average holding duration is{" "}
-					<span className="font-medium text-text-primary">{formatDuration(stats.avgHoldingDuration)}</span>. Under these
+					<span className="font-medium text-text-primary">{formatDuration(avgHoldingDuration)}</span>. Under these
 					conditions, an individual FPS holder with at least{" "}
-					<span className="font-medium text-text-primary">{formatCurrency(formatUnits(stats.fpsForVeto, 18))} FPS</span> held for
+					<span className="font-medium text-text-primary">{formatCurrency(formatUnits(fpsForVeto, 18))} FPS</span> held for
 					the average duration would reach the veto threshold of 2%. If you need voting power on one of the supported multichains,
 					sync your votes first.
 				</div>

@@ -20,6 +20,9 @@ import { useRouter } from "next/router";
 import AppLink from "@components/AppLink";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
+import EarnActionTabs from "./EarnActionTabs";
+import EarnOutcomePreview from "./EarnOutcomePreview";
+import AppChainBadge from "@components/AppChainBadge";
 
 export default function SavingsInteractionCard() {
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
@@ -45,6 +48,8 @@ export default function SavingsInteractionCard() {
 	const [onbehalfToggle, setOnbehalfToggle] = useState(false);
 	const [onbehalfAddress, setOnbehalfAddress] = useState("");
 	const [onbehalfError, setOnbehalfError] = useState("");
+	const [mode, setMode] = useState<"deposit" | "withdraw" | "interest">("deposit");
+	const [interestDestination, setInterestDestination] = useState<"wallet" | "savings">("wallet");
 
 	const frankencoinAddress =
 		chainId == 1 ? ADDRESS[chainId as ChainIdMain].frankencoin : ADDRESS[chainId as ChainIdSide].ccipBridgedFrankencoin;
@@ -52,7 +57,7 @@ export default function SavingsInteractionCard() {
 		chainId == 1 ? ADDRESS[chainId as ChainIdMain].savingsReferral : ADDRESS[chainId as ChainIdSide].ccipBridgedSavings
 	);
 
-	const state = status[chainId][savingsAdresse];
+	const chainStatus = status?.[chainId]?.[savingsAdresse];
 
 	const { data } = useBlockNumber({ watch: true });
 	const { address } = useConnection();
@@ -67,8 +72,6 @@ export default function SavingsInteractionCard() {
 	const fromSymbol = "ZCHF";
 	const change: bigint = amount - (userSavingsBalance + userSavingsInterest);
 	const direction: boolean = amount >= userSavingsBalance + userSavingsInterest;
-	const claimable: boolean = userSavingsInterest > 0n;
-
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -86,6 +89,7 @@ export default function SavingsInteractionCard() {
 
 	useEffect(() => {
 		if (!isAddress(account)) return;
+		if (!chainStatus) return;
 
 		const fetchAsync = async function () {
 			const _balance = await readContract(WAGMI_CONFIG, {
@@ -115,7 +119,8 @@ export default function SavingsInteractionCard() {
 			});
 			setCurrentTicks(_current);
 
-			const _locktime = _userTicks >= _current ? (_userTicks - _current) / BigInt(state.rate) : 0n;
+			const safeRate = BigInt(chainStatus.rate || 0);
+			const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
 			setUserSavingsLocktime(_locktime);
 
 			const _tickDiff = _current - _userTicks;
@@ -144,7 +149,7 @@ export default function SavingsInteractionCard() {
 		};
 
 		fetchAsync();
-	}, [data, account, isLoaded, frankencoinAddress, savingsAdresse, state, chainId]);
+	}, [data, account, isLoaded, frankencoinAddress, savingsAdresse, chainStatus, chainId]);
 
 	useEffect(() => {
 		setLoaded(false);
@@ -180,8 +185,17 @@ export default function SavingsInteractionCard() {
 
 	return (
 		<section className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-auto">
+			{!chainStatus ? (
+				<AppCard>
+					<div className="text-text-secondary">Savings data is loading for this chain. Please wait a moment.</div>
+				</AppCard>
+			) : null}
 			<AppCard>
-				<div className="text-lg font-bold text-center">{!onbehalfToggle ? "Adjustment" : "Save on behalf"}</div>
+				<div className="flex items-center justify-between gap-3">
+					<div className="text-lg font-bold">{!onbehalfToggle ? "Earn with ZCHF" : "Save for another address"}</div>
+					<AppChainBadge label={`Saving on ${chain.name}`} />
+				</div>
+				<EarnActionTabs mode={mode} onChange={setMode} />
 
 				<div className="mt-8">
 					<TokenInputChain
@@ -214,6 +228,30 @@ export default function SavingsInteractionCard() {
 						/>
 					) : null}
 					<AppToggle disabled={false} label="Custom target address" enabled={onbehalfToggle} onChange={setOnbehalfToggle} />
+					{mode === "interest" && !onbehalfToggle ? (
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+							<button
+								type="button"
+								onClick={() => setInterestDestination("wallet")}
+								className={`rounded-lg border px-3 py-2 text-sm ${
+									interestDestination === "wallet" ? "bg-menu-active border-menu-separator text-text-active" : "border-menu-separator"
+								}`}
+							>
+								Take interest to wallet
+							</button>
+							<button
+								type="button"
+								onClick={() => setInterestDestination("savings")}
+								className={`rounded-lg border px-3 py-2 text-sm ${
+									interestDestination === "savings"
+										? "bg-menu-active border-menu-separator text-text-active"
+										: "border-menu-separator"
+								}`}
+							>
+								Re-deposit interest (coming soon)
+							</button>
+						</div>
+					) : null}
 				</div>
 
 				<div className="mx-auto my-4 w-full flex-col flex gap-4">
@@ -224,16 +262,16 @@ export default function SavingsInteractionCard() {
 							amount={amount}
 							onBehalf={onbehalfAddress as Address}
 						/>
-					) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
+					) : mode === "interest" ? (
 						<SavingsActionInterest
-							disabled={!!error}
+							disabled={!!error || interestDestination === "savings"}
 							savingsModule={savingsAdresse}
 							balance={userSavingsBalance}
 							interest={userSavingsInterest}
 							newReferrer={newReferrer}
 							newReferralFeePPM={newReferralFeePPM}
 						/>
-					) : amount > userSavingsBalance ? (
+					) : mode === "deposit" ? (
 						<SavingsActionSave
 							disabled={!!error}
 							savingsModule={savingsAdresse}
@@ -253,6 +291,12 @@ export default function SavingsInteractionCard() {
 						/>
 					)}
 				</div>
+				<EarnOutcomePreview
+					mode={mode}
+					amount={(Number(amount) / 1e18).toFixed(2)}
+					chainName={chain.name}
+					destination={interestDestination}
+				/>
 
 				{newReferrer ? (
 					<div className="flex mt-8">

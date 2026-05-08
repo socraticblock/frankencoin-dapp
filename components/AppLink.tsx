@@ -12,12 +12,20 @@ interface Props {
 
 export default function AppLink({ label, href = "/", external = false, icon = false, className }: Props) {
 	const umamiEvent = (external ? "external_link_" : "link_") + label.toLowerCase().replace(/\s+/g, "_");
+	const rawHref = typeof href === "string" ? href.trim() : "";
+	const isAbsolute = /^https?:\/\//i.test(rawHref);
+	const safeHref = external ? (isAbsolute ? rawHref : "https://frankencoin.com") : rawHref.startsWith("/") ? rawHref : "/";
+
+	if (!safeHref) {
+		return <span className={className}>{label}</span>;
+	}
+
 	return (
 		<Link
 			className={`${
 				className ?? "flex items-center justify-end pt-2"
 			} text-card-input-max hover:text-card-input-hover cursor-pointer`}
-			href={href}
+			href={safeHref}
 			target={external ? "_blank" : undefined}
 			rel={external ? "noreferrer" : undefined}
 			data-umami-event={umamiEvent}

@@ -8,7 +8,6 @@ import { readContract } from "wagmi/actions";
 import { WAGMI_CONFIG } from "../../../../app.config";
 import { RootState } from "../../../../redux/redux.store";
 import { useSelector } from "react-redux";
-import { useRouter as useNavigation } from "next/navigation";
 import { ADDRESS, MintingHubV1ABI, MintingHubV2ABI } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 import AppCard from "@components/AppCard";
@@ -23,11 +22,12 @@ export default function ChallengePlaceBid() {
 
 	const { data } = useBlockNumber({ watch: true });
 	const router = useRouter();
-	const navigate = useNavigation();
 
 	const chainId = mainnet.id;
-	const addressQuery: Address = normalizeAddress(router.query.address as string);
-	const indexQuery: string = router.query.index as string;
+	const isReady = router.isReady;
+	const addressParam = typeof router.query.address === "string" ? router.query.address : "";
+	const indexQuery: string = typeof router.query.index === "string" ? router.query.index : "";
+	const addressQuery: Address = isReady && addressParam ? normalizeAddress(addressParam) : zeroAddress;
 
 	const challenges = useSelector((state: RootState) => state.challenges.list.list);
 	const positions = useSelector((state: RootState) => state.positions.list.list);
@@ -54,8 +54,8 @@ export default function ChallengePlaceBid() {
 	}, [data, position, challenge, chainId]);
 
 	useEffect(() => {
-		if (isNavigating) navigate.push("/mypositions");
-	}, [isNavigating, navigate]);
+		if (isNavigating) router.push("/mypositions");
+	}, [isNavigating, router]);
 
 	if (!challenge || !position) {
 		return (

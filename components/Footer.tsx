@@ -29,12 +29,12 @@ const DynamicDocs = (): string => {
 
 export default function Footer() {
 	return (
-		<div className="md:flex md:grid-rows-2 justify-items-center md:px-12 md:pb-[25px] max-md:pb-[25px] pt-8 bg-layout-footer text-layout-primary">
+		<div className="md:flex md:grid-rows-2 justify-items-center md:px-12 md:pb-6 max-md:pb-6 pt-8 border-t border-menu-separator bg-layout-secondary text-text-primary">
 			<div className="md:flex-1 max-md:flex justify-center">
 				<SubmitIssue />
 			</div>
 
-			<ul className="flex gap-8 max-md:pt-12 justify-center">
+			<ul className="flex gap-6 max-md:pt-8 justify-center">
 				<li>
 					<FooterButton link={SOCIAL.Twitter} text="Twitter" icon={faXTwitter} />
 				</li>
@@ -66,8 +66,8 @@ interface ButtonProps {
 
 const FooterButton = ({ link, text, icon }: ButtonProps) => {
 	return (
-		<Link href={link} target="_blank" rel="noreferrer" className="flex gap-1 hover:opacity-70">
-			<FontAwesomeIcon icon={icon} className="w-6 h-6" />
+		<Link href={link} target="_blank" rel="noreferrer" className="flex gap-1 hover:opacity-70 text-text-secondary hover:text-text-primary">
+			<FontAwesomeIcon icon={icon} className="w-5 h-5" />
 		</Link>
 	);
 };
