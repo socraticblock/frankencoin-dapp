@@ -184,6 +184,17 @@ export default function MainPage() {
 						<MetricCard label="FPS Holdings" value={fpsHoldings} unit="FPS" ctaLabel="Open Invest" ctaHref="/equity" />
 						<MetricCard label="Current Network" value={chain.name} />
 					</div>
+					<div className="mt-4">
+						<DetectedAcrossChainsPanel
+							rows={chainRows}
+							currentChainId={currentChainId as ChainId}
+							fpsKnown={fpsHoldings !== null}
+							onSwitch={(targetChainId) => {
+								const targetChain = getChain(targetChainId);
+								appKitNetwork.switchNetwork(targetChain);
+							}}
+						/>
+					</div>
 				</div>
 				<div className="rounded-2xl border border-menu-separator bg-card-body-primary p-6 space-y-4">
 					<div>
@@ -224,14 +235,6 @@ export default function MainPage() {
 					)}
 				</div>
 			</section>
-
-			<DetectedAcrossChainsPanel
-				rows={chainRows}
-				onSwitch={(targetChainId) => {
-					const targetChain = getChain(targetChainId);
-					appKitNetwork.switchNetwork(targetChain);
-				}}
-			/>
 
 			<section className="rounded-2xl border border-menu-separator bg-card-body-primary p-6">
 				<h2 className="text-xl font-semibold text-text-primary">What do you want to do?</h2>
