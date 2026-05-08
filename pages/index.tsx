@@ -61,16 +61,17 @@ export default function MainPage() {
 	];
 
 	const currentZchfAddress = useMemo(() => getZchfAddress(chain.id), [chain.id]);
+	const hasCurrentZchfAddress = Boolean(currentZchfAddress);
 	const connectedAddress = address || zeroAddress;
 	const currentChainId = chain.id;
 
 	const { data: walletZchfRaw, isLoading: walletZchfLoading } = useReadContract({
-		address: currentZchfAddress,
+		address: currentZchfAddress ?? zeroAddress,
 		chainId: currentChainId,
 		abi: currentChainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
 		functionName: "balanceOf",
 		args: [connectedAddress],
-		query: { enabled: Boolean(isConnected && currentZchfAddress && address) },
+		query: { enabled: Boolean(isConnected && address && hasCurrentZchfAddress) },
 	});
 
 	const { data: fpsHoldingsRaw, isLoading: fpsLoading } = useReadContract({
@@ -97,20 +98,21 @@ export default function MainPage() {
 
 	const walletZchf = useMemo(() => {
 		if (!isConnected || !address) return null;
+		if (!hasCurrentZchfAddress) return null;
 		if (walletZchfLoading) return null;
 		if (typeof walletZchfRaw !== "bigint") return null;
 		return Number(formatUnits(walletZchfRaw, 18));
-	}, [isConnected, address, walletZchfLoading, walletZchfRaw]);
+	}, [isConnected, address, hasCurrentZchfAddress, walletZchfLoading, walletZchfRaw]);
 
 	const mySavings = useMemo(() => {
 		if (!isConnected || !address || !savingsLoaded) return null;
-		if (!currentChainEntry) return 0;
+		if (!currentChainEntry) return null;
 		return Number(formatUnits(currentChainEntry.balance, 18));
 	}, [isConnected, address, savingsLoaded, currentChainEntry]);
 
 	const claimableInterest = useMemo(() => {
 		if (!isConnected || !address || !savingsLoaded) return null;
-		if (!currentChainEntry) return 0;
+		if (!currentChainEntry) return null;
 		return Number(formatUnits(currentChainEntry.interest, 18));
 	}, [isConnected, address, savingsLoaded, currentChainEntry]);
 
@@ -127,22 +129,27 @@ export default function MainPage() {
 	const chainRows = useMemo<ChainRow[]>(() => {
 		const supportedChains = [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic];
 		const savingsByChain = new Map<ChainId, number>();
+		const checkedSavingsChains = new Set<ChainId>();
 
 		for (const entry of savingsEntries) {
+			checkedSavingsChains.add(entry.chainId);
 			savingsByChain.set(entry.chainId, Number(formatUnits(entry.balance, 18)));
 		}
 
 		return supportedChains.map((chainItem) => {
 			const isCurrent = chainItem.id === currentChainId;
-			const knownSavings = savingsLoaded && isConnected && address ? savingsByChain.get(chainItem.id as ChainId) ?? 0 : null;
+			const chainKey = chainItem.id as ChainId;
+			const isSavingsChecked = savingsLoaded && isConnected && Boolean(address) && checkedSavingsChains.has(chainKey);
+			const knownSavings = isSavingsChecked ? savingsByChain.get(chainKey) ?? 0 : null;
 			const knownWallet = isCurrent ? walletZchf : null;
 			const hasDetectedSavings = typeof knownSavings === "number" && knownSavings > 0;
+			const hasNoSavings = isSavingsChecked && knownSavings === 0;
 
 			return {
-				chainId: chainItem.id as ChainId,
+				chainId: chainKey,
 				name: chainItem.name,
 				isCurrent,
-				status: isCurrent ? "Current" : hasDetectedSavings ? "Detected" : savingsLoaded ? "Available" : "Not checked",
+				status: isCurrent ? "Current" : hasDetectedSavings ? "Detected" : hasNoSavings ? "No savings detected" : "Not checked",
 				walletZchf: knownWallet,
 				savingsZchf: knownSavings,
 			};
@@ -191,14 +198,20 @@ export default function MainPage() {
 							<div className="text-sm text-text-secondary">Connected address</div>
 							<div className="font-medium text-text-primary">{shortenAddress(address)}</div>
 							<div className="pt-1">
-								<AppButtonSecondary
-									size="small"
-									width="w-auto"
-									className="h-9 px-3"
-									onClick={() => appKitNetwork.switchNetwork(mainnet)}
-								>
-									Switch to Ethereum
-								</AppButtonSecondary>
+								{chain.id === mainnet.id ? (
+									<span className="inline-flex items-center rounded-full border border-menu-separator px-3 py-1 text-xs text-text-secondary">
+										Ethereum mainnet connected
+									</span>
+								) : (
+									<AppButtonSecondary
+										size="small"
+										width="w-auto"
+										className="h-9 px-3"
+										onClick={() => appKitNetwork.switchNetwork(mainnet)}
+									>
+										Switch to Ethereum
+									</AppButtonSecondary>
+								)}
 							</div>
 						</div>
 					) : (

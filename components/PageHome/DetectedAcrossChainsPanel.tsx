@@ -6,7 +6,7 @@ export type ChainRow = {
 	chainId: ChainId;
 	name: string;
 	isCurrent: boolean;
-	status: "Current" | "Detected" | "Available" | "Not checked" | "Data unavailable";
+	status: "Current" | "Detected" | "No savings detected" | "Not checked" | "Data unavailable";
 	walletZchf?: number | null;
 	savingsZchf?: number | null;
 };
