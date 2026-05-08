@@ -27,6 +27,7 @@ type CockpitCardProps = {
 	subtitle?: string;
 	detail?: string;
 	help?: string;
+	iconLabel: string;
 	action?: ChainAction;
 	secondary?: boolean;
 	tone: CockpitCardTone;
@@ -270,7 +271,6 @@ export default function MainPage() {
 	const cards = useMemo<CockpitCardProps[]>(() => {
 		const savingsTargetChain = primarySavingsEntry?.chainId ?? (base.id as ChainId);
 		const savingsTargetName = getChain(savingsTargetChain).name;
-		const savingsActionLabel = currentChainId === savingsTargetChain ? "Open Earn" : `Switch to ${savingsTargetName} and open Earn`;
 
 		return [
 			{
@@ -278,8 +278,9 @@ export default function MainPage() {
 				value: formatAmount(fpsHoldings, "FPS"),
 				subtitle: "on Ethereum",
 				help: "FPS is managed on Ethereum mainnet.",
+				iconLabel: "FPS",
 				action: {
-					label: currentChainId === mainnet.id ? "Open Invest" : "Switch to Ethereum and open Invest",
+					label: currentChainId === mainnet.id ? "Open Invest" : "Switch to Ethereum",
 					targetChainId: mainnet.id as ChainId,
 					href: "/equity",
 				},
@@ -293,8 +294,9 @@ export default function MainPage() {
 				detail: hasPositive(totalClaimableInterest)
 					? `${formatCurrency(totalClaimableInterest!, 2, 2)} ZCHF interest available`
 					: undefined,
+				iconLabel: "SAVE",
 				action: {
-					label: savingsActionLabel,
+					label: currentChainId === savingsTargetChain ? "Open Earn" : `Switch to ${savingsTargetName}`,
 					targetChainId: savingsTargetChain,
 					href: "/savings",
 				},
@@ -308,8 +310,9 @@ export default function MainPage() {
 					: myBorrowedZchf === null
 					? "\u2014"
 					: "No active borrowing",
+				iconLabel: "DEBT",
 				action: {
-					label: hasBorrowing ? "Open Portfolio" : "View Portfolio",
+					label: "Open Portfolio",
 					targetChainId: currentChainId as ChainId,
 					href: "/mypositions",
 				},
@@ -320,6 +323,7 @@ export default function MainPage() {
 				title: "Wallet ZCHF",
 				value: formatAmount(walletZchf, "ZCHF"),
 				subtitle: `on ${chain.name}`,
+				iconLabel: "ZCHF",
 				action: {
 					label: "Open Transfer",
 					targetChainId: currentChainId as ChainId,
@@ -333,6 +337,7 @@ export default function MainPage() {
 				title: "Known ZCHF Activity",
 				value: formatAmount(knownZchfActivity, "ZCHF"),
 				subtitle: "Loaded wallet + savings activity across active chains.",
+				iconLabel: "SUM",
 				tone: "green",
 				onAction: runChainAction,
 			},
@@ -413,7 +418,7 @@ export default function MainPage() {
 								A concise cockpit of wallet, savings, FPS, and borrowing activity.
 							</p>
 						</div>
-						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
 							{cards.map((card) => (
 								<CockpitCard key={card.title} {...card} />
 							))}
@@ -507,7 +512,7 @@ export default function MainPage() {
 	);
 }
 
-function CockpitCard({ title, value, subtitle, detail, help, action, secondary, tone, onAction }: CockpitCardProps) {
+function CockpitCard({ title, value, subtitle, detail, help, iconLabel, action, secondary, tone, onAction }: CockpitCardProps) {
 	const toneClass = {
 		brass: "border-[#d6bd7c] bg-[#fffdf8] text-[#9b7625]",
 		blue: "border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300",
@@ -517,9 +522,9 @@ function CockpitCard({ title, value, subtitle, detail, help, action, secondary, 
 	}[tone];
 
 	return (
-		<article className="flex min-h-[220px] flex-col rounded-xl border border-[#dfd2bb] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+		<article className="flex min-h-[236px] flex-col rounded-xl border border-[#dfd2bb] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
 			<div className={`flex h-10 w-10 items-center justify-center rounded-full border ${toneClass}`} title={help}>
-				{cardIcon(title)}
+				<BadgeIcon label={iconLabel} />
 			</div>
 			<div className="mt-3 text-base font-semibold text-text-primary">{title}</div>
 			<div className="mt-4 text-2xl font-semibold leading-tight text-text-primary">{value}</div>
@@ -529,11 +534,21 @@ function CockpitCard({ title, value, subtitle, detail, help, action, secondary, 
 			{action ? (
 				<div className="mt-4">
 					{secondary ? (
-						<AppButtonSecondary size="small" width="w-full" className="h-10" onClick={() => onAction(action)}>
+						<AppButtonSecondary
+							size="small"
+							width="w-full"
+							className="min-h-[44px] whitespace-normal px-4 py-3 text-center leading-tight"
+							onClick={() => onAction(action)}
+						>
 							{action.label}
 						</AppButtonSecondary>
 					) : (
-						<AppButton size="small" width="w-full" className="h-10" onClick={() => onAction(action)}>
+						<AppButton
+							size="small"
+							width="w-full"
+							className="min-h-[44px] whitespace-normal px-4 py-3 text-center leading-tight"
+							onClick={() => onAction(action)}
+						>
 							{action.label}
 						</AppButton>
 					)}
@@ -572,12 +587,8 @@ function StatusDivider() {
 	return <span className="text-[#c4a75f]">.</span>;
 }
 
-function cardIcon(title: string) {
-	if (title === "FPS") return "/";
-	if (title === "Savings") return "$";
-	if (title === "Borrowing") return "#";
-	if (title === "Wallet ZCHF") return "[]";
-	return "+";
+function BadgeIcon({ label }: { label: string }) {
+	return <span className="text-[10px] font-semibold uppercase tracking-[0.16em]">{label}</span>;
 }
 
 function formatAmount(value: number | null, unit: string) {
