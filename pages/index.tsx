@@ -4,28 +4,33 @@ import AppButtonSecondary from "@components/AppButtonSecondary";
 import AppChainBadge from "@components/AppChainBadge";
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
+import DetectedAcrossChainsPanel, { ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
 import WalletConnect from "@components/WalletConnect";
-import { useConnection, useChainId } from "wagmi";
+import { useAppKitNetwork } from "@reown/appkit/react";
+import { useChainId, useConnection, useReadContract } from "wagmi";
 import { formatCurrency, getChain, normalizeAddress, shortenAddress } from "@utils";
-import { ChainId } from "@frankencoin/zchf";
+import { ADDRESS, BridgedFrankencoinABI, ChainId, EquityABI, FrankencoinABI } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/redux.store";
 import { useMemo } from "react";
-import { formatUnits } from "viem";
+import { Address, formatUnits, zeroAddress } from "viem";
 import { useServiceStatus } from "../hooks/useServiceStatus";
+import { SavingsBalance } from "@frankencoin/api";
+import { arbitrum, avalanche, base, gnosis, mainnet, optimism, polygon, sonic } from "viem/chains";
 
 export default function MainPage() {
 	const { address, isConnected } = useConnection();
+	const appKitNetwork = useAppKitNetwork();
 	const chainId = useChainId();
 	const chain = getChain(chainId as ChainId);
 	const { openPositions } = useSelector((state: RootState) => state.positions);
-	const { savingsInfo, savingsBalance } = useSelector((state: RootState) => state.savings);
+	const { savingsLoaded, savingsBalance } = useSelector((state: RootState) => state.savings);
 	const serviceStatus = useServiceStatus();
 
 	const intentCards = [
 		{
 			title: "Get ZCHF",
-			description: "Buy, receive, or transfer ZCHF to your wallet.",
+			description: "Receive or transfer ZCHF to your wallet.",
 			cta: "Open Transfer",
 			href: "/transfer",
 		},
@@ -55,20 +60,94 @@ export default function MainPage() {
 		},
 	];
 
+	const currentZchfAddress = useMemo(() => getZchfAddress(chain.id), [chain.id]);
+	const connectedAddress = address || zeroAddress;
+	const currentChainId = chain.id;
+
+	const { data: walletZchfRaw, isLoading: walletZchfLoading } = useReadContract({
+		address: currentZchfAddress,
+		chainId: currentChainId,
+		abi: currentChainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
+		functionName: "balanceOf",
+		args: [connectedAddress],
+		query: { enabled: Boolean(isConnected && currentZchfAddress && address) },
+	});
+
+	const { data: fpsHoldingsRaw, isLoading: fpsLoading } = useReadContract({
+		address: ADDRESS[mainnet.id].equity,
+		chainId: mainnet.id,
+		abi: EquityABI,
+		functionName: "balanceOf",
+		args: [connectedAddress],
+		query: { enabled: Boolean(isConnected && address) },
+	});
+
 	const myBorrowedZchf = useMemo(() => {
-		if (!isConnected || !address) return 0;
+		if (!isConnected || !address) return null;
 		return openPositions
 			.filter((p) => normalizeAddress(p.owner) === normalizeAddress(address))
 			.reduce((sum, p) => sum + Number(formatUnits(BigInt(p.minted), 18)), 0);
 	}, [isConnected, address, openPositions]);
 
-	const walletZchf = getNumberish(savingsBalance, ["walletZCHF", "walletBalance", "zchf"]);
-	const mySavings = getNumberish(savingsBalance, ["savingsBalance", "balance", "saved"]);
-	const claimableInterest = getNumberish(savingsBalance, ["interest", "claimable", "claimableInterest"]);
+	const savingsEntries = useMemo(() => getSavingsEntries(savingsBalance), [savingsBalance]);
+	const currentChainEntry = useMemo(
+		() => savingsEntries.find((entry) => entry.chainId === currentChainId),
+		[savingsEntries, currentChainId]
+	);
+
+	const walletZchf = useMemo(() => {
+		if (!isConnected || !address) return null;
+		if (walletZchfLoading) return null;
+		if (typeof walletZchfRaw !== "bigint") return null;
+		return Number(formatUnits(walletZchfRaw, 18));
+	}, [isConnected, address, walletZchfLoading, walletZchfRaw]);
+
+	const mySavings = useMemo(() => {
+		if (!isConnected || !address || !savingsLoaded) return null;
+		if (!currentChainEntry) return 0;
+		return Number(formatUnits(currentChainEntry.balance, 18));
+	}, [isConnected, address, savingsLoaded, currentChainEntry]);
+
+	const claimableInterest = useMemo(() => {
+		if (!isConnected || !address || !savingsLoaded) return null;
+		if (!currentChainEntry) return 0;
+		return Number(formatUnits(currentChainEntry.interest, 18));
+	}, [isConnected, address, savingsLoaded, currentChainEntry]);
+
+	const fpsHoldings = useMemo(() => {
+		if (!isConnected || !address) return null;
+		if (fpsLoading) return null;
+		if (typeof fpsHoldingsRaw !== "bigint") return null;
+		return Number(formatUnits(fpsHoldingsRaw, 18));
+	}, [isConnected, address, fpsLoading, fpsHoldingsRaw]);
 
 	const protocolLive = serviceStatus.every((s) => s.isLoaded);
 	const apiStatus = serviceStatus.find((s) => s.id === "api")?.isLoaded ?? false;
 	const indexerStatus = serviceStatus.find((s) => s.id === "ponder")?.isLoaded ?? false;
+	const chainRows = useMemo<ChainRow[]>(() => {
+		const supportedChains = [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic];
+		const savingsByChain = new Map<ChainId, number>();
+
+		for (const entry of savingsEntries) {
+			savingsByChain.set(entry.chainId, Number(formatUnits(entry.balance, 18)));
+		}
+
+		return supportedChains.map((chainItem) => {
+			const isCurrent = chainItem.id === currentChainId;
+			const knownSavings = savingsLoaded && isConnected && address ? savingsByChain.get(chainItem.id as ChainId) ?? 0 : null;
+			const knownWallet = isCurrent ? walletZchf : null;
+			const hasDetectedSavings = typeof knownSavings === "number" && knownSavings > 0;
+
+			return {
+				chainId: chainItem.id as ChainId,
+				name: chainItem.name,
+				isCurrent,
+				status: isCurrent ? "Current" : hasDetectedSavings ? "Detected" : savingsLoaded ? "Available" : "Not checked",
+				walletZchf: knownWallet,
+				savingsZchf: knownSavings,
+			};
+		});
+	}, [savingsEntries, savingsLoaded, isConnected, address, currentChainId, walletZchf]);
 
 	return (
 		<>
@@ -91,11 +170,11 @@ export default function MainPage() {
 				<div className="lg:col-span-2 rounded-2xl border border-menu-separator bg-card-body-primary p-6">
 					<h2 className="text-sm font-semibold tracking-wide text-text-subheader uppercase">Desk overview</h2>
 					<div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-						<MetricCard label="Wallet ZCHF" value={walletZchf} unit="ZCHF" />
-						<MetricCard label="Savings Balance" value={mySavings} unit="ZCHF" />
-						<MetricCard label="Claimable Interest" value={claimableInterest} unit="ZCHF" />
+						<MetricCard label="Wallet ZCHF" value={walletZchf} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" />
+						<MetricCard label="Savings Balance" value={mySavings} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" />
+						<MetricCard label="Claimable Interest" value={claimableInterest} unit="ZCHF" ctaLabel="Open Earn" ctaHref="/savings" />
 						<MetricCard label="Borrowed ZCHF" value={myBorrowedZchf} unit="ZCHF" />
-						<MetricCard label="FPS Holdings" value={0} unit="FPS" />
+						<MetricCard label="FPS Holdings" value={fpsHoldings} unit="FPS" ctaLabel="Open Invest" ctaHref="/equity" />
 						<MetricCard label="Current Network" value={chain.name} />
 					</div>
 				</div>
@@ -111,6 +190,16 @@ export default function MainPage() {
 						<div className="space-y-2">
 							<div className="text-sm text-text-secondary">Connected address</div>
 							<div className="font-medium text-text-primary">{shortenAddress(address)}</div>
+							<div className="pt-1">
+								<AppButtonSecondary
+									size="small"
+									width="w-auto"
+									className="h-9 px-3"
+									onClick={() => appKitNetwork.switchNetwork(mainnet)}
+								>
+									Switch to Ethereum
+								</AppButtonSecondary>
+							</div>
 						</div>
 					) : (
 						<div className="space-y-3">
@@ -122,6 +211,14 @@ export default function MainPage() {
 					)}
 				</div>
 			</section>
+
+			<DetectedAcrossChainsPanel
+				rows={chainRows}
+				onSwitch={(targetChainId) => {
+					const targetChain = getChain(targetChainId);
+					appKitNetwork.switchNetwork(targetChain);
+				}}
+			/>
 
 			<section className="rounded-2xl border border-menu-separator bg-card-body-primary p-6">
 				<h2 className="text-xl font-semibold text-text-primary">What do you want to do?</h2>
@@ -175,24 +272,77 @@ export default function MainPage() {
 	);
 }
 
-function MetricCard({ label, value, unit }: { label: string; value: number | string | null; unit?: string }) {
+function MetricCard({
+	label,
+	value,
+	unit,
+	ctaLabel,
+	ctaHref,
+}: {
+	label: string;
+	value: number | string | null;
+	unit?: string;
+	ctaLabel?: string;
+	ctaHref?: string;
+}) {
+	const isKnown = value !== null && value !== undefined;
 	return (
 		<div className="rounded-xl border border-menu-separator bg-card-content-secondary px-4 py-3">
 			<div className="text-xs uppercase tracking-wide text-text-subheader">{label}</div>
-			<div className="mt-2 text-xl font-semibold text-text-primary">
-				{typeof value === "number" ? formatCurrency(value, 2, 2) : value ?? "—"}
-			</div>
-			{unit ? <div className="text-xs text-text-secondary mt-1">{unit}</div> : null}
+			<div className="mt-2 text-xl font-semibold text-text-primary">{typeof value === "number" ? formatCurrency(value, 2, 2) : value ?? "—"}</div>
+			{isKnown && unit ? <div className="mt-1 text-xs text-text-secondary">{unit}</div> : null}
+			{!isKnown && ctaLabel && ctaHref ? (
+				<div className="mt-2">
+					<AppButtonSecondary to={ctaHref} size="small" width="w-auto" className="h-8 px-3">
+						{ctaLabel}
+					</AppButtonSecondary>
+				</div>
+			) : null}
 		</div>
 	);
 }
 
-function getNumberish(source: unknown, keys: string[]): number {
-	if (!source || typeof source !== "object") return 0;
-	for (const key of keys) {
-		const value = (source as Record<string, unknown>)[key];
-		if (typeof value === "number" && Number.isFinite(value)) return value;
-		if (typeof value === "string" && value.length > 0 && Number.isFinite(Number(value))) return Number(value);
+function getSavingsEntries(source: unknown): { chainId: ChainId; balance: bigint; interest: bigint }[] {
+	if (!source || typeof source !== "object") return [];
+	const sections = Object.values(source as Record<string, unknown>);
+	const rows: { chainId: ChainId; balance: bigint; interest: bigint }[] = [];
+
+	for (const section of sections) {
+		if (!section || typeof section !== "object") continue;
+		const records = Object.values(section as Record<string, unknown>);
+		for (const record of records) {
+			if (!record || typeof record !== "object") continue;
+			const chainIdValue = (record as SavingsBalance).chainId;
+			const balanceValue = readBigIntField(record, "balance");
+			const interestValue = readBigIntField(record, "interest");
+			if (typeof chainIdValue !== "number" || balanceValue === null || interestValue === null) continue;
+			rows.push({ chainId: chainIdValue as ChainId, balance: balanceValue, interest: interestValue });
+		}
 	}
-	return 0;
+	return rows;
+}
+
+function readBigIntField(source: unknown, key: string): bigint | null {
+	if (!source || typeof source !== "object") return null;
+	const raw = (source as Record<string, unknown>)[key];
+	if (typeof raw === "bigint") return raw;
+	if (typeof raw === "number" && Number.isFinite(raw)) return BigInt(Math.trunc(raw));
+	if (typeof raw === "string" && raw.length > 0) {
+		try {
+			return BigInt(raw);
+		} catch {
+			return null;
+		}
+	}
+	return null;
+}
+
+function getZchfAddress(chainId: ChainId): Address | undefined {
+	const addresses = ADDRESS[chainId] as unknown as Record<string, unknown> | undefined;
+	if (!addresses) return undefined;
+	if ("frankencoin" in addresses && typeof addresses.frankencoin === "string") return addresses.frankencoin as Address;
+	if ("ccipBridgedFrankencoin" in addresses && typeof addresses.ccipBridgedFrankencoin === "string") {
+		return addresses.ccipBridgedFrankencoin as Address;
+	}
+	return undefined;
 }
