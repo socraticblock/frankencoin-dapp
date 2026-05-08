@@ -113,6 +113,106 @@ Avenir-Roman-12.ttf */
 	font-display: swap;
 }
 
+:root {
+	--layout-primary: #f7f3ea;
+	--layout-secondary: #fffdf8;
+	--layout-footer: #efeae0;
+
+	--menu-text: #111827;
+	--menu-textactive: #0b1f3a;
+	--menu-active: #efeae0;
+	--menu-hover: #f0ece4;
+	--menu-back: #fffdf8;
+	--menu-separator: #e4ded2;
+
+	--card-input-label: #5d647b;
+	--card-input-disabled: #f5f6f9;
+	--card-input-empty: #adb2c2;
+	--card-input-focus: #3e96f4;
+	--card-input-error: #e02523;
+	--card-input-border: #e4ded2;
+	--card-input-hover: #0f80f0;
+	--card-input-min: #065dc1;
+	--card-input-max: #065dc1;
+	--card-input-reset: #065dc1;
+
+	--card-body-primary: #fffdf8;
+	--card-body-secondary: #0b1f3a;
+	--card-body-seperator: #e4ded2;
+	--card-content-primary: #f5f1e8;
+	--card-content-secondary: #ffffff;
+	--card-content-highlight: #d52b1e;
+
+	--text-header: #111827;
+	--text-subheader: #4b5563;
+	--text-active: #0b1f3a;
+	--text-primary: #101827;
+	--text-secondary: #4b5563;
+	--text-warning: #b42318;
+	--text-success: #0e7a4f;
+
+	--table-header-primary: #fffdf8;
+	--table-header-secondary: #f0ece4;
+	--table-row-primary: #ffffff;
+	--table-row-secondary: #f5f1e8;
+	--table-row-hover: #efeae0;
+
+	--button-default: #0b1f3a;
+	--button-hover: #12345a;
+	--button-disabled: #eae5dc;
+	--button-textdisabled: #8b95a7;
+}
+
+.dark {
+	--layout-primary: #0d1117;
+	--layout-secondary: #111827;
+	--layout-footer: #151c28;
+
+	--menu-text: #f7f2ea;
+	--menu-textactive: #f7f2ea;
+	--menu-active: #1c2533;
+	--menu-hover: #253044;
+	--menu-back: #111827;
+	--menu-separator: #2a3444;
+
+	--card-input-label: #d6cec2;
+	--card-input-disabled: #1c2533;
+	--card-input-empty: #9ca3af;
+	--card-input-focus: #7ba3d0;
+	--card-input-error: #f97066;
+	--card-input-border: #2a3444;
+	--card-input-hover: #8db2da;
+	--card-input-min: #bfcfdf;
+	--card-input-max: #bfcfdf;
+	--card-input-reset: #bfcfdf;
+
+	--card-body-primary: #151c28;
+	--card-body-secondary: #f3eee6;
+	--card-body-seperator: #2a3444;
+	--card-content-primary: #1c2533;
+	--card-content-secondary: #111827;
+	--card-content-highlight: #f05a4f;
+
+	--text-header: #f7f2ea;
+	--text-subheader: #d6cec2;
+	--text-active: #f7f2ea;
+	--text-primary: #f7f2ea;
+	--text-secondary: #d6cec2;
+	--text-warning: #f97066;
+	--text-success: #3ddc97;
+
+	--table-header-primary: #151c28;
+	--table-header-secondary: #1c2533;
+	--table-row-primary: #111827;
+	--table-row-secondary: #1c2533;
+	--table-row-hover: #253044;
+
+	--button-default: #e8e1d6;
+	--button-hover: #f3eee6;
+	--button-disabled: #2a3444;
+	--button-textdisabled: #9ca3af;
+}
+
 @layer components {
 	.btn {
 		@apply inline-flex whitespace-nowrap justify-center items-center gap-3 cursor-pointer rounded-lg select-none ease-in duration-200 border border-transparent px-3 py-2 md:px-3 md:py-3;
@@ -141,11 +241,6 @@ Avenir-Roman-12.ttf */
 
 body {
 	@apply antialiased bg-layout-primary text-text-primary;
-}
-
-.dark body {
-	background: #0d1117;
-	color: #f7f2ea;
 }
 
 .text-link,
@@ -248,8 +343,9 @@ button[data-testid="component-big-button"] {
 
 /* Toast Styles */
 .Toastify__toast {
-	border: 1px rgb(51 65 85) solid;
-	background-color: transparent !important;
+	border: 1px solid var(--menu-separator);
+	background-color: var(--card-body-primary) !important;
+	color: var(--text-primary);
 	backdrop-filter: blur(10px);
 }
 .Toastify__toast .Toastify__toast-body {
