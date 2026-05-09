@@ -1,7 +1,6 @@
 import Head from "next/head";
-import AppActionCard from "@components/AppActionCard";
 import AppButton from "@components/AppButton";
-import AppButtonSecondary from "@components/AppButtonSecondary";
+import AppLink from "@components/AppLink";
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
 import DetectedAcrossChainsPanel, { ChainAction, ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
@@ -9,7 +8,7 @@ import { useLiveSavingsInterestByChain } from "@components/PageHome/useLiveSavin
 import WalletConnect from "@components/WalletConnect";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import { useChainId, useConnection, useReadContract, useReadContracts } from "wagmi";
-import { formatCurrency, getChain, normalizeAddress, shortenAddress } from "@utils";
+import { formatCurrency, getChain, normalizeAddress, shortenAddress, SOCIAL } from "@utils";
 import { ADDRESS, BridgedFrankencoinABI, ChainId, EquityABI, FrankencoinABI } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/redux.store";
@@ -52,39 +51,6 @@ export default function MainPage() {
 	const { openPositions } = useSelector((state: RootState) => state.positions);
 	const { savingsLoaded, savingsBalance } = useSelector((state: RootState) => state.savings);
 	const serviceStatus = useServiceStatus();
-
-	const intentCards = [
-		{
-			title: "Get ZCHF",
-			description: "Receive or transfer ZCHF to your wallet.",
-			cta: "Open Transfer",
-			href: "/transfer",
-		},
-		{
-			title: "Earn with ZCHF",
-			description: "Deposit ZCHF into the savings module and collect protocol interest.",
-			cta: "Go to Earn",
-			href: "/savings",
-		},
-		{
-			title: "Borrow ZCHF",
-			description: "Use approved collateral to mint ZCHF against it.",
-			cta: "Explore collateral",
-			href: "/mint",
-		},
-		{
-			title: "Invest in FPS",
-			description: "Buy or redeem Frankencoin Pool Shares on Ethereum mainnet.",
-			cta: "View FPS",
-			href: "/equity",
-		},
-		{
-			title: "Portfolio",
-			description: "Review savings, borrowing positions, FPS holdings, and reports.",
-			cta: "Open Portfolio",
-			href: "/mypositions",
-		},
-	];
 
 	const connectedAddress = address || zeroAddress;
 	const currentChainId = chain.id;
@@ -371,7 +337,7 @@ export default function MainPage() {
 		}
 
 		return {
-			message: "Your Desk is ready. Choose an action below to get started.",
+			message: "Your Desk is ready. Use the overview and active allocations to continue.",
 		};
 	}, [activeSavingsEntries, currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, liveInterestByChain]);
 
@@ -566,89 +532,65 @@ export default function MainPage() {
 				</div>
 			</section>
 
-			<section className="rounded-2xl border border-menu-separator bg-card-body-primary p-6">
-				<h2 className="text-xl font-semibold text-text-primary">What do you want to do?</h2>
-				<p className="mt-1 text-sm text-text-secondary">
-					Choose your path. Each action is designed to be clear before wallet confirmation.
+			<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
+				<h2 className="text-lg font-semibold tracking-tight text-text-primary">Use ZCHF Desk with confidence</h2>
+				<p className="mt-1 max-w-2xl text-sm text-text-secondary">
+					Short context on safety and data—without repeating the flows above.
 				</p>
-				<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-					{intentCards.map((card) => (
-						<AppActionCard key={card.title} title={card.title} description={card.description}>
-							{card.title === "Earn with ZCHF" ? (
-								<AppButtonSecondary
-									className="h-10"
-									width="w-full"
-									onClick={() =>
-										runChainAction({ label: "Go to Earn", targetChainId: earnTargetChainId, href: "/savings" })
-									}
-								>
-									{card.cta}
-								</AppButtonSecondary>
-							) : (
-								<AppButtonSecondary to={card.href} className="h-10" width="w-full">
-									{card.cta}
-								</AppButtonSecondary>
-							)}
-						</AppActionCard>
-					))}
+				<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+					<article className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<h3 className="text-sm font-semibold text-text-primary">Clear actions before signing</h3>
+						<p className="mt-2 text-xs leading-relaxed text-text-secondary">
+							Review amount, network, and expected outcome on each page before your wallet opens. If something looks wrong, stop
+							and verify on-chain.
+						</p>
+					</article>
+					<article className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<h3 className="text-sm font-semibold text-text-primary">Protocol data status</h3>
+						<ul className="mt-2 space-y-1.5 text-xs text-text-secondary">
+							<li>
+								Network: <span className="font-medium text-text-primary">{chain.name}</span>
+							</li>
+							<li>
+								Desk data:{" "}
+								<span className={`font-medium ${protocolLive ? "text-text-success" : "text-text-warning"}`}>
+									{protocolLive ? "Live" : "Partial"}
+								</span>
+							</li>
+							<li>
+								API:{" "}
+								<span className={`font-medium ${apiStatus ? "text-text-success" : "text-text-warning"}`}>
+									{apiStatus ? "Live" : "Delayed"}
+								</span>
+							</li>
+							<li>
+								Indexer:{" "}
+								<span className={`font-medium ${indexerStatus ? "text-text-success" : "text-text-warning"}`}>
+									{indexerStatus ? "Live" : "Delayed"}
+								</span>
+							</li>
+							<li>
+								Wallet:{" "}
+								<span className={`font-medium ${isConnected ? "text-text-success" : "text-text-warning"}`}>
+									{isConnected ? "Connected" : "Disconnected"}
+								</span>
+							</li>
+						</ul>
+					</article>
+					<article className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<h3 className="text-sm font-semibold text-text-primary">Learn how ZCHF works</h3>
+						<p className="mt-2 text-xs leading-relaxed text-text-secondary">
+							Frankencoin is a collateral-backed Swiss franc stablecoin. The docs cover mechanics, risks, and governance.
+						</p>
+						<AppLink
+							label="Open documentation"
+							href={SOCIAL.Docs}
+							external
+							icon
+							className="mt-3 inline-flex items-center text-xs font-medium text-card-input-max hover:text-card-input-hover"
+						/>
+					</article>
 				</div>
-			</section>
-
-			<section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-				<AppActionCard title="How ZCHF Desk works" description="A quick guided journey">
-					<ol className="space-y-2 text-sm text-text-secondary">
-						<li>1. Get ZCHF for your wallet.</li>
-						<li>2. Earn protocol interest in Savings.</li>
-						<li>3. Borrow against approved collateral.</li>
-						<li>4. Invest in FPS on Ethereum mainnet.</li>
-						<li>5. Review everything in Portfolio.</li>
-					</ol>
-				</AppActionCard>
-
-				<AppActionCard title="Protocol status" description="Calm service visibility">
-					<ul className="space-y-2 text-sm text-text-secondary">
-						<li>
-							Current network: <span className="font-medium text-text-primary">{chain.name}</span>
-						</li>
-						<li>
-							Savings API:{" "}
-							<span className={`font-medium ${apiStatus ? "text-text-success" : "text-text-warning"}`}>
-								{apiStatus ? "Live" : "Delayed"}
-							</span>
-						</li>
-						<li>
-							Indexer:{" "}
-							<span className={`font-medium ${indexerStatus ? "text-text-success" : "text-text-warning"}`}>
-								{indexerStatus ? "Live" : "Delayed"}
-							</span>
-						</li>
-						<li>
-							Wallet:{" "}
-							<span className={`font-medium ${isConnected ? "text-text-success" : "text-text-warning"}`}>
-								{isConnected ? "Connected" : "Disconnected"}
-							</span>
-						</li>
-					</ul>
-				</AppActionCard>
-
-				<AppActionCard title="Before you sign" description="Trust and clarity first">
-					<p className="text-sm text-text-secondary">
-						ZCHF Desk explains important actions before your wallet opens, including amount, network, destination, and expected
-						result.
-					</p>
-					<div className="rounded-xl border border-menu-separator bg-card-content-primary p-3 text-sm">
-						<div className="grid grid-cols-2 gap-2 text-text-secondary">
-							<span>Action</span>
-							<span className="text-right text-text-primary">Deposit ZCHF</span>
-							<span>Amount</span>
-							<span className="text-right text-text-primary">500 ZCHF</span>
-							<span>Network</span>
-							<span className="text-right text-text-primary">Base</span>
-							<span>After confirmation</span>
-							<span className="text-right text-text-primary">Savings balance increases</span>
-						</div>
-					</div>
-				</AppActionCard>
 			</section>
 		</>
 	);
