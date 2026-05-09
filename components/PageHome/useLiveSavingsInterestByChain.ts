@@ -99,7 +99,7 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 
 	const queryEnabled = Boolean(account && isAddress(account) && account !== zeroAddress && contracts.length > 0);
 
-	const { data, isPending, isError, refetch } = useReadContracts({
+	const { data, isPending, refetch } = useReadContracts({
 		contracts,
 		query: {
 			enabled: queryEnabled,
@@ -144,13 +144,6 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 			return map;
 		}
 
-		if (isError) {
-			for (const meta of chainMetas) {
-				map.set(meta.chainId, { interestZchf: null, status: "error" });
-			}
-			return map;
-		}
-
 		if (isPending || !data) {
 			for (const meta of chainMetas) {
 				map.set(meta.chainId, { interestZchf: null, status: "loading" });
@@ -158,8 +151,8 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 			return map;
 		}
 
-		let allSuccess = true;
 		for (let index = 0; index < chainMetas.length; index++) {
+			const meta = chainMetas[index];
 			const savingsRes = data[index * 2];
 			const ticksRes = data[index * 2 + 1];
 			if (
@@ -169,24 +162,11 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 				ticksRes.status !== "success" ||
 				typeof ticksRes.result !== "bigint"
 			) {
-				allSuccess = false;
-				break;
-			}
-		}
-
-		if (!allSuccess) {
-			for (const meta of chainMetas) {
 				map.set(meta.chainId, { interestZchf: null, status: "error" });
+				continue;
 			}
-			return map;
-		}
-
-		for (let index = 0; index < chainMetas.length; index++) {
-			const meta = chainMetas[index];
-			const savingsRes = data[index * 2]!;
-			const ticksRes = data[index * 2 + 1]!;
 			const parsed = parseSavingsTuple(savingsRes.result);
-			if (!parsed || typeof ticksRes.result !== "bigint") {
+			if (!parsed) {
 				map.set(meta.chainId, { interestZchf: null, status: "error" });
 				continue;
 			}
@@ -198,5 +178,5 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 		}
 
 		return map;
-	}, [chainIds, chainMetas, data, isError, isPending, queryEnabled, status]);
+	}, [chainIds, chainMetas, data, isPending, queryEnabled, status]);
 }

@@ -10,6 +10,8 @@ export type ChainAction = {
 	label: string;
 	targetChainId: ChainId;
 	href: string;
+	/** When true, navigate immediately without switching the wallet (e.g. Earn opens with `chainId` context). */
+	skipNetworkSwitch?: boolean;
 };
 
 export type ChainRow = {
@@ -366,8 +368,12 @@ function SavingsAllocationRow({ row, onAction }: { row: ChainRow; onAction: (act
 				</div>
 			</div>
 			<RowAction
-				action={{ label: "Open Earn", targetChainId: row.chainId, href: "/savings" }}
-				helper={row.isCurrent ? undefined : `Requires ${row.name}`}
+				action={{
+					label: "Manage in Earn",
+					targetChainId: row.chainId,
+					href: `/savings?chainId=${row.chainId}`,
+					skipNetworkSwitch: true,
+				}}
 				onAction={onAction}
 			/>
 		</div>

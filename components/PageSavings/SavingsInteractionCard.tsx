@@ -2,8 +2,8 @@ import AppCard from "@components/AppCard";
 import TokenInputChain from "@components/Input/TokenInputChain";
 import { ADDRESS, ChainId, ChainIdMain, ChainIdSide, FrankencoinABI, SavingsABI } from "@frankencoin/zchf";
 import { useConnection, useBlockNumber, useChainId } from "wagmi";
-import { Address, isAddress, zeroAddress } from "viem";
-import { useEffect, useState } from "react";
+import { Address, isAddress, parseUnits, zeroAddress } from "viem";
+import { useEffect, useRef, useState } from "react";
 import SavingsDetailsCard from "./SavingsDetailsCard";
 import { readContract } from "wagmi/actions";
 import { WAGMI_CHAINS, WAGMI_CONFIG } from "../../app.config";
@@ -22,7 +22,20 @@ import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import AppChainBadge from "@components/AppChainBadge";
 
-export default function SavingsInteractionCard() {
+export type EarnFormIntent = "collect" | "deposit" | "withdraw" | null;
+
+type SavingsInteractionCardProps = {
+	earnFormIntent?: EarnFormIntent;
+	onConsumeEarnFormIntent?: () => void;
+};
+
+export default function SavingsInteractionCard({
+	earnFormIntent = null,
+	onConsumeEarnFormIntent,
+}: SavingsInteractionCardProps) {
+	const onConsumeRef = useRef(onConsumeEarnFormIntent);
+	onConsumeRef.current = onConsumeEarnFormIntent;
+
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
 	const chainId = useChainId() as ChainId;
 	const chain = getChain(chainId);
@@ -166,6 +179,21 @@ export default function SavingsInteractionCard() {
 			setError("");
 		}
 	}, [amount, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest]);
+
+	useEffect(() => {
+		if (!earnFormIntent || !isLoaded || onbehalfToggle) return;
+		if (earnFormIntent === "collect") {
+			setAmount(userSavingsBalance);
+		} else if (earnFormIntent === "deposit") {
+			const bump = userBalance > 0n ? (userBalance >= parseUnits("0.01", 18) ? parseUnits("0.01", 18) : userBalance) : 0n;
+			const maxTarget = userSavingsBalance + userSavingsInterest + userBalance;
+			const next = userSavingsBalance + userSavingsInterest + bump;
+			setAmount(next > maxTarget ? maxTarget : next > userSavingsBalance + userSavingsInterest ? next : userSavingsBalance + userSavingsInterest);
+		} else if (earnFormIntent === "withdraw") {
+			setAmount(0n);
+		}
+		onConsumeRef.current?.();
+	}, [earnFormIntent, isLoaded, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest]);
 
 	// ---------------------------------------------------------------------------
 

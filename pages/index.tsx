@@ -247,6 +247,10 @@ export default function MainPage() {
 	}, [chainId, pendingChainAction, router]);
 
 	const runChainAction = async (action: ChainAction) => {
+		if (action.skipNetworkSwitch) {
+			await router.push(action.href);
+			return;
+		}
 		if (chainId === action.targetChainId) {
 			await router.push(action.href);
 			return;
@@ -341,11 +345,12 @@ export default function MainPage() {
 					.filter(([, v]) => v.status === "ready" && (v.interestZchf ?? 0) > 0)
 					.sort((a, b) => (b[1].interestZchf ?? 0) - (a[1].interestZchf ?? 0))[0]?.[0] ?? earnTargetChainId;
 			return {
-				message: `You have ${formatCurrency(interestAggregate.total!, 2, 2)} ZCHF interest available.`,
+				message: `${formatCurrency(interestAggregate.total!, 2, 2)} ZCHF interest is ready to collect.`,
 				action: {
-					label: "Go to Earn",
+					label: "Manage earning",
 					targetChainId: target,
-					href: "/savings",
+					href: `/savings?chainId=${target}`,
+					skipNetworkSwitch: true,
 				},
 			};
 		}
@@ -434,7 +439,8 @@ export default function MainPage() {
 				action: {
 					label: "Go to Earn",
 					targetChainId: earnTargetChainId,
-					href: "/savings",
+					href: `/savings?chainId=${earnTargetChainId}`,
+					skipNetworkSwitch: true,
 				},
 				tone: "blue",
 				onAction: runChainAction,

@@ -12,12 +12,13 @@ import { ADDRESS, ChainId } from "@frankencoin/zchf";
 import { normalizeAddress } from "../../utils/format";
 import { mainnet } from "viem/chains";
 
-export default function SavingsRecentActivitiesTable() {
+export default function SavingsRecentActivitiesTable({ filterChainId }: { filterChainId?: ChainId }) {
 	const headers: string[] = ["Date", "Kind", "Amount", "Balance"];
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
 	const [list, setList] = useState<SavingsActivityQuery[]>([]);
-	const chainId = useChainId() as ChainId;
+	const walletChainId = useChainId() as ChainId;
+	const chainId = filterChainId ?? walletChainId;
 	const { address } = useConnection();
 
 	const activities = useSelector((state: RootState) => state.savings.savingsActivity);

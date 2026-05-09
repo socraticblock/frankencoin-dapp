@@ -59,22 +59,21 @@ export default function SavingsDetailsCard({
 				{...inactiveBalance.map((i, idx) => <SavingsSavedItem savings={i} key={`SavingsSavedItem_${idx}`} />)}
 
 				<div className="flex mt-4">
-					<div className="flex-1 text-text-secondary">Your current balance</div>
+					<div className="flex-1 text-text-secondary">Current savings balance</div>
 					<div className="">{formatCurrency(formatUnits(balance, 18))} ZCHF</div>
 				</div>
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">Interest to be collected</div>
+					<div className="flex-1 text-text-secondary">Interest ready</div>
 					<div className="">{formatCurrency(formatUnits(interest, 18))} ZCHF</div>
 				</div>
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">
-						{direction ? "To be added from your wallet" : "Withdrawn to your wallet"}
-					</div>
+					<div className="flex-1 text-text-secondary">{direction ? "Amount to deposit" : "Amount to withdraw"}</div>
 					<div className="">
-						{change < 0n ? "-" : ""}{" "}
-						{formatCurrency(formatUnits((change < 0n ? -change : change) - (referrer != zeroAddress ? referralFees : 0n), 18))}{" "}
+						{formatCurrency(
+							formatUnits((change < 0n ? -change : change) - (referrer != zeroAddress ? referralFees : 0n), 18)
+						)}{" "}
 						ZCHF
 					</div>
 				</div>
@@ -92,7 +91,7 @@ export default function SavingsDetailsCard({
 				<hr className="border-slate-700 border-dashed" />
 
 				<div className="flex font-bold">
-					<div className="flex-1 text-text-secondary">Resulting balance</div>
+					<div className="flex-1 text-text-secondary">Resulting savings balance</div>
 					<div className="">{formatCurrency(formatUnits(balance + change + interest, 18))} ZCHF</div>
 				</div>
 
