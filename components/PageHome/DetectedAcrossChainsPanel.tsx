@@ -75,6 +75,7 @@ export default function DetectedAcrossChainsPanel({
 	const totalSavings = savingsRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
 	const totalInterest = savingsRows.reduce((acc, row) => acc + (row.claimableInterestZchf ?? 0), 0);
 	const hasBorrowing = typeof borrowedZchf === "number" && borrowedZchf > 0;
+	const useLedgerLayout = savingsRows.length >= 3;
 
 	return (
 		<div className="space-y-3">
@@ -113,103 +114,175 @@ export default function DetectedAcrossChainsPanel({
 						<h3 className="text-xl font-semibold text-text-primary">Active Allocations</h3>
 						<p className="mt-1 text-sm text-text-secondary">Manage where your ZCHF, savings, FPS, and borrowing live.</p>
 					</div>
-					<div className="flex rounded-lg border border-[#e0d4bd] bg-card-content-secondary p-1 dark:border-menu-separator">
-						<SortButton active={savingsSort === "interest"} onClick={() => setSavingsSort("interest")}>
-							Sort by interest
-						</SortButton>
-						<SortButton active={savingsSort === "balance"} onClick={() => setSavingsSort("balance")}>
-							Sort by balance
-						</SortButton>
-					</div>
+					{savingsRows.length >= 3 ? (
+						<div className="flex rounded-lg border border-[#e0d4bd] bg-card-content-secondary p-1 dark:border-menu-separator">
+							<SortButton active={savingsSort === "interest"} onClick={() => setSavingsSort("interest")}>
+								Sort by interest
+							</SortButton>
+							<SortButton active={savingsSort === "balance"} onClick={() => setSavingsSort("balance")}>
+								Sort by balance
+							</SortButton>
+						</div>
+					) : null}
 				</div>
 
-				<div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-					<AllocationGroup
-						title={
-							savingsRows.length > 0
-								? `Savings across ${savingsRows.length} ${savingsRows.length === 1 ? "chain" : "chains"}`
-								: "Savings"
-						}
-						summary={[
-							{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "-" },
-							{
-								label: "Claimable interest",
-								value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "-",
-								positive: totalInterest > 0,
-							},
-						]}
-					>
-						{savingsRows.length > 0 ? (
-							<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
-								{savingsRows.map((row) => (
-									<SavingsAllocationRow key={row.chainId} row={row} onAction={onAction} />
-								))}
-							</div>
-						) : (
-							<EmptyAllocation
-								copy={dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."}
+				{useLedgerLayout ? (
+					<div className="mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+						<div className="self-start">
+							<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} totalInterest={totalInterest} dataUnavailable={dataUnavailable} onAction={onAction} />
+						</div>
+						<div className="space-y-4">
+							<WalletGroup
+								walletRows={walletRows}
+								walletReadsLoading={walletReadsLoading}
+								walletReadFailures={walletReadFailures.length}
+								walletZchfComplete={walletZchfComplete}
+								onAction={onAction}
 							/>
-						)}
-					</AllocationGroup>
-
-					<div className="space-y-4">
-						<AllocationGroup title="Wallet">
-							{walletRows.length > 0 ? (
-								<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
-									{walletRows.map((row) => (
-										<WalletAllocationRow key={row.chainId} row={row} onAction={onAction} />
-									))}
-								</div>
-							) : (
-								<EmptyAllocation
-									copy={
-										walletReadsLoading
-											? "Wallet ZCHF is loading."
-											: walletReadFailures.length > 0
-											? "Some wallet balances could not be loaded."
-											: "No wallet ZCHF loaded across supported chains."
-									}
-								/>
-							)}
-							{walletReadFailures.length > 0 ? (
-								<p className="mt-3 text-xs text-text-secondary">Some wallet balances could not be loaded.</p>
-							) : null}
-							{walletZchfComplete ? (
-								<p className="mt-3 text-xs text-text-secondary">Wallet balances loaded across supported ZCHF chains.</p>
-							) : null}
-						</AllocationGroup>
-
-						<AllocationGroup title="Investments">
-							{fpsRow ? (
-								<SimpleAllocationRow
-									chainName="Ethereum"
-									chainId={mainnet.id as ChainId}
-									primary={`${formatCurrency(fpsRow.fpsHoldings ?? 0, 2, 2)} FPS`}
-									action={{ label: "Open Invest", targetChainId: mainnet.id as ChainId, href: "/equity" }}
-									onAction={onAction}
-								/>
-							) : (
-								<EmptyAllocation copy="No active FPS investment loaded." />
-							)}
-						</AllocationGroup>
-
-						<AllocationGroup title="Borrowing">
-							{hasBorrowing ? (
-								<SimpleAllocationRow
-									primary={`Total borrowed: ${formatCurrency(borrowedZchf!, 2, 2)} ZCHF`}
-									action={{ label: "Open Portfolio", targetChainId: currentChainId, href: "/mypositions" }}
-									onAction={onAction}
-								/>
-							) : (
-								<EmptyAllocation
-									copy={borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing loaded."}
-								/>
-							)}
-						</AllocationGroup>
+							<InvestmentsGroup fpsRow={fpsRow} onAction={onAction} />
+							<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
+						</div>
 					</div>
-				</div>
+				) : (
+					<div className="mt-5 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+						<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} totalInterest={totalInterest} dataUnavailable={dataUnavailable} onAction={onAction} />
+						<WalletGroup
+							walletRows={walletRows}
+							walletReadsLoading={walletReadsLoading}
+							walletReadFailures={walletReadFailures.length}
+							walletZchfComplete={walletZchfComplete}
+							onAction={onAction}
+						/>
+						<InvestmentsGroup fpsRow={fpsRow} onAction={onAction} />
+						<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
+					</div>
+				)}
 			</section>
 		</div>
+	);
+}
+
+function SavingsGroup({
+	savingsRows,
+	totalSavings,
+	totalInterest,
+	dataUnavailable,
+	onAction,
+}: {
+	savingsRows: ChainRow[];
+	totalSavings: number;
+	totalInterest: number;
+	dataUnavailable?: boolean;
+	onAction: (action: ChainAction) => void;
+}) {
+	const title = savingsRows.length <= 1 ? "Savings" : `Savings across ${savingsRows.length} chains`;
+	return (
+		<AllocationGroup
+			title={title}
+			summary={[
+				{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "-" },
+				{
+					label: "Claimable interest",
+					value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "-",
+					positive: totalInterest > 0,
+				},
+			]}
+		>
+			{savingsRows.length === 1 ? (
+				<p className="mb-2 text-xs text-text-secondary">1 active chain</p>
+			) : null}
+			{savingsRows.length > 0 ? (
+				<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
+					{savingsRows.map((row) => (
+						<SavingsAllocationRow key={row.chainId} row={row} onAction={onAction} />
+					))}
+				</div>
+			) : (
+				<EmptyAllocation copy={dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."} />
+			)}
+		</AllocationGroup>
+	);
+}
+
+function WalletGroup({
+	walletRows,
+	walletReadsLoading,
+	walletReadFailures,
+	walletZchfComplete,
+	onAction,
+}: {
+	walletRows: ChainRow[];
+	walletReadsLoading: boolean;
+	walletReadFailures: number;
+	walletZchfComplete?: boolean;
+	onAction: (action: ChainAction) => void;
+}) {
+	return (
+		<AllocationGroup title="Wallet">
+			{walletRows.length > 0 ? (
+				<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
+					{walletRows.map((row) => (
+						<WalletAllocationRow key={row.chainId} row={row} onAction={onAction} />
+					))}
+				</div>
+			) : (
+				<EmptyAllocation
+					copy={
+						walletReadsLoading
+							? "Wallet ZCHF is loading."
+							: walletReadFailures > 0
+							? "Some wallet balances could not be loaded."
+							: "No wallet ZCHF found across supported chains."
+					}
+				/>
+			)}
+			{walletReadFailures > 0 ? <p className="mt-3 text-xs text-text-secondary">Some wallet balances could not be loaded.</p> : null}
+			{walletZchfComplete ? <p className="mt-3 text-xs text-text-secondary">Wallet balances loaded across supported ZCHF chains.</p> : null}
+		</AllocationGroup>
+	);
+}
+
+function InvestmentsGroup({ fpsRow, onAction }: { fpsRow?: ChainRow; onAction: (action: ChainAction) => void }) {
+	return (
+		<AllocationGroup title="Investments">
+			{fpsRow ? (
+				<SimpleAllocationRow
+					chainName="Ethereum"
+					chainId={mainnet.id as ChainId}
+					primary={`${formatCurrency(fpsRow.fpsHoldings ?? 0, 2, 2)} FPS`}
+					action={{ label: "Open Invest", targetChainId: mainnet.id as ChainId, href: "/equity" }}
+					onAction={onAction}
+				/>
+			) : (
+				<EmptyAllocation copy="No FPS investment." />
+			)}
+		</AllocationGroup>
+	);
+}
+
+function BorrowingGroup({
+	hasBorrowing,
+	borrowedZchf,
+	currentChainId,
+	onAction,
+}: {
+	hasBorrowing: boolean;
+	borrowedZchf?: number | null;
+	currentChainId: ChainId;
+	onAction: (action: ChainAction) => void;
+}) {
+	return (
+		<AllocationGroup title="Borrowing">
+			{hasBorrowing ? (
+				<SimpleAllocationRow
+					primary={`Total borrowed: ${formatCurrency(borrowedZchf!, 2, 2)} ZCHF`}
+					action={{ label: "Open Portfolio", targetChainId: currentChainId, href: "/mypositions" }}
+					onAction={onAction}
+				/>
+			) : (
+				<EmptyAllocation copy={borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing."} />
+			)}
+		</AllocationGroup>
 	);
 }
 
@@ -223,7 +296,7 @@ function AllocationGroup({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="rounded-xl border border-[#e6dbca] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+		<div className="self-start h-auto rounded-xl border border-[#e6dbca] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<h4 className="text-base font-semibold text-text-primary">{title}</h4>
 				{summary && summary.length > 0 ? (
