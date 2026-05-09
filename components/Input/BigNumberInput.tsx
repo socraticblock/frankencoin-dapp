@@ -13,7 +13,17 @@ export type BigNumberInputProps = {
 	min?: string;
 	className?: string;
 	disabled?: boolean;
+	maxDisplayDecimals?: number;
 };
+
+function formatDisplayUnits(value: string, decimals: number, maxDisplayDecimals?: number) {
+	const formatted = formatUnits(value, decimals);
+	if (maxDisplayDecimals === undefined) return formatted;
+	const [whole, fraction = ""] = formatted.split(".");
+	if (fraction.length <= maxDisplayDecimals) return formatted;
+	const trimmedFraction = fraction.slice(0, maxDisplayDecimals).replace(/0+$/, "");
+	return trimmedFraction.length > 0 ? `${whole}.${trimmedFraction}` : whole;
+}
 
 export function BigNumberInput({
 	inputRefChild,
@@ -26,6 +36,7 @@ export function BigNumberInput({
 	min,
 	className,
 	disabled,
+	maxDisplayDecimals,
 }: BigNumberInputProps) {
 	const inputRefFallback = React.useRef<HTMLInputElement>(null);
 	const inputRef = inputRefChild || inputRefFallback;
@@ -47,10 +58,10 @@ export function BigNumberInput({
 			}
 
 			if (!parseInputValue || !parseInputValue.eq(value)) {
-				setInputvalue(formatUnits(value, decimals));
+				setInputvalue(formatDisplayUnits(value, decimals, maxDisplayDecimals));
 			}
 		}
-	}, [value, decimals, inputValue]);
+	}, [value, decimals, inputValue, maxDisplayDecimals]);
 
 	React.useEffect(() => {
 		if (autoFocus && inputRef) {

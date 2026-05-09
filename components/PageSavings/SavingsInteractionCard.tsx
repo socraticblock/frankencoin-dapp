@@ -23,6 +23,7 @@ import { useAppKitNetwork } from "@reown/appkit/react";
 import AppChainBadge from "@components/AppChainBadge";
 
 export type EarnFormIntent = "collect" | "deposit" | "withdraw" | null;
+const SAVINGS_DATA_ERROR = "Savings data could not be loaded for this chain.";
 
 type SavingsInteractionCardProps = {
 	earnFormIntent?: EarnFormIntent;
@@ -84,6 +85,8 @@ export default function SavingsInteractionCard({
 	const change: bigint = amount - (userSavingsBalance + userSavingsInterest);
 	const direction: boolean = amount >= userSavingsBalance + userSavingsInterest;
 	const hasActionableFunds = userBalance > 0n || userSavingsBalance > 0n || userSavingsInterest > 0n;
+	const hasSavingsDataError = error === SAVINGS_DATA_ERROR;
+	const isSavingsDataReady = Boolean(chainStatus && isLoaded && !hasSavingsDataError);
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -100,72 +103,85 @@ export default function SavingsInteractionCard({
 	}, [queryReferrer, queryReferralFeePPM]);
 
 	useEffect(() => {
+		setLoaded(false);
+		setAmount(0n);
+		setError("");
+		setUserBalance(0n);
+		setUserSavingsBalance(0n);
+		setUserSavingsTicks(0n);
+		setUserSavingsInterest(0n);
+		setUserSavingsLocktime(0n);
+		setCurrentTicks(0n);
+		setUserSavingsReferrer(zeroAddress);
+		setUserSavingsReferralFeePPM(0n);
+		setUserSavingsReferralFees(0n);
+	}, [account, chainId]);
+
+	useEffect(() => {
 		if (!isAddress(account)) return;
 		if (!chainStatus) return;
 
+		let active = true;
+		const shouldInitializeAmount = !isLoaded;
+
 		const fetchAsync = async function () {
-			const _balance = await readContract(WAGMI_CONFIG, {
-				address: frankencoinAddress,
-				chainId: chainId,
-				abi: FrankencoinABI,
-				functionName: "balanceOf",
-				args: [account],
-			});
-			setUserBalance(_balance);
+			try {
+				const _balance = await readContract(WAGMI_CONFIG, {
+					address: frankencoinAddress,
+					chainId: chainId,
+					abi: FrankencoinABI,
+					functionName: "balanceOf",
+					args: [account],
+				});
 
-			const [_userSavings, _userTicks] = await readContract(WAGMI_CONFIG, {
-				address: savingsAdresse,
-				chainId: chainId,
-				abi: SavingsABI,
-				functionName: "savings",
-				args: [account],
-			});
-			setUserSavingsBalance(_userSavings);
-			setUserSavingsTicks(_userTicks);
+				const [_userSavings, _userTicks, _referrer, _referralFeePPM] = await readContract(WAGMI_CONFIG, {
+					address: savingsAdresse,
+					chainId: chainId,
+					abi: SavingsABI,
+					functionName: "savings",
+					args: [account],
+				});
 
-			const _current = await readContract(WAGMI_CONFIG, {
-				address: savingsAdresse,
-				chainId: chainId,
-				abi: SavingsABI,
-				functionName: "currentTicks",
-			});
-			setCurrentTicks(_current);
+				const _current = await readContract(WAGMI_CONFIG, {
+					address: savingsAdresse,
+					chainId: chainId,
+					abi: SavingsABI,
+					functionName: "currentTicks",
+				});
 
-			const safeRate = BigInt(chainStatus.rate || 0);
-			const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
-			setUserSavingsLocktime(_locktime);
+				const safeRate = BigInt(chainStatus.rate || 0);
+				const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
+				const _tickDiff = _current - _userTicks;
+				const _interest =
+					_userTicks == 0n || _locktime > 0
+						? 0n
+						: (_tickDiff * _userSavings) / (1_000_000n * 365n * 24n * 60n * 60n);
+				const _fee = (_interest * BigInt(_referralFeePPM)) / 1_000_000n;
 
-			const _tickDiff = _current - _userTicks;
-			const _interest = _userTicks == 0n || _locktime > 0 ? 0n : (_tickDiff * _userSavings) / (1_000_000n * 365n * 24n * 60n * 60n);
-
-			setUserSavingsInterest(_interest);
-
-			const [, , _referrer, _referralFeePPM] = await readContract(WAGMI_CONFIG, {
-				address: savingsAdresse,
-				chainId,
-				abi: SavingsABI,
-				functionName: "savings",
-				args: [account],
-			});
-
-			setUserSavingsReferrer(_referrer);
-			setUserSavingsReferralFeePPM(BigInt(_referralFeePPM));
-
-			const _fee = (_interest * BigInt(_referralFeePPM)) / 1_000_000n;
-			setUserSavingsReferralFees(_fee);
-
-			if (!isLoaded) {
-				setAmount(_userSavings);
+				if (!active) return;
+				setUserBalance(_balance);
+				setUserSavingsBalance(_userSavings);
+				setUserSavingsTicks(_userTicks);
+				setCurrentTicks(_current);
+				setUserSavingsLocktime(_locktime);
+				setUserSavingsInterest(_interest);
+				setUserSavingsReferrer(_referrer);
+				setUserSavingsReferralFeePPM(BigInt(_referralFeePPM));
+				setUserSavingsReferralFees(_fee);
+				if (shouldInitializeAmount) setAmount(_userSavings);
+				setLoaded(true);
+			} catch {
+				if (!active) return;
+				setError(SAVINGS_DATA_ERROR);
 				setLoaded(true);
 			}
 		};
 
 		fetchAsync();
+		return () => {
+			active = false;
+		};
 	}, [data, account, isLoaded, frankencoinAddress, savingsAdresse, chainStatus, chainId]);
-
-	useEffect(() => {
-		setLoaded(false);
-	}, [account]);
 
 	useEffect(() => {
 		if (isAddress(onbehalfAddress) || onbehalfAddress == "") {
@@ -176,12 +192,13 @@ export default function SavingsInteractionCard({
 	}, [onbehalfAddress]);
 
 	useEffect(() => {
+		if (error === SAVINGS_DATA_ERROR) return;
 		if (amount > userBalance + (!onbehalfToggle ? userSavingsBalance + userSavingsInterest : 0n)) {
 			setError(`Not enough ${fromSymbol} in your wallet.`);
 		} else {
 			setError("");
 		}
-	}, [amount, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest]);
+	}, [amount, error, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest]);
 
 	useEffect(() => {
 		if (!earnFormIntent || !isLoaded || onbehalfToggle) return;
@@ -213,112 +230,118 @@ export default function SavingsInteractionCard({
 
 	return (
 		<section className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-auto">
-			{!chainStatus ? (
-				<AppCard>
-					<div className="text-text-secondary">Savings data is loading for this chain. Please wait a moment.</div>
-				</AppCard>
-			) : null}
 			<AppCard>
 				<div className="flex items-center justify-between gap-3">
 					<div className="text-lg font-bold">{!onbehalfToggle ? "Earn with ZCHF" : "Save for another address"}</div>
 					<AppChainBadge label={`Saving on ${chain.name}`} />
 				</div>
 
-				<div className="mt-8">
-					<TokenInputChain
-						label={!onbehalfToggle ? "Your savings" : "You save"}
-						chain={chain.name}
-						min={!onbehalfToggle ? BigInt("0") : undefined}
-						max={!onbehalfToggle ? userBalance + userSavingsBalance + userSavingsInterest : userBalance}
-						reset={!onbehalfToggle ? userSavingsBalance : 0n}
-						symbol={fromSymbol}
-						placeholder={fromSymbol + " Amount"}
-						value={amount.toString()}
-						onChange={onChangeAmount}
-						error={error}
-						limit={userBalance}
-						limitDigit={18}
-						limitLabel="Balance"
-						onChangeChain={onChangeChain}
-						lockChainSelector={lockChainSelector}
-						tokenLogo={"ZCHF"}
-					/>
-				</div>
-
-				<div className="">
-					{onbehalfToggle ? (
-						<AddressInput
-							label="To address"
-							placeholder="0x1a2b3c..."
-							error={onbehalfError}
-							value={onbehalfAddress}
-							onChange={setOnbehalfAddress}
-						/>
-					) : null}
-					<AppToggle disabled={false} label="Custom target address" enabled={onbehalfToggle} onChange={setOnbehalfToggle} />
-				</div>
-
-				<div className="mx-auto my-4 w-full flex-col flex gap-4">
-					{!onbehalfToggle && isLoaded && !hasActionableFunds ? (
-						<div className="rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-4 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-body-primary">
-							Add ZCHF on {chain.name} to start earning.
-						</div>
-					) : onbehalfToggle ? (
-						<SavingsActionSaveOnBehalf
-							disabled={onbehalfError != "" || onbehalfAddress == ""}
-							savingsModule={savingsAdresse}
-							amount={amount}
-							onBehalf={onbehalfAddress as Address}
-						/>
-					) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
-						<SavingsActionInterest
-							disabled={!!error}
-							savingsModule={savingsAdresse}
-							balance={userSavingsBalance}
-							interest={userSavingsInterest}
-							newReferrer={newReferrer}
-							newReferralFeePPM={newReferralFeePPM}
-						/>
-					) : amount > userSavingsBalance ? (
-						<SavingsActionSave
-							disabled={!!error}
-							savingsModule={savingsAdresse}
-							amount={amount}
-							interest={userSavingsInterest}
-							newReferrer={newReferrer}
-							newReferralFeePPM={newReferralFeePPM}
-						/>
-					) : (
-						<SavingsActionWithdraw
-							disabled={userSavingsBalance == 0n || !!error}
-							savingsModule={savingsAdresse}
-							balance={amount}
-							change={change}
-							newReferrer={newReferrer}
-							newReferralFeePPM={newReferralFeePPM}
-						/>
-					)}
-				</div>
-
-				{newReferrer ? (
-					<div className="flex mt-8">
-						<div className={`flex-1 text-text-secondary`}>
-							<span className="font-semibold">Notice: </span>
-							You are about to set a referrer{" "}
-							<AppLink
-								className="pr-2"
-								label={shortenAddress(newReferrer)}
-								href={ContractUrl(newReferrer, chain)}
-								external={true}
-							/>
-							who will receive <span className="font-semibold">{Math.round(Number(newReferralFeePPM / 1000n)) / 10}%</span> of
-							your earned interest.
-						</div>
+				{!isSavingsDataReady ? (
+					<div className="mt-8 rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-4 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-body-primary">
+						{hasSavingsDataError ? SAVINGS_DATA_ERROR : `Loading savings data for ${chain.name}…`}
 					</div>
+				) : null}
+
+				{isSavingsDataReady ? (
+					<>
+						<div className="mt-8">
+							<TokenInputChain
+								label={!onbehalfToggle ? "Your savings" : "You save"}
+								chain={chain.name}
+								min={!onbehalfToggle ? BigInt("0") : undefined}
+								max={!onbehalfToggle ? userBalance + userSavingsBalance + userSavingsInterest : userBalance}
+								reset={!onbehalfToggle ? userSavingsBalance : 0n}
+								symbol={fromSymbol}
+								placeholder={fromSymbol + " Amount"}
+								value={amount.toString()}
+								onChange={onChangeAmount}
+								error={hasSavingsDataError ? "" : error}
+								limit={userBalance}
+								limitDigit={18}
+								limitLabel="Balance"
+								onChangeChain={onChangeChain}
+								lockChainSelector={lockChainSelector}
+								tokenLogo={"ZCHF"}
+							/>
+						</div>
+
+						<div className="">
+							{onbehalfToggle ? (
+								<AddressInput
+									label="To address"
+									placeholder="0x1a2b3c..."
+									error={onbehalfError}
+									value={onbehalfAddress}
+									onChange={setOnbehalfAddress}
+								/>
+							) : null}
+							<AppToggle disabled={false} label="Custom target address" enabled={onbehalfToggle} onChange={setOnbehalfToggle} />
+						</div>
+
+						<div className="mx-auto my-4 w-full flex-col flex gap-4">
+							{!onbehalfToggle && !hasActionableFunds ? (
+								<div className="rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-4 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-body-primary">
+									Add ZCHF on {chain.name} to start earning.
+								</div>
+							) : onbehalfToggle ? (
+								<SavingsActionSaveOnBehalf
+									disabled={onbehalfError != "" || onbehalfAddress == ""}
+									savingsModule={savingsAdresse}
+									amount={amount}
+									onBehalf={onbehalfAddress as Address}
+								/>
+							) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
+								<SavingsActionInterest
+									disabled={!!error}
+									savingsModule={savingsAdresse}
+									balance={userSavingsBalance}
+									interest={userSavingsInterest}
+									newReferrer={newReferrer}
+									newReferralFeePPM={newReferralFeePPM}
+								/>
+							) : amount > userSavingsBalance ? (
+								<SavingsActionSave
+									disabled={!!error}
+									savingsModule={savingsAdresse}
+									amount={amount}
+									interest={userSavingsInterest}
+									newReferrer={newReferrer}
+									newReferralFeePPM={newReferralFeePPM}
+								/>
+							) : (
+								<SavingsActionWithdraw
+									disabled={userSavingsBalance == 0n || !!error}
+									savingsModule={savingsAdresse}
+									balance={amount}
+									change={change}
+									newReferrer={newReferrer}
+									newReferralFeePPM={newReferralFeePPM}
+								/>
+							)}
+						</div>
+
+						{newReferrer ? (
+							<div className="flex mt-8">
+								<div className={`flex-1 text-text-secondary`}>
+									<span className="font-semibold">Notice: </span>
+									You are about to set a referrer{" "}
+									<AppLink
+										className="pr-2"
+										label={shortenAddress(newReferrer)}
+										href={ContractUrl(newReferrer, chain)}
+										external={true}
+									/>
+									who will receive{" "}
+									<span className="font-semibold">{Math.round(Number(newReferralFeePPM / 1000n)) / 10}%</span> of your
+									earned interest.
+								</div>
+							</div>
+						) : null}
+					</>
 				) : null}
 			</AppCard>
 
-			{!onbehalfToggle && isLoaded && !hasActionableFunds ? null : (
+			{isSavingsDataReady && (onbehalfToggle || hasActionableFunds) ? (
 				<SavingsDetailsCard
 					account={account}
 					chain={chain}
@@ -331,7 +354,7 @@ export default function SavingsInteractionCard({
 					referralFeePPM={userSavingsReferralFeePPM}
 					referralFees={userSavingsReferralFees}
 				/>
-			)}
+			) : null}
 		</section>
 	);
 }

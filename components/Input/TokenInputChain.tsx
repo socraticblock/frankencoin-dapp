@@ -99,27 +99,34 @@ export default function TokenInputChain({
 						) : (
 							<BigNumberInput
 								inputRefChild={inputRef}
-								className={`w-full px-0 py-0 text-3xl ${disabled ? "bg-card-input-disabled" : ""}`}
+								className={`w-full min-w-0 px-0 py-0 text-3xl ${disabled ? "bg-card-input-disabled" : ""}`}
 								decimals={Number(digit)}
 								placeholder={placeholder}
 								value={value || ""}
 								onChange={onChange}
 								autoFocus={autoFocus}
 								disabled={disabled}
+								maxDisplayDecimals={lockChainSelector ? 4 : undefined}
 							/>
 						)}
 					</div>
 
 					<div className="md:col-span-2">
-						<ChainBySelect
-							chains={WAGMI_CHAINS.map((c) => c.name)}
-							chain={chain}
-							chainOnChange={onChangeChain}
-							disabled={lockChainSelector}
-							invertColors={disabled}
-							prefixLabel={prefixLabel}
-							tokenLogo={tokenLogo}
-						/>
+						{lockChainSelector ? (
+							<div className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-card-input-border bg-card-content-secondary px-3 text-sm font-medium text-text-primary">
+								{tokenLogo ? <TokenLogo currency={tokenLogo} chain={chain} size={5} /> : null}
+								<span className="whitespace-nowrap">{`${symbol} · ${chain}`}</span>
+							</div>
+						) : (
+							<ChainBySelect
+								chains={WAGMI_CHAINS.map((c) => c.name)}
+								chain={chain}
+								chainOnChange={onChangeChain}
+								invertColors={disabled}
+								prefixLabel={prefixLabel}
+								tokenLogo={tokenLogo}
+							/>
+						)}
 					</div>
 				</div>
 
