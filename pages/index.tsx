@@ -5,6 +5,7 @@ import AppButtonSecondary from "@components/AppButtonSecondary";
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
 import DetectedAcrossChainsPanel, { ChainAction, ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
+import { useLiveSavingsInterestByChain } from "@components/PageHome/useLiveSavingsInterestByChain";
 import WalletConnect from "@components/WalletConnect";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import { useChainId, useConnection, useReadContract, useReadContracts } from "wagmi";
@@ -88,6 +89,12 @@ export default function MainPage() {
 	const connectedAddress = address || zeroAddress;
 	const currentChainId = chain.id;
 	const supportedChains = useMemo(() => [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic], []);
+	const supportedChainIds = useMemo(() => supportedChains.map((c) => c.id as ChainId), [supportedChains]);
+
+	const liveInterestByChain = useLiveSavingsInterestByChain(
+		isConnected && address ? (normalizeAddress(address) as Address) : undefined,
+		supportedChainIds
+	);
 
 	const walletZchfContracts = useMemo(
 		() =>
@@ -188,14 +195,64 @@ export default function MainPage() {
 		return savingsEntries.reduce((acc, entry) => acc + Number(formatUnits(entry.balance, 18)), 0);
 	}, [isConnected, address, savingsLoaded, savingsEntries]);
 
-	const totalClaimableInterest = useMemo(() => {
-		if (!isConnected || !address || !savingsLoaded) return null;
-		return savingsEntries.reduce((acc, entry) => acc + Number(formatUnits(entry.interest, 18)), 0);
-	}, [isConnected, address, savingsLoaded, savingsEntries]);
+	const chainsWithPositiveSavingsBalance = useMemo(() => {
+		const set = new Set<ChainId>();
+		for (const entry of savingsEntries) {
+			if (entry.balance > 0n) set.add(entry.chainId);
+		}
+		return set;
+	}, [savingsEntries]);
+
+	const interestAggregate = useMemo(() => {
+		if (!isConnected || !address) return { total: null as number | null, loading: false, errorNote: null as string | null };
+		if (!savingsLoaded) return { total: null, loading: true, errorNote: null };
+		if (chainsWithPositiveSavingsBalance.size === 0) return { total: 0, loading: false, errorNote: null };
+
+		let sum = 0;
+		for (const chainId of chainsWithPositiveSavingsBalance) {
+			const live = liveInterestByChain.get(chainId);
+			if (!live || live.status === "loading") return { total: null, loading: true, errorNote: null };
+			if (live.status === "error" || live.status === "no_module") {
+				return { total: null, loading: false, errorNote: "Some interest data could not be loaded." };
+			}
+			sum += live.interestZchf ?? 0;
+		}
+		return { total: sum, loading: false, errorNote: null };
+	}, [isConnected, address, savingsLoaded, chainsWithPositiveSavingsBalance, liveInterestByChain]);
+
+	const earnTargetChainId = useMemo(() => {
+		if (!isConnected || !address) return currentChainId as ChainId;
+		let bestInterest = -1;
+		let bestChain: ChainId | null = null;
+		for (const [cid, live] of liveInterestByChain) {
+			if (live.status === "ready" && (live.interestZchf ?? 0) > bestInterest) {
+				bestInterest = live.interestZchf ?? 0;
+				bestChain = cid;
+			}
+		}
+		if (bestChain !== null && bestInterest > 0) return bestChain;
+
+		let bestBal = -1;
+		let bestChainBal: ChainId | null = null;
+		for (const entry of savingsEntries) {
+			const b = Number(formatUnits(entry.balance, 18));
+			if (b > bestBal) {
+				bestBal = b;
+				bestChainBal = entry.chainId;
+			}
+		}
+		if (bestChainBal !== null && bestBal > 0) return bestChainBal;
+		return currentChainId as ChainId;
+	}, [isConnected, address, liveInterestByChain, savingsEntries, currentChainId]);
 
 	const activeSavingsEntries = useMemo(
-		() => savingsEntries.filter((entry) => entry.balance > 0n || entry.interest > 0n),
-		[savingsEntries]
+		() =>
+			savingsEntries.filter((entry) => {
+				if (entry.balance > 0n) return true;
+				const live = liveInterestByChain.get(entry.chainId);
+				return live?.status === "ready" && (live.interestZchf ?? 0) > 0;
+			}),
+		[savingsEntries, liveInterestByChain]
 	);
 
 	const runChainAction = async (action: ChainAction) => {
@@ -212,19 +269,27 @@ export default function MainPage() {
 
 	const chainRows = useMemo<ChainRow[]>(() => {
 		const savingsByChain = new Map<ChainId, number>();
-		const interestByChain = new Map<ChainId, number>();
+		const hasSavingsEntry = new Set<ChainId>();
 		const walletByChain = new Map(walletZchfByChain.map((entry) => [entry.chainId, entry]));
 
 		for (const entry of savingsEntries) {
+			hasSavingsEntry.add(entry.chainId);
 			savingsByChain.set(entry.chainId, Number(formatUnits(entry.balance, 18)));
-			interestByChain.set(entry.chainId, Number(formatUnits(entry.interest, 18)));
 		}
 
 		return supportedChains.map((chainItem) => {
 			const isCurrent = chainItem.id === currentChainId;
 			const chainKey = chainItem.id as ChainId;
-			const knownSavings = savingsLoaded && isConnected && address ? savingsByChain.get(chainKey) ?? 0 : null;
-			const knownInterest = savingsLoaded && isConnected && address ? interestByChain.get(chainKey) ?? 0 : null;
+			const hasEntry = hasSavingsEntry.has(chainKey);
+			const knownSavings =
+				savingsLoaded && isConnected && address ? (hasEntry ? savingsByChain.get(chainKey) ?? 0 : null) : null;
+			const liveInt = liveInterestByChain.get(chainKey);
+			const knownInterest =
+				!isConnected || !address
+					? null
+					: liveInt?.status === "ready" && liveInt.interestZchf !== null
+						? liveInt.interestZchf
+						: null;
 			const walletEntry = walletByChain.get(chainKey);
 			const knownWallet = walletEntry?.status === "loaded" ? walletEntry.balance : null;
 			const knownFps = chainKey === mainnet.id ? fpsHoldings : null;
@@ -260,6 +325,7 @@ export default function MainPage() {
 		fpsHoldings,
 		dataUnavailable,
 		supportedChains,
+		liveInterestByChain,
 	]);
 
 	const relevantChainChips = useMemo(() => {
@@ -271,10 +337,13 @@ export default function MainPage() {
 	}, [activeSavingsEntries, currentChainId, fpsHoldings]);
 
 	const suggestion = useMemo(() => {
-		if ((totalClaimableInterest ?? 0) > 0) {
-			const target = activeSavingsEntries.find((entry) => entry.interest > 0n)?.chainId ?? (currentChainId as ChainId);
+		if (!interestAggregate.loading && (interestAggregate.total ?? 0) > 0) {
+			const target =
+				[...liveInterestByChain.entries()]
+					.filter(([, v]) => v.status === "ready" && (v.interestZchf ?? 0) > 0)
+					.sort((a, b) => (b[1].interestZchf ?? 0) - (a[1].interestZchf ?? 0))[0]?.[0] ?? earnTargetChainId;
 			return {
-				message: `You have ${formatCurrency(totalClaimableInterest!, 2, 2)} ZCHF interest available.`,
+				message: `You have ${formatCurrency(interestAggregate.total!, 2, 2)} ZCHF interest available.`,
 				action: {
 					label: "Go to Earn",
 					targetChainId: target,
@@ -304,7 +373,7 @@ export default function MainPage() {
 		return {
 			message: "Your Desk is ready. Choose an action below to get started.",
 		};
-	}, [activeSavingsEntries, currentChainId, fpsHoldings, hasBorrowing, totalClaimableInterest]);
+	}, [activeSavingsEntries, currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, liveInterestByChain]);
 
 	const cards = useMemo<CockpitCardProps[]>(() => {
 		const walletCopy =
@@ -319,10 +388,13 @@ export default function MainPage() {
 				: totalSavings > 0
 				? `You have ${formatCurrency(totalSavings, 2, 2)} ZCHF earning.`
 				: "You are not earning on any ZCHF yet.";
-		const interestCopy =
-			totalClaimableInterest !== null && totalClaimableInterest > 0
-				? `${formatCurrency(totalClaimableInterest, 2, 2)} ZCHF interest available.`
-				: undefined;
+		const interestCopy = interestAggregate.loading
+			? "Interest data is loading."
+			: interestAggregate.errorNote
+				? interestAggregate.errorNote
+				: interestAggregate.total !== null && interestAggregate.total > 0
+					? `${formatCurrency(interestAggregate.total, 2, 2)} ZCHF interest available.`
+					: undefined;
 		const fpsCopy =
 			fpsHoldings === null
 				? "FPS holdings are loading."
@@ -363,7 +435,7 @@ export default function MainPage() {
 				iconLabel: "SAVE",
 				action: {
 					label: "Go to Earn",
-					targetChainId: currentChainId as ChainId,
+					targetChainId: earnTargetChainId,
 					href: "/savings",
 				},
 				tone: "blue",
@@ -403,11 +475,12 @@ export default function MainPage() {
 		];
 	}, [
 		currentChainId,
+		earnTargetChainId,
 		fpsHoldings,
 		hasBorrowing,
 		hasWalletZchfErrors,
+		interestAggregate,
 		myBorrowedZchf,
-		totalClaimableInterest,
 		totalSavings,
 		totalWalletZchf,
 	]);
@@ -501,9 +574,21 @@ export default function MainPage() {
 				<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 					{intentCards.map((card) => (
 						<AppActionCard key={card.title} title={card.title} description={card.description}>
-							<AppButtonSecondary to={card.href} className="h-10" width="w-full">
-								{card.cta}
-							</AppButtonSecondary>
+							{card.title === "Earn with ZCHF" ? (
+								<AppButtonSecondary
+									className="h-10"
+									width="w-full"
+									onClick={() =>
+										runChainAction({ label: "Go to Earn", targetChainId: earnTargetChainId, href: "/savings" })
+									}
+								>
+									{card.cta}
+								</AppButtonSecondary>
+							) : (
+								<AppButtonSecondary to={card.href} className="h-10" width="w-full">
+									{card.cta}
+								</AppButtonSecondary>
+							)}
 						</AppActionCard>
 					))}
 				</div>

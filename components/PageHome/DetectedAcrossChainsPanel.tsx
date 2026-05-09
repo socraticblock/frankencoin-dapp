@@ -54,12 +54,19 @@ export default function DetectedAcrossChainsPanel({
 	const [savingsSort, setSavingsSort] = useState<SavingsSort>("interest");
 
 	const savingsRows = useMemo(() => {
-		const active = rows.filter((row) => hasPositive(row.savingsZchf) || hasPositive(row.claimableInterestZchf));
+		const active = rows.filter(
+			(row) =>
+				hasPositive(row.savingsZchf) ||
+				hasPositive(row.claimableInterestZchf) ||
+				(row.claimableInterestZchf === null && hasPositive(row.savingsZchf))
+		);
+		const interestDesc = (a: ChainRow, b: ChainRow) =>
+			(b.claimableInterestZchf ?? Number.NEGATIVE_INFINITY) - (a.claimableInterestZchf ?? Number.NEGATIVE_INFINITY);
 		return [...active].sort((a, b) => {
 			if (savingsSort === "balance") {
-				return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0) || (b.claimableInterestZchf ?? 0) - (a.claimableInterestZchf ?? 0);
+				return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0) || interestDesc(a, b);
 			}
-			return (b.claimableInterestZchf ?? 0) - (a.claimableInterestZchf ?? 0) || (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
+			return interestDesc(a, b) || (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
 		});
 	}, [rows, savingsSort]);
 
@@ -73,7 +80,15 @@ export default function DetectedAcrossChainsPanel({
 	const walletReadFailures = useMemo(() => rows.filter((row) => row.walletZchfStatus === "error"), [rows]);
 	const walletReadsLoading = useMemo(() => rows.some((row) => row.walletZchfStatus === "loading"), [rows]);
 	const totalSavings = savingsRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
-	const totalInterest = savingsRows.reduce((acc, row) => acc + (row.claimableInterestZchf ?? 0), 0);
+	const interestSummary = useMemo(() => {
+		if (savingsRows.length === 0) return { label: "Claimable interest", value: "-", positive: false };
+		const values = savingsRows.map((r) => r.claimableInterestZchf);
+		if (values.some((v) => v === null || v === undefined)) {
+			return { label: "Claimable interest", value: "Interest data is loading.", positive: false };
+		}
+		const sum = values.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+		return { label: "Claimable interest", value: `${formatCurrency(sum, 2, 2)} ZCHF`, positive: sum > 0 };
+	}, [savingsRows]);
 	const hasBorrowing = typeof borrowedZchf === "number" && borrowedZchf > 0;
 	const useLedgerLayout = savingsRows.length >= 3;
 
@@ -129,7 +144,7 @@ export default function DetectedAcrossChainsPanel({
 				{useLedgerLayout ? (
 					<div className="mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 						<div className="self-start">
-							<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} totalInterest={totalInterest} dataUnavailable={dataUnavailable} onAction={onAction} />
+							<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
 						</div>
 						<div className="space-y-4">
 							<WalletGroup
@@ -145,7 +160,7 @@ export default function DetectedAcrossChainsPanel({
 					</div>
 				) : (
 					<div className="mt-5 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-						<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} totalInterest={totalInterest} dataUnavailable={dataUnavailable} onAction={onAction} />
+						<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
 						<WalletGroup
 							walletRows={walletRows}
 							walletReadsLoading={walletReadsLoading}
@@ -165,13 +180,13 @@ export default function DetectedAcrossChainsPanel({
 function SavingsGroup({
 	savingsRows,
 	totalSavings,
-	totalInterest,
+	interestSummary,
 	dataUnavailable,
 	onAction,
 }: {
 	savingsRows: ChainRow[];
 	totalSavings: number;
-	totalInterest: number;
+	interestSummary: { label: string; value: string; positive: boolean };
 	dataUnavailable?: boolean;
 	onAction: (action: ChainAction) => void;
 }) {
@@ -182,9 +197,9 @@ function SavingsGroup({
 			summary={[
 				{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "-" },
 				{
-					label: "Claimable interest",
-					value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "-",
-					positive: totalInterest > 0,
+					label: interestSummary.label,
+					value: savingsRows.length > 0 ? interestSummary.value : "-",
+					positive: interestSummary.positive,
 				},
 			]}
 		>
@@ -318,17 +333,27 @@ function AllocationGroup({
 }
 
 function SavingsAllocationRow({ row, onAction }: { row: ChainRow; onAction: (action: ChainAction) => void }) {
+	const interestDisplay =
+		row.claimableInterestZchf === null || row.claimableInterestZchf === undefined
+			? "—"
+			: `${formatCurrency(row.claimableInterestZchf, 2, 2)} ZCHF`;
+	const savingsDisplay =
+		row.savingsZchf === null || row.savingsZchf === undefined ? "—" : `${formatCurrency(row.savingsZchf, 2, 2)} ZCHF`;
 	return (
 		<div className="grid grid-cols-1 gap-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center">
 			<ChainCell name={row.name} />
 			<div>
 				<div className="text-xs text-text-secondary">Savings</div>
-				<div className="font-semibold text-text-primary">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</div>
+				<div className="font-semibold text-text-primary">{savingsDisplay}</div>
 			</div>
 			<div>
 				<div className="text-xs text-text-secondary">Interest</div>
-				<div className={`font-semibold ${(row.claimableInterestZchf ?? 0) > 0 ? "text-text-success" : "text-text-primary"}`}>
-					{formatCurrency(row.claimableInterestZchf ?? 0, 2, 2)} ZCHF
+				<div
+					className={`font-semibold ${
+						row.claimableInterestZchf != null && row.claimableInterestZchf > 0 ? "text-text-success" : "text-text-primary"
+					}`}
+				>
+					{interestDisplay}
 				</div>
 			</div>
 			<RowAction
