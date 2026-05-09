@@ -23,13 +23,13 @@ type CockpitCardTone = "brass" | "blue" | "violet" | "slate" | "green";
 
 type CockpitCardProps = {
 	title: string;
-	value: string;
-	subtitle?: string;
-	detail?: string;
+	copy: string;
+	amount?: string;
+	secondaryCopy?: string;
 	help?: string;
 	iconLabel: string;
 	action?: ChainAction;
-	secondary?: boolean;
+	secondaryActions?: { label: string; note: string }[];
 	tone: CockpitCardTone;
 	onAction: (action: ChainAction) => void;
 };
@@ -145,22 +145,6 @@ export default function MainPage() {
 		[savingsEntries]
 	);
 
-	const primarySavingsEntry = useMemo(() => {
-		const withInterest = activeSavingsEntries.find((entry) => entry.interest > 0n);
-		return withInterest ?? activeSavingsEntries[0] ?? null;
-	}, [activeSavingsEntries]);
-
-	const savingsChainLabel = useMemo(() => {
-		if (!primarySavingsEntry) return undefined;
-		if (activeSavingsEntries.length > 1) return `across ${activeSavingsEntries.length} chains`;
-		return `on ${getChain(primarySavingsEntry.chainId).name}`;
-	}, [activeSavingsEntries, primarySavingsEntry]);
-
-	const knownZchfActivity = useMemo(() => {
-		if (walletZchf === null || totalSavings === null) return null;
-		return walletZchf + totalSavings;
-	}, [walletZchf, totalSavings]);
-
 	const runChainAction = async (action: ChainAction) => {
 		const targetChain = getChain(action.targetChainId);
 		if (chain.id !== action.targetChainId) {
@@ -222,34 +206,23 @@ export default function MainPage() {
 	}, [activeSavingsEntries, currentChainId, fpsHoldings]);
 
 	const suggestion = useMemo(() => {
-		const interestEntry = activeSavingsEntries.find((entry) => entry.interest > 0n);
-		if (interestEntry) {
-			const target = interestEntry.chainId;
-			const targetName = getChain(target).name;
+		if ((totalClaimableInterest ?? 0) > 0) {
+			const target = activeSavingsEntries.find((entry) => entry.interest > 0n)?.chainId ?? (currentChainId as ChainId);
 			return {
-				message: `Claimable interest is available on ${targetName}.`,
+				message: `You have ${formatCurrency(totalClaimableInterest!, 2, 2)} ZCHF interest available.`,
 				action: {
-					label: chain.id === target ? "Open Earn" : `Switch to ${targetName} and open Earn`,
+					label: "Go to Earn",
 					targetChainId: target,
 					href: "/savings",
 				},
 			};
 		}
 
-		const savingsElsewhere = activeSavingsEntries.find((entry) => entry.chainId !== chain.id && entry.balance > 0n);
-		if (savingsElsewhere) {
-			const targetName = getChain(savingsElsewhere.chainId).name;
-			return {
-				message: `Savings were detected on ${targetName} while your wallet is connected to ${chain.name}.`,
-				action: { label: `Switch to ${targetName}`, targetChainId: savingsElsewhere.chainId, href: "/savings" },
-			};
-		}
-
 		if ((fpsHoldings ?? 0) > 0) {
 			return {
-				message: "FPS holdings are managed on Ethereum.",
+				message: "You have FPS invested.",
 				action: {
-					label: chain.id === mainnet.id ? "Open Invest" : "Switch to Ethereum and open Invest",
+					label: "Go to Invest",
 					targetChainId: mainnet.id as ChainId,
 					href: "/equity",
 				},
@@ -266,21 +239,78 @@ export default function MainPage() {
 		return {
 			message: "Your Desk is ready. Choose an action below to get started.",
 		};
-	}, [activeSavingsEntries, chain.id, chain.name, fpsHoldings, hasBorrowing]);
+	}, [activeSavingsEntries, currentChainId, fpsHoldings, hasBorrowing, totalClaimableInterest]);
 
 	const cards = useMemo<CockpitCardProps[]>(() => {
-		const savingsTargetChain = primarySavingsEntry?.chainId ?? (base.id as ChainId);
-		const savingsTargetName = getChain(savingsTargetChain).name;
+		const walletCopy =
+			walletZchf === null
+				? "Wallet ZCHF is loading."
+				: `You have ${formatCurrency(walletZchf, 2, 2)} ZCHF in your wallet on the current network.`;
+		const earningCopy =
+			totalSavings === null
+				? "Earning data is loading."
+				: totalSavings > 0
+				? `You have ${formatCurrency(totalSavings, 2, 2)} ZCHF earning.`
+				: "You are not earning on any ZCHF yet.";
+		const interestCopy =
+			totalClaimableInterest !== null && totalClaimableInterest > 0
+				? `${formatCurrency(totalClaimableInterest, 2, 2)} ZCHF interest available.`
+				: undefined;
+		const fpsCopy =
+			fpsHoldings === null
+				? "FPS holdings are loading."
+				: fpsHoldings > 0
+				? `You have ${formatCurrency(fpsHoldings, 2, 2)} FPS invested.`
+				: "You have not invested in FPS yet.";
+		const borrowingCopy =
+			myBorrowedZchf === null
+				? "Borrowing data is loading."
+				: myBorrowedZchf > 0
+				? `You have borrowed ${formatCurrency(myBorrowedZchf, 2, 2)} ZCHF.`
+				: "You have no active borrowing.";
 
 		return [
 			{
+				title: "Wallet ZCHF",
+				copy: walletCopy,
+				amount: walletZchf === null ? undefined : `${formatCurrency(walletZchf, 2, 2)} ZCHF`,
+				secondaryCopy: "Only the current-network wallet balance is shown.",
+				iconLabel: "ZCHF",
+				action: {
+					label: "Open Transfer",
+					targetChainId: currentChainId as ChainId,
+					href: "/transfer",
+				},
+				secondaryActions: [
+					{ label: "Buy with bank", note: "Coming soon" },
+					{ label: "Buy on DEX", note: "Coming soon" },
+				],
+				tone: "slate",
+				onAction: runChainAction,
+			},
+			{
+				title: "Earning",
+				copy: earningCopy,
+				amount: totalSavings === null ? undefined : `${formatCurrency(totalSavings, 2, 2)} ZCHF`,
+				secondaryCopy: interestCopy,
+				iconLabel: "SAVE",
+				action: {
+					label: "Go to Earn",
+					targetChainId: currentChainId as ChainId,
+					href: "/savings",
+				},
+				tone: "blue",
+				onAction: runChainAction,
+			},
+			{
 				title: "FPS",
-				value: formatAmount(fpsHoldings, "FPS"),
-				subtitle: "on Ethereum",
+				copy: fpsCopy,
+				amount: fpsHoldings === null ? undefined : `${formatCurrency(fpsHoldings, 2, 2)} FPS`,
+				secondaryCopy: "FPS is managed on Ethereum mainnet.",
 				help: "FPS is managed on Ethereum mainnet.",
 				iconLabel: "FPS",
 				action: {
-					label: currentChainId === mainnet.id ? "Open Invest" : "Switch to Ethereum",
+					label: "Go to Invest",
 					targetChainId: mainnet.id as ChainId,
 					href: "/equity",
 				},
@@ -288,73 +318,23 @@ export default function MainPage() {
 				onAction: runChainAction,
 			},
 			{
-				title: "Savings",
-				value: formatAmount(totalSavings, "ZCHF"),
-				subtitle: savingsChainLabel,
-				detail: hasPositive(totalClaimableInterest)
-					? `${formatCurrency(totalClaimableInterest!, 2, 2)} ZCHF interest available`
-					: undefined,
-				iconLabel: "SAVE",
-				action: {
-					label: currentChainId === savingsTargetChain ? "Open Earn" : `Switch to ${savingsTargetName}`,
-					targetChainId: savingsTargetChain,
-					href: "/savings",
-				},
-				tone: "blue",
-				onAction: runChainAction,
-			},
-			{
 				title: "Borrowing",
-				value: hasBorrowing
-					? `${formatCurrency(myBorrowedZchf!, 2, 2)} ZCHF borrowed`
-					: myBorrowedZchf === null
-					? "\u2014"
-					: "No active borrowing",
+				copy: borrowingCopy,
+				amount: myBorrowedZchf === null ? undefined : `${formatCurrency(myBorrowedZchf, 2, 2)} ZCHF`,
+				secondaryCopy: hasBorrowing
+					? "Manage your borrowing positions from Portfolio."
+					: "Explore approved collateral and opening a new position.",
 				iconLabel: "DEBT",
 				action: {
-					label: "Open Portfolio",
+					label: hasBorrowing ? "Open Portfolio" : "Explore Borrowing",
 					targetChainId: currentChainId as ChainId,
-					href: "/mypositions",
+					href: hasBorrowing ? "/mypositions" : "/mint",
 				},
 				tone: "violet",
 				onAction: runChainAction,
 			},
-			{
-				title: "Wallet ZCHF",
-				value: formatAmount(walletZchf, "ZCHF"),
-				subtitle: `on ${chain.name}`,
-				iconLabel: "ZCHF",
-				action: {
-					label: "Open Transfer",
-					targetChainId: currentChainId as ChainId,
-					href: "/transfer",
-				},
-				secondary: true,
-				tone: "slate",
-				onAction: runChainAction,
-			},
-			{
-				title: "Known ZCHF Activity",
-				value: formatAmount(knownZchfActivity, "ZCHF"),
-				subtitle: "Loaded wallet + savings activity across active chains.",
-				iconLabel: "SUM",
-				tone: "green",
-				onAction: runChainAction,
-			},
 		];
-	}, [
-		chain.name,
-		currentChainId,
-		fpsHoldings,
-		hasBorrowing,
-		knownZchfActivity,
-		myBorrowedZchf,
-		primarySavingsEntry?.chainId,
-		savingsChainLabel,
-		totalClaimableInterest,
-		totalSavings,
-		walletZchf,
-	]);
+	}, [currentChainId, fpsHoldings, hasBorrowing, myBorrowedZchf, totalClaimableInterest, totalSavings, walletZchf]);
 
 	return (
 		<>
@@ -414,15 +394,14 @@ export default function MainPage() {
 					<div>
 						<div className="flex flex-wrap items-end justify-between gap-2">
 							<h2 className="text-xl font-semibold text-text-primary">Desk Overview</h2>
-							<p className="text-sm text-text-secondary">
-								A concise cockpit of wallet, savings, FPS, and borrowing activity.
-							</p>
+							<p className="text-sm text-text-secondary">A clean summary of your loaded wallet and protocol activity.</p>
 						</div>
-						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
 							{cards.map((card) => (
 								<CockpitCard key={card.title} {...card} />
 							))}
 						</div>
+						<p className="mt-3 text-xs text-text-secondary">Totals are based on loaded wallet and protocol data.</p>
 					</div>
 
 					<DetectedAcrossChainsPanel
@@ -430,6 +409,7 @@ export default function MainPage() {
 						currentChainId={currentChainId as ChainId}
 						isConnected={Boolean(isConnected && address)}
 						dataUnavailable={dataUnavailable}
+						borrowedZchf={myBorrowedZchf}
 						suggestion={suggestion}
 						onAction={runChainAction}
 					/>
@@ -512,7 +492,7 @@ export default function MainPage() {
 	);
 }
 
-function CockpitCard({ title, value, subtitle, detail, help, iconLabel, action, secondary, tone, onAction }: CockpitCardProps) {
+function CockpitCard({ title, copy, amount, secondaryCopy, help, iconLabel, action, secondaryActions, tone, onAction }: CockpitCardProps) {
 	const toneClass = {
 		brass: "border-[#d6bd7c] bg-[#fffdf8] text-[#9b7625]",
 		blue: "border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300",
@@ -522,36 +502,38 @@ function CockpitCard({ title, value, subtitle, detail, help, iconLabel, action, 
 	}[tone];
 
 	return (
-		<article className="flex min-h-[236px] flex-col rounded-xl border border-[#dfd2bb] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+		<article className="flex min-h-[284px] flex-col rounded-xl border border-[#dfd2bb] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
 			<div className={`flex h-10 w-10 items-center justify-center rounded-full border ${toneClass}`} title={help}>
 				<BadgeIcon label={iconLabel} />
 			</div>
 			<div className="mt-3 text-base font-semibold text-text-primary">{title}</div>
-			<div className="mt-4 text-2xl font-semibold leading-tight text-text-primary">{value}</div>
-			{subtitle ? <div className="mt-2 text-sm text-text-secondary">{subtitle}</div> : null}
-			{detail ? <div className="mt-2 text-sm font-semibold text-text-success">{detail}</div> : null}
+			{amount ? <div className="mt-4 text-2xl font-semibold leading-tight text-text-primary">{amount}</div> : null}
+			<p className="mt-3 text-sm leading-6 text-text-secondary">{copy}</p>
+			{secondaryCopy ? <p className="mt-2 text-sm font-medium text-text-success">{secondaryCopy}</p> : null}
 			<div className="flex-1" />
 			{action ? (
-				<div className="mt-4">
-					{secondary ? (
-						<AppButtonSecondary
-							size="small"
-							width="w-full"
-							className="min-h-[44px] whitespace-normal px-4 py-3 text-center leading-tight"
-							onClick={() => onAction(action)}
+				<div className="mt-4 space-y-2">
+					<AppButton
+						size="small"
+						width="w-full"
+						className="min-h-[44px] whitespace-normal px-4 py-3 text-center leading-tight"
+						onClick={() => onAction(action)}
+					>
+						{action.label}
+					</AppButton>
+					{secondaryActions?.map((secondaryAction) => (
+						<button
+							key={secondaryAction.label}
+							type="button"
+							disabled
+							className="flex min-h-[38px] w-full cursor-not-allowed items-center justify-between rounded-lg border border-[#e0d4bd] bg-[#f4efe6] px-3 text-sm text-text-secondary opacity-80 dark:border-menu-separator dark:bg-card-content-primary"
 						>
-							{action.label}
-						</AppButtonSecondary>
-					) : (
-						<AppButton
-							size="small"
-							width="w-full"
-							className="min-h-[44px] whitespace-normal px-4 py-3 text-center leading-tight"
-							onClick={() => onAction(action)}
-						>
-							{action.label}
-						</AppButton>
-					)}
+							<span>{secondaryAction.label}</span>
+							<span className="rounded-full border border-[#d7c28a] px-2 py-0.5 text-[10px] font-semibold text-[#80601d] dark:border-[#8a7448] dark:text-[#e5c978]">
+								{secondaryAction.note}
+							</span>
+						</button>
+					))}
 				</div>
 			) : null}
 		</article>
@@ -589,11 +571,6 @@ function StatusDivider() {
 
 function BadgeIcon({ label }: { label: string }) {
 	return <span className="text-[10px] font-semibold uppercase tracking-[0.16em]">{label}</span>;
-}
-
-function formatAmount(value: number | null, unit: string) {
-	if (value === null || value === undefined) return "\u2014";
-	return `${formatCurrency(value, 2, 2)} ${unit}`;
 }
 
 function hasPositive(value?: number | null) {

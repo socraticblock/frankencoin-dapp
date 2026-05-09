@@ -1,7 +1,9 @@
 import AppButton from "@components/AppButton";
+import AppButtonSecondary from "@components/AppButtonSecondary";
 import ChainLogo from "@components/ChainLogo";
 import { formatCurrency } from "@utils";
 import { ChainId } from "@frankencoin/zchf";
+import { mainnet } from "viem/chains";
 import { useMemo, useState } from "react";
 
 export type ChainAction = {
@@ -28,6 +30,7 @@ interface Props {
 	currentChainId: ChainId;
 	isConnected: boolean;
 	dataUnavailable?: boolean;
+	borrowedZchf?: number | null;
 	suggestion?: {
 		message: string;
 		action?: ChainAction;
@@ -35,26 +38,26 @@ interface Props {
 	onAction: (action: ChainAction) => void;
 }
 
-export default function DetectedAcrossChainsPanel({ rows, isConnected, dataUnavailable, suggestion, onAction }: Props) {
-	const [showAll, setShowAll] = useState(false);
+type SavingsSort = "interest" | "balance";
 
-	const activeRows = useMemo(
-		() =>
-			rows.filter((row) => {
-				if (row.isCurrent) return true;
-				return (
-					hasPositive(row.walletZchf) ||
-					hasPositive(row.savingsZchf) ||
-					hasPositive(row.claimableInterestZchf) ||
-					hasPositive(row.fpsHoldings)
-				);
-			}),
-		[rows]
-	);
+export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUnavailable, borrowedZchf, suggestion, onAction }: Props) {
+	const [savingsSort, setSavingsSort] = useState<SavingsSort>("interest");
 
-	const visibleRows = showAll ? rows : activeRows;
-	const quietChains = rows.filter((row) => !activeRows.some((activeRow) => activeRow.chainId === row.chainId)).map((row) => row.name);
-	const supportedChainsLabel = quietChains.join(", ");
+	const savingsRows = useMemo(() => {
+		const active = rows.filter((row) => hasPositive(row.savingsZchf) || hasPositive(row.claimableInterestZchf));
+		return [...active].sort((a, b) => {
+			if (savingsSort === "balance") {
+				return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0) || (b.claimableInterestZchf ?? 0) - (a.claimableInterestZchf ?? 0);
+			}
+			return (b.claimableInterestZchf ?? 0) - (a.claimableInterestZchf ?? 0) || (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
+		});
+	}, [rows, savingsSort]);
+
+	const fpsRow = useMemo(() => rows.find((row) => row.chainId === mainnet.id && hasPositive(row.fpsHoldings)), [rows]);
+	const walletRow = useMemo(() => rows.find((row) => row.isCurrent), [rows]);
+	const totalSavings = savingsRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
+	const totalInterest = savingsRows.reduce((acc, row) => acc + (row.claimableInterestZchf ?? 0), 0);
+	const hasBorrowing = typeof borrowedZchf === "number" && borrowedZchf > 0;
 
 	return (
 		<div className="space-y-3">
@@ -88,111 +91,225 @@ export default function DetectedAcrossChainsPanel({ rows, isConnected, dataUnava
 			) : null}
 
 			<section className="rounded-xl border border-[#e0d4bd] bg-[#fffbf2] p-5 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary">
-				<div className="flex flex-wrap items-center justify-between gap-3">
+				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div>
-						<h3 className="text-sm font-semibold text-text-primary">Active locations</h3>
-						<p className="mt-1 text-sm text-text-secondary">Where your ZCHF, savings, and FPS currently live.</p>
+						<h3 className="text-xl font-semibold text-text-primary">Active Allocations</h3>
+						<p className="mt-1 text-sm text-text-secondary">Manage where your ZCHF, savings, FPS, and borrowing live.</p>
 					</div>
-					{rows.length > activeRows.length ? (
-						<button
-							type="button"
-							className="text-sm font-semibold text-[#8a6a22] underline-offset-4 hover:underline dark:text-[#e5c978]"
-							onClick={() => setShowAll((prev) => !prev)}
-						>
-							{showAll ? "Hide chains" : "View all chains"}
-						</button>
-					) : null}
+					<div className="flex rounded-lg border border-[#e0d4bd] bg-card-content-secondary p-1 dark:border-menu-separator">
+						<SortButton active={savingsSort === "interest"} onClick={() => setSavingsSort("interest")}>
+							Sort by interest
+						</SortButton>
+						<SortButton active={savingsSort === "balance"} onClick={() => setSavingsSort("balance")}>
+							Sort by balance
+						</SortButton>
+					</div>
 				</div>
 
-				<div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
-					{visibleRows.map((row) => (
-						<LocationCard key={row.chainId} row={row} dataUnavailable={dataUnavailable} showEmptyState={showAll} />
-					))}
-				</div>
+				<div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+					<AllocationGroup
+						title={
+							savingsRows.length > 0
+								? `Savings across ${savingsRows.length} ${savingsRows.length === 1 ? "chain" : "chains"}`
+								: "Savings"
+						}
+						summary={[
+							{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "—" },
+							{
+								label: "Claimable interest",
+								value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "—",
+								positive: totalInterest > 0,
+							},
+						]}
+					>
+						{savingsRows.length > 0 ? (
+							<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
+								{savingsRows.map((row) => (
+									<SavingsAllocationRow key={row.chainId} row={row} onAction={onAction} />
+								))}
+							</div>
+						) : (
+							<EmptyAllocation
+								copy={dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."}
+							/>
+						)}
+					</AllocationGroup>
 
-				{!showAll && quietChains.length > 0 ? (
-					<div className="mt-4 border-t border-[#eadfcd] pt-4 dark:border-menu-separator">
-						<p className="text-xs text-text-secondary">
-							{isConnected
-								? `Other supported chains: ${supportedChainsLabel}`
-								: `Other supported chains: ${supportedChainsLabel}`}
-						</p>
+					<div className="space-y-4">
+						<AllocationGroup title="Investments">
+							{fpsRow ? (
+								<SimpleAllocationRow
+									chainName="Ethereum"
+									chainId={mainnet.id as ChainId}
+									primary={`${formatCurrency(fpsRow.fpsHoldings ?? 0, 2, 2)} FPS`}
+									action={{ label: "Open Invest", targetChainId: mainnet.id as ChainId, href: "/equity" }}
+									onAction={onAction}
+								/>
+							) : (
+								<EmptyAllocation copy="No active FPS investment loaded." />
+							)}
+						</AllocationGroup>
+
+						<AllocationGroup title="Borrowing">
+							{hasBorrowing ? (
+								<SimpleAllocationRow
+									primary={`Total borrowed: ${formatCurrency(borrowedZchf!, 2, 2)} ZCHF`}
+									action={{ label: "Open Portfolio", targetChainId: currentChainId, href: "/mypositions" }}
+									onAction={onAction}
+								/>
+							) : (
+								<EmptyAllocation
+									copy={borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing loaded."}
+								/>
+							)}
+						</AllocationGroup>
+
+						<AllocationGroup title="Wallet">
+							{walletRow ? (
+								<SimpleAllocationRow
+									chainName={walletRow.name}
+									chainId={walletRow.chainId}
+									primary={
+										walletRow.walletZchf === null || walletRow.walletZchf === undefined
+											? "Current network wallet ZCHF: —"
+											: `Current network wallet ZCHF: ${formatCurrency(walletRow.walletZchf, 2, 2)} ZCHF`
+									}
+									action={{ label: "Open Transfer", targetChainId: currentChainId, href: "/transfer" }}
+									onAction={onAction}
+								/>
+							) : (
+								<EmptyAllocation copy="Wallet ZCHF is loading." />
+							)}
+						</AllocationGroup>
 					</div>
-				) : null}
+				</div>
 			</section>
 		</div>
 	);
 }
 
-function LocationCard({ row, dataUnavailable, showEmptyState }: { row: ChainRow; dataUnavailable?: boolean; showEmptyState: boolean }) {
-	const facts = getLocationFacts(row);
-	const accentClass = row.isCurrent
-		? "border-[#d8bf86] shadow-[inset_2px_0_0_0_#c9a54f]"
-		: hasPositive(row.savingsZchf) || hasPositive(row.claimableInterestZchf)
-		? "border-blue-200 shadow-[inset_2px_0_0_0_#2563eb] dark:border-blue-900"
-		: "border-[#e6dbca]";
-
+function AllocationGroup({
+	title,
+	summary,
+	children,
+}: {
+	title: string;
+	summary?: { label: string; value: string; positive?: boolean }[];
+	children: React.ReactNode;
+}) {
 	return (
-		<div
-			className={`rounded-2xl border bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(251,246,237,0.92))] p-4 shadow-sm dark:bg-card-body-primary ${accentClass} dark:border-menu-separator`}
-		>
-			<div className="flex items-center gap-3">
-				<div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#e3d6c1] bg-[#f7f1e6] dark:border-menu-separator dark:bg-card-content-primary">
-					<ChainLogo chain={row.name.toLowerCase()} size={6} />
-				</div>
-				<div className="min-w-0 flex-1">
-					<div className="text-[22px] font-semibold leading-none text-text-primary">{row.name}</div>
-					<div className="mt-2 flex flex-wrap gap-2">
-						{row.isCurrent ? <LocationPill>Current</LocationPill> : null}
-						{hasPositive(row.fpsHoldings) ? <LocationPill variant="brass">FPS</LocationPill> : null}
-						{hasPositive(row.savingsZchf) ? <LocationPill variant="blue">Savings</LocationPill> : null}
-						{hasPositive(row.claimableInterestZchf) ? <LocationPill variant="green">Interest</LocationPill> : null}
+		<div className="rounded-xl border border-[#e6dbca] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<h4 className="text-base font-semibold text-text-primary">{title}</h4>
+				{summary && summary.length > 0 ? (
+					<div className="flex flex-wrap gap-4 text-right text-xs text-text-secondary">
+						{summary.map((item) => (
+							<div key={item.label}>
+								<div>{item.label}</div>
+								<div className={`mt-1 text-sm font-semibold ${item.positive ? "text-text-success" : "text-text-primary"}`}>
+									{item.value}
+								</div>
+							</div>
+						))}
 					</div>
-				</div>
+				) : null}
 			</div>
-
-			<div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
-				{dataUnavailable && !row.isCurrent ? <LocationMetric tone="muted" label="Data unavailable" /> : null}
-				{!dataUnavailable && facts.map((fact) => <LocationMetric key={`${row.chainId}-${fact.label}`} {...fact} />)}
-				{!dataUnavailable && facts.length === 0 && showEmptyState ? <LocationMetric tone="muted" label="No ZCHF activity" /> : null}
-			</div>
+			<div className="mt-3">{children}</div>
 		</div>
 	);
 }
 
-function LocationMetric({ label, tone = "default" }: { label: string; tone?: "default" | "positive" | "muted" }) {
-	const dotClass = tone === "positive" ? "bg-[#0e9f6e]" : tone === "muted" ? "bg-[#c4b59a] dark:bg-[#6f6a5f]" : "bg-[#b49349]";
-
+function SavingsAllocationRow({ row, onAction }: { row: ChainRow; onAction: (action: ChainAction) => void }) {
 	return (
-		<span className="inline-flex items-center gap-2 text-base text-text-primary">
-			<span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
-			{label}
-		</span>
+		<div className="grid grid-cols-1 gap-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center">
+			<ChainCell name={row.name} />
+			<div>
+				<div className="text-xs text-text-secondary">Savings</div>
+				<div className="font-semibold text-text-primary">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</div>
+			</div>
+			<div>
+				<div className="text-xs text-text-secondary">Interest</div>
+				<div className={`font-semibold ${(row.claimableInterestZchf ?? 0) > 0 ? "text-text-success" : "text-text-primary"}`}>
+					{formatCurrency(row.claimableInterestZchf ?? 0, 2, 2)} ZCHF
+				</div>
+			</div>
+			<RowAction
+				action={{ label: "Open Earn", targetChainId: row.chainId, href: "/savings" }}
+				helper={row.isCurrent ? undefined : `Requires ${row.name}`}
+				onAction={onAction}
+			/>
+		</div>
 	);
 }
 
-function LocationPill({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "brass" | "blue" | "green" }) {
-	const pillClass = {
-		default: "border-[#d7c28a] bg-[#f7ecd2] text-[#80601d] dark:border-[#8a7448] dark:bg-[#242b38] dark:text-[#e5c978]",
-		brass: "border-[#dcc490] bg-[#f9f0da] text-[#896521] dark:border-[#8a7448] dark:bg-[#242b38] dark:text-[#e5c978]",
-		blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300",
-		green: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300",
-	}[variant];
-
-	return <span className={`rounded-full border px-3 py-1 text-[11px] font-medium ${pillClass}`}>{children}</span>;
+function SimpleAllocationRow({
+	chainName,
+	chainId,
+	primary,
+	action,
+	onAction,
+}: {
+	chainName?: string;
+	chainId?: ChainId;
+	primary: string;
+	action: ChainAction;
+	onAction: (action: ChainAction) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-3 rounded-lg border border-[#eadfcd] bg-[#fffaf0] p-3 dark:border-menu-separator dark:bg-card-body-primary md:flex-row md:items-center md:justify-between">
+			<div className="space-y-2">
+				{chainName ? <ChainCell name={chainName} /> : null}
+				<div className="font-semibold text-text-primary">{primary}</div>
+			</div>
+			<RowAction
+				action={action}
+				helper={chainId && action.targetChainId !== chainId ? `Requires ${chainName}` : undefined}
+				onAction={onAction}
+			/>
+		</div>
+	);
 }
 
-function getLocationFacts(row: ChainRow) {
-	return [
-		row.fpsHoldings !== null && row.fpsHoldings !== undefined ? { label: `FPS ${formatCurrency(row.fpsHoldings, 2, 2)}` } : null,
-		row.walletZchf !== null && row.walletZchf !== undefined ? { label: `Wallet ZCHF ${formatCurrency(row.walletZchf, 2, 2)}` } : null,
-		row.savingsZchf !== null && row.savingsZchf !== undefined && row.savingsZchf > 0
-			? { label: `Savings ${formatCurrency(row.savingsZchf, 2, 2)} ZCHF` }
-			: null,
-		row.claimableInterestZchf !== null && row.claimableInterestZchf !== undefined && row.claimableInterestZchf > 0
-			? { label: `Interest ${formatCurrency(row.claimableInterestZchf, 2, 2)} ZCHF`, tone: "positive" as const }
-			: null,
-	].filter(Boolean) as { label: string; tone?: "default" | "positive" }[];
+function ChainCell({ name }: { name: string }) {
+	return (
+		<div className="flex items-center gap-2">
+			<ChainLogo chain={name.toLowerCase()} size={5} />
+			<span className="font-semibold text-text-primary">{name}</span>
+		</div>
+	);
+}
+
+function RowAction({ action, helper, onAction }: { action: ChainAction; helper?: string; onAction: (action: ChainAction) => void }) {
+	return (
+		<div className="flex flex-col gap-1 md:items-end">
+			<AppButtonSecondary size="small" width="w-auto" className="min-h-[34px] px-3 text-xs" onClick={() => onAction(action)}>
+				{action.label}
+			</AppButtonSecondary>
+			{helper ? <span className="text-[11px] text-text-secondary">{helper}</span> : null}
+		</div>
+	);
+}
+
+function SortButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+	return (
+		<button
+			type="button"
+			className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+				active ? "bg-[#f4ead4] text-[#80601d] dark:bg-[#242b38] dark:text-[#e5c978]" : "text-text-secondary hover:text-text-primary"
+			}`}
+			onClick={onClick}
+		>
+			{children}
+		</button>
+	);
+}
+
+function EmptyAllocation({ copy }: { copy: string }) {
+	return (
+		<p className="rounded-lg border border-dashed border-[#e0d4bd] p-3 text-sm text-text-secondary dark:border-menu-separator">
+			{copy}
+		</p>
+	);
 }
 
 function hasPositive(value?: number | null) {
