@@ -33,6 +33,7 @@ interface Props {
 	onReset?: () => void;
 	autoFocus?: boolean;
 	disabled?: boolean;
+	lockChainSelector?: boolean;
 	error?: string;
 	prefixLabel?: string;
 	tokenLogo?: string;
@@ -57,6 +58,7 @@ export default function TokenInputChain({
 	chain = WAGMI_CHAIN.name,
 	autoFocus,
 	disabled,
+	lockChainSelector = false,
 	onChange = () => {},
 	onMin = () => {},
 	onMax = () => {},
@@ -113,6 +115,7 @@ export default function TokenInputChain({
 							chains={WAGMI_CHAINS.map((c) => c.name)}
 							chain={chain}
 							chainOnChange={onChangeChain}
+							disabled={lockChainSelector}
 							invertColors={disabled}
 							prefixLabel={prefixLabel}
 							tokenLogo={tokenLogo}

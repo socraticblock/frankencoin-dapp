@@ -8,7 +8,7 @@ import AppTitle from "@components/AppTitle";
 import Head from "next/head";
 import ReportsYearlyTable from "@components/PageReports/ReportsSavingsYearlyTable";
 import SavingsRecentActivitiesTable from "@components/PageSavings/SavingsRecentActivitiesTable";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RootState, store } from "../redux/redux.store";
 import { fetchLeadrate, fetchSavings } from "../redux/slices/savings.slice";
 import { useConnection, useChainId } from "wagmi";
@@ -29,8 +29,9 @@ function interestCell(row: EarnChainRow): string {
 
 function pickerStateLabel(row: EarnChainRow): string {
 	const saving = (row.savingsZchf ?? 0) > 0;
+	const interest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
 	const wallet = row.walletZchf ?? 0;
-	if (saving) return "Already earning";
+	if (saving || interest) return "Already earning";
 	if (wallet > 0) return "Ready to start";
 	if (row.walletStatus === "loading") return "Loading…";
 	if (row.walletStatus === "error") return "Wallet balance unavailable";
@@ -64,10 +65,21 @@ export default function SavingsPage() {
 
 	const [selectedChainId, setSelectedChainId] = useState<ChainId>(mainnet.id as ChainId);
 	const [earnFormIntent, setEarnFormIntent] = useState<EarnFormIntent>(null);
+	const managementPanelRef = useRef<HTMLDivElement>(null);
+	const autoIntentKeyRef = useRef("");
 
 	const selectedMeta = getChain(selectedChainId);
 	const selectedRow = chainRows.find((r) => r.chainId === selectedChainId);
 	const walletOnSelected = walletChainId === selectedChainId;
+	const selectedSavings = selectedRow?.savingsZchf ?? 0;
+	const selectedInterest = selectedRow?.interestZchf ?? 0;
+	const selectedWallet = selectedRow?.walletZchf ?? 0;
+	const selectedHasSavings = selectedSavings > 0;
+	const selectedHasInterest = selectedRow?.interestStatus === "ready" && selectedInterest > 0;
+	const selectedHasWalletZchf = selectedWallet > 0;
+	const selectedIsActionable = selectedHasSavings || selectedHasInterest || selectedHasWalletZchf;
+	const selectedIsActiveSavings = selectedHasSavings || selectedHasInterest;
+	const selectedIsReadyToDeposit = !selectedIsActiveSavings && selectedHasWalletZchf;
 
 	const savingsAddrSelected = normalizeAddress(
 		selectedChainId === mainnet.id
@@ -96,6 +108,18 @@ export default function SavingsPage() {
 		setSelectedChainId(defaultSelectedChainId);
 	}, [router.isReady, router.query.chainId, defaultSelectedChainId]);
 
+	useEffect(() => {
+		const autoIntentKey = `${selectedChainId}:${walletOnSelected}:${selectedIsReadyToDeposit}`;
+		if (!walletOnSelected || !selectedIsReadyToDeposit) {
+			autoIntentKeyRef.current = "";
+			return;
+		}
+		if (earnFormIntent !== null) return;
+		if (autoIntentKeyRef.current === autoIntentKey) return;
+		autoIntentKeyRef.current = autoIntentKey;
+		setEarnFormIntent("deposit");
+	}, [earnFormIntent, selectedChainId, selectedIsReadyToDeposit, walletOnSelected]);
+
 	const setSelectedChain = useCallback(
 		(id: ChainId) => {
 			setSelectedChainId(id);
@@ -104,6 +128,33 @@ export default function SavingsPage() {
 			});
 		},
 		[router]
+	);
+
+	const focusManagementPanel = useCallback(() => {
+		requestAnimationFrame(() => {
+			const panel = managementPanelRef.current;
+			if (!panel) return;
+			panel.scrollIntoView({ behavior: "smooth", block: "start" });
+			panel.focus({ preventScroll: true });
+		});
+	}, []);
+
+	const getDefaultIntentForRow = useCallback((row?: EarnChainRow): EarnFormIntent => {
+		if (!row) return null;
+		const hasSavings = (row.savingsZchf ?? 0) > 0;
+		const hasInterest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
+		const hasWallet = (row.walletZchf ?? 0) > 0;
+		return !hasSavings && !hasInterest && hasWallet ? "deposit" : null;
+	}, []);
+
+	const selectChainAndFocus = useCallback(
+		(id: ChainId, nextIntent: EarnFormIntent | "auto" = "auto") => {
+			const row = chainRows.find((candidate) => candidate.chainId === id);
+			setEarnFormIntent(nextIntent === "auto" ? getDefaultIntentForRow(row) : nextIntent);
+			setSelectedChain(id);
+			focusManagementPanel();
+		},
+		[chainRows, focusManagementPanel, getDefaultIntentForRow, setSelectedChain]
 	);
 
 	const handleSwitchToSelected = async () => {
@@ -148,6 +199,12 @@ export default function SavingsPage() {
 		if (router.query.address) params.set("address", String(router.query.address));
 		return `/transfer?${params.toString()}`;
 	}, [router.query.address, selectedChainId]);
+
+	const selectedStatusLine = selectedIsActiveSavings
+		? `Ready to manage on ${selectedMeta.name}.`
+		: selectedIsReadyToDeposit
+			? `Ready to start earning on ${selectedMeta.name}.`
+			: `Add ZCHF on ${selectedMeta.name} to start earning.`;
 
 	return (
 		<>
@@ -216,7 +273,7 @@ export default function SavingsPage() {
 							<AppButton
 								className="mt-4 min-h-[44px] w-full max-w-sm sm:mx-auto"
 								width="w-full max-w-sm"
-								onClick={() => setSelectedChain(bestStartChainId)}
+								onClick={() => selectChainAndFocus(bestStartChainId)}
 							>
 								Start earning
 							</AppButton>
@@ -248,7 +305,7 @@ export default function SavingsPage() {
 											<AppButtonSecondary
 												size="small"
 												className="min-h-[40px] w-full md:w-auto"
-												onClick={() => setSelectedChain(row.chainId)}
+												onClick={() => selectChainAndFocus(row.chainId)}
 											>
 												Manage
 											</AppButtonSecondary>
@@ -276,55 +333,27 @@ export default function SavingsPage() {
 										</div>
 									</div>
 									<div className="mt-4 flex flex-col gap-2">
-										{walletChainId === row.chainId ? (
-											<>
-												<AppButtonSecondary
-													className="min-h-[44px] w-full"
-													width="w-full"
-													onClick={() => {
-														setSelectedChain(row.chainId);
-														setEarnFormIntent("collect");
-													}}
-												>
-													Collect interest
-												</AppButtonSecondary>
-												<AppButtonSecondary
-													className="min-h-[44px] w-full"
-													width="w-full"
-													onClick={() => {
-														setSelectedChain(row.chainId);
-														setEarnFormIntent("deposit");
-													}}
-												>
-													Deposit more
-												</AppButtonSecondary>
-												<AppButtonSecondary
-													className="min-h-[44px] w-full"
-													width="w-full"
-													onClick={() => {
-														setSelectedChain(row.chainId);
-														setEarnFormIntent("withdraw");
-													}}
-												>
-													Withdraw
-												</AppButtonSecondary>
-											</>
-										) : (
-											<AppButtonSecondary
-												className="min-h-[44px] w-full"
-												width="w-full"
-												onClick={async () => {
-													setSelectedChain(row.chainId);
-													try {
-														await appKitNetwork.switchNetwork(getChain(row.chainId));
-													} catch {
-														/* silent */
-													}
-												}}
-											>
-												Switch to {row.name} to manage
-											</AppButtonSecondary>
-										)}
+										<AppButtonSecondary
+											className="min-h-[44px] w-full"
+											width="w-full"
+											onClick={() => selectChainAndFocus(row.chainId, "collect")}
+										>
+											Collect interest
+										</AppButtonSecondary>
+										<AppButtonSecondary
+											className="min-h-[44px] w-full"
+											width="w-full"
+											onClick={() => selectChainAndFocus(row.chainId, "deposit")}
+										>
+											Deposit more
+										</AppButtonSecondary>
+										<AppButtonSecondary
+											className="min-h-[44px] w-full"
+											width="w-full"
+											onClick={() => selectChainAndFocus(row.chainId, "withdraw")}
+										>
+											Withdraw
+										</AppButtonSecondary>
 									</div>
 								</div>
 							))}
@@ -333,8 +362,8 @@ export default function SavingsPage() {
 				</section>
 
 				<section className="space-y-3 rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 dark:border-menu-separator dark:bg-card-body-primary md:p-6">
-					<h2 className="text-lg font-semibold text-text-primary">Start earning on another chain</h2>
-					<p className="text-sm text-text-secondary">Choose where your ZCHF should earn.</p>
+					<h2 className="text-lg font-semibold text-text-primary">Choose an earning chain</h2>
+					<p className="text-sm text-text-secondary">Select where you want to manage or start earning with ZCHF.</p>
 					<div className="mt-3 space-y-2">
 						{supportedChains.map((c) => {
 							const row = chainRows.find((r) => r.chainId === c.id)!;
@@ -342,7 +371,7 @@ export default function SavingsPage() {
 								<button
 									key={c.id}
 									type="button"
-									onClick={() => setSelectedChain(c.id as ChainId)}
+									onClick={() => selectChainAndFocus(c.id as ChainId)}
 									className={`flex w-full flex-col gap-1 rounded-xl border px-4 py-3 text-left text-sm transition md:flex-row md:items-center md:justify-between ${
 										selectedChainId === c.id
 											? "border-[#c4a75f] bg-[#f4ead4]/80 dark:border-[#8a7448] dark:bg-[#242b38]"
@@ -371,67 +400,87 @@ export default function SavingsPage() {
 					</div>
 				</section>
 
-				<section className="space-y-4 rounded-2xl border border-[#e0d4bd] bg-card-content-secondary p-5 dark:border-menu-separator md:p-6">
+				<section
+					ref={managementPanelRef}
+					tabIndex={-1}
+					className="space-y-4 rounded-2xl border border-[#e0d4bd] bg-card-content-secondary p-5 outline-none dark:border-menu-separator md:p-6"
+				>
 					<div>
 						<h2 className="text-lg font-semibold text-text-primary">{selectedMeta.name} earning</h2>
 						{selectedRow ? (
 							<div className="mt-2 space-y-1 text-sm text-text-secondary">
-								<p>
-									You have {formatCurrency(selectedRow.savingsZchf ?? 0, 2, 2)} ZCHF earning on {selectedMeta.name}.
-								</p>
-								{selectedRow.interestStatus === "ready" ? (
-									<p className="text-text-primary">
-										{formatCurrency(selectedRow.interestZchf ?? 0, 2, 2)} ZCHF interest is ready to collect.
+								{selectedIsActiveSavings ? (
+									<>
+										<p>You have {formatCurrency(selectedSavings, 2, 2)} ZCHF earning on {selectedMeta.name}.</p>
+										{selectedRow.interestStatus === "ready" ? (
+											<p className="text-text-primary">
+												{formatCurrency(selectedInterest, 2, 2)} ZCHF interest is ready to collect.
+											</p>
+										) : selectedRow.interestStatus === "loading" ? (
+											<p>Interest on this chain is loading.</p>
+										) : selectedRow.interestStatus === "error" ? (
+											<p>Interest on this chain is temporarily unavailable.</p>
+										) : null}
+									</>
+								) : selectedIsReadyToDeposit ? (
+									<>
+										<p>You have {formatCurrency(selectedWallet, 2, 2)} ZCHF in your wallet on {selectedMeta.name}.</p>
+										<p>You are not earning on {selectedMeta.name} yet.</p>
+									</>
+								) : (
+									<>
+										<p className="font-medium text-text-primary">No ZCHF available on {selectedMeta.name}</p>
+										<p>You do not have ZCHF in your wallet on {selectedMeta.name} yet. Add ZCHF there before starting to earn.</p>
+									</>
+								)}
+								{selectedIsActionable || !walletOnSelected ? (
+									<p>
+										Your wallet is currently connected to <span className="font-medium text-text-primary">{walletChain.name}</span>.
 									</p>
-								) : selectedRow.interestStatus === "loading" ? (
-									<p>Interest on this chain is loading.</p>
-								) : selectedRow.interestStatus === "error" ? (
-									<p>Interest on this chain is temporarily unavailable.</p>
 								) : null}
-								<p>
-									Your wallet is currently connected to <span className="font-medium text-text-primary">{walletChain.name}</span>.
-								</p>
 							</div>
 						) : null}
 					</div>
 
 					{!isConnected || account === zeroAddress ? (
 						<p className="text-sm text-text-secondary">Connect your wallet to manage earning on {selectedMeta.name}.</p>
-					) : walletOnSelected ? (
+					) : !selectedIsActionable ? (
+						<div className="space-y-4">
+							<p className="text-sm font-medium text-text-secondary">{selectedStatusLine}</p>
+							<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+								<AppButtonSecondary className="min-h-[44px]" width="w-full sm:w-auto" to={openTransferHref}>
+									Open Transfer
+								</AppButtonSecondary>
+								<AppButtonSecondary className="min-h-[44px] opacity-60" width="w-full sm:w-auto" disabled>
+									Buy with bank — Coming soon
+								</AppButtonSecondary>
+								<AppButtonSecondary className="min-h-[44px] opacity-60" width="w-full sm:w-auto" disabled>
+									Buy on DEX — Coming soon
+								</AppButtonSecondary>
+							</div>
+						</div>
+					) : !walletOnSelected ? (
+						<div className="space-y-4">
+							<p className="text-sm font-medium text-text-secondary">
+								{selectedIsActiveSavings
+									? `Switch to ${selectedMeta.name} to manage.`
+									: `Switch to ${selectedMeta.name} to start earning.`}
+							</p>
+							<AppButton className="min-h-[48px] w-full sm:w-auto" width="w-full sm:w-auto" onClick={handleSwitchToSelected}>
+								{selectedIsActiveSavings
+									? `Switch to ${selectedMeta.name} to manage`
+									: `Switch to ${selectedMeta.name} to start earning`}
+							</AppButton>
+						</div>
+					) : (
 						<>
-							<p className="text-sm font-medium text-text-success">Ready to manage on {selectedMeta.name}.</p>
+							<p className="text-sm font-medium text-text-success">{selectedStatusLine}</p>
 							<SavingsInteractionCard
 								earnFormIntent={earnFormIntent}
 								onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
+								lockChainSelector
 							/>
 						</>
-					) : (
-						<div className="space-y-4">
-							{(selectedRow?.walletZchf ?? 0) > 0 ? (
-								<p className="text-sm text-text-secondary">
-									You have {formatCurrency(selectedRow!.walletZchf ?? 0, 2, 2)} ZCHF in your wallet on {selectedMeta.name}.
-									Switch networks to deposit into earning or adjust savings.
-								</p>
-							) : (
-								<p className="text-sm text-text-secondary">You do not have ZCHF on this chain yet.</p>
-							)}
-							<AppButton className="min-h-[48px] w-full sm:w-auto" width="w-full sm:w-auto" onClick={handleSwitchToSelected}>
-								Switch to {selectedMeta.name} to manage
-							</AppButton>
-							{(selectedRow?.walletZchf ?? 0) <= 0 ? (
-								<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-									<AppButtonSecondary className="min-h-[44px]" width="w-full sm:w-auto" to={openTransferHref}>
-										Open Transfer
-									</AppButtonSecondary>
-									<AppButtonSecondary className="min-h-[44px] opacity-60" width="w-full sm:w-auto" disabled>
-										Buy with bank — Coming soon
-									</AppButtonSecondary>
-									<AppButtonSecondary className="min-h-[44px] opacity-60" width="w-full sm:w-auto" disabled>
-										Buy on DEX — Coming soon
-									</AppButtonSecondary>
-								</div>
-							) : null}
-						</div>
 					)}
 				</section>
 

@@ -49,6 +49,7 @@ export default function ChainBySelect({
 				defaultValue={active}
 				value={active}
 				onChange={handleOnChange}
+				isDisabled={disabled}
 				isClearable={isClearable}
 				styles={{
 					indicatorSeparator: () => ({

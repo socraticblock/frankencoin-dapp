@@ -27,11 +27,13 @@ export type EarnFormIntent = "collect" | "deposit" | "withdraw" | null;
 type SavingsInteractionCardProps = {
 	earnFormIntent?: EarnFormIntent;
 	onConsumeEarnFormIntent?: () => void;
+	lockChainSelector?: boolean;
 };
 
 export default function SavingsInteractionCard({
 	earnFormIntent = null,
 	onConsumeEarnFormIntent,
+	lockChainSelector = false,
 }: SavingsInteractionCardProps) {
 	const onConsumeRef = useRef(onConsumeEarnFormIntent);
 	onConsumeRef.current = onConsumeEarnFormIntent;
@@ -81,6 +83,7 @@ export default function SavingsInteractionCard({
 	const fromSymbol = "ZCHF";
 	const change: bigint = amount - (userSavingsBalance + userSavingsInterest);
 	const direction: boolean = amount >= userSavingsBalance + userSavingsInterest;
+	const hasActionableFunds = userBalance > 0n || userSavingsBalance > 0n || userSavingsInterest > 0n;
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -198,6 +201,7 @@ export default function SavingsInteractionCard({
 	// ---------------------------------------------------------------------------
 
 	const onChangeChain = (value: string) => {
+		if (lockChainSelector) return;
 		const chain = WAGMI_CHAINS.find((c) => c.name == value) as AppKitNetwork;
 		if (chain != undefined) AppKitNetwork.switchNetwork(chain);
 	};
@@ -236,6 +240,7 @@ export default function SavingsInteractionCard({
 						limitDigit={18}
 						limitLabel="Balance"
 						onChangeChain={onChangeChain}
+						lockChainSelector={lockChainSelector}
 						tokenLogo={"ZCHF"}
 					/>
 				</div>
@@ -254,7 +259,11 @@ export default function SavingsInteractionCard({
 				</div>
 
 				<div className="mx-auto my-4 w-full flex-col flex gap-4">
-					{onbehalfToggle ? (
+					{!onbehalfToggle && isLoaded && !hasActionableFunds ? (
+						<div className="rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-4 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-body-primary">
+							Add ZCHF on {chain.name} to start earning.
+						</div>
+					) : onbehalfToggle ? (
 						<SavingsActionSaveOnBehalf
 							disabled={onbehalfError != "" || onbehalfAddress == ""}
 							savingsModule={savingsAdresse}
@@ -309,18 +318,20 @@ export default function SavingsInteractionCard({
 				) : null}
 			</AppCard>
 
-			<SavingsDetailsCard
-				account={account}
-				chain={chain}
-				balance={userSavingsBalance}
-				change={isLoaded && !onbehalfToggle ? change : 0n}
-				direction={direction}
-				interest={isLoaded && !onbehalfToggle ? userSavingsInterest : 0n}
-				locktime={userSavingsLocktime}
-				referrer={userSavingsReferrer}
-				referralFeePPM={userSavingsReferralFeePPM}
-				referralFees={userSavingsReferralFees}
-			/>
+			{!onbehalfToggle && isLoaded && !hasActionableFunds ? null : (
+				<SavingsDetailsCard
+					account={account}
+					chain={chain}
+					balance={userSavingsBalance}
+					change={isLoaded && !onbehalfToggle ? change : 0n}
+					direction={direction}
+					interest={isLoaded && !onbehalfToggle ? userSavingsInterest : 0n}
+					locktime={userSavingsLocktime}
+					referrer={userSavingsReferrer}
+					referralFeePPM={userSavingsReferralFeePPM}
+					referralFees={userSavingsReferralFees}
+				/>
+			)}
 		</section>
 	);
 }
