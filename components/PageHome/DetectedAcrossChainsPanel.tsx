@@ -154,7 +154,7 @@ export default function DetectedAcrossChainsPanel({
 								walletZchfComplete={walletZchfComplete}
 								onAction={onAction}
 							/>
-							<InvestmentsGroup fpsRow={fpsRow} onAction={onAction} />
+							<InvestmentsGroup fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
 							<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
 						</div>
 					</div>
@@ -168,7 +168,7 @@ export default function DetectedAcrossChainsPanel({
 							walletZchfComplete={walletZchfComplete}
 							onAction={onAction}
 						/>
-						<InvestmentsGroup fpsRow={fpsRow} onAction={onAction} />
+						<InvestmentsGroup fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
 						<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
 					</div>
 				)}
@@ -257,13 +257,21 @@ function WalletGroup({
 	);
 }
 
-function InvestmentsGroup({ fpsRow, onAction }: { fpsRow?: ChainRow; onAction: (action: ChainAction) => void }) {
+function InvestmentsGroup({
+	fpsRow,
+	currentChainId,
+	onAction,
+}: {
+	fpsRow?: ChainRow;
+	currentChainId: ChainId;
+	onAction: (action: ChainAction) => void;
+}) {
 	return (
 		<AllocationGroup title="Investments">
 			{fpsRow ? (
 				<SimpleAllocationRow
 					chainName="Ethereum"
-					chainId={mainnet.id as ChainId}
+					currentChainId={currentChainId}
 					primary={`${formatCurrency(fpsRow.fpsHoldings ?? 0, 2, 2)} FPS`}
 					action={{ label: "Open Invest", targetChainId: mainnet.id as ChainId, href: "/equity" }}
 					onAction={onAction}
@@ -290,6 +298,7 @@ function BorrowingGroup({
 		<AllocationGroup title="Borrowing">
 			{hasBorrowing ? (
 				<SimpleAllocationRow
+					currentChainId={currentChainId}
 					primary={`Total borrowed: ${formatCurrency(borrowedZchf!, 2, 2)} ZCHF`}
 					action={{ label: "Open Portfolio", targetChainId: currentChainId, href: "/mypositions" }}
 					onAction={onAction}
@@ -384,17 +393,19 @@ function WalletAllocationRow({ row, onAction }: { row: ChainRow; onAction: (acti
 
 function SimpleAllocationRow({
 	chainName,
-	chainId,
+	currentChainId,
 	primary,
 	action,
 	onAction,
 }: {
 	chainName?: string;
-	chainId?: ChainId;
+	currentChainId?: ChainId;
 	primary: string;
 	action: ChainAction;
 	onAction: (action: ChainAction) => void;
 }) {
+	const requiresNetworkSwitch =
+		currentChainId !== undefined && action.targetChainId !== currentChainId && Boolean(chainName);
 	return (
 		<div className="flex flex-col gap-3 rounded-lg border border-[#eadfcd] bg-[#fffaf0] p-3 dark:border-menu-separator dark:bg-card-body-primary md:flex-row md:items-center md:justify-between">
 			<div className="space-y-2">
@@ -403,7 +414,7 @@ function SimpleAllocationRow({
 			</div>
 			<RowAction
 				action={action}
-				helper={chainId && action.targetChainId !== chainId ? `Requires ${chainName}` : undefined}
+				helper={requiresNetworkSwitch ? `Requires ${chainName}` : undefined}
 				onAction={onAction}
 			/>
 		</div>

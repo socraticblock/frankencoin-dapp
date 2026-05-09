@@ -12,7 +12,7 @@ import { formatCurrency, getChain, normalizeAddress, shortenAddress, SOCIAL } fr
 import { ADDRESS, BridgedFrankencoinABI, ChainId, EquityABI, FrankencoinABI } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/redux.store";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Address, formatUnits, zeroAddress } from "viem";
 import { useServiceStatus } from "../hooks/useServiceStatus";
 import { SavingsBalance } from "@frankencoin/api";
@@ -41,6 +41,8 @@ type WalletZchfByChain = {
 	status: WalletZchfStatus;
 	balance: number | null;
 };
+
+const PENDING_CHAIN_SWITCH_MS = 90_000;
 
 export default function MainPage() {
 	const { address, isConnected } = useConnection();
@@ -221,16 +223,46 @@ export default function MainPage() {
 		[savingsEntries, liveInterestByChain]
 	);
 
-	const runChainAction = async (action: ChainAction) => {
-		const targetChain = getChain(action.targetChainId);
-		if (chain.id !== action.targetChainId) {
-			try {
-				await appKitNetwork.switchNetwork(targetChain);
-			} catch {
-				return;
-			}
+	const [pendingChainAction, setPendingChainAction] = useState<ChainAction | null>(null);
+	const pendingChainTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const clearPendingChainTimeout = () => {
+		if (pendingChainTimeoutRef.current !== null) {
+			clearTimeout(pendingChainTimeoutRef.current);
+			pendingChainTimeoutRef.current = null;
 		}
-		await router.push(action.href);
+	};
+
+	useEffect(() => {
+		return () => clearPendingChainTimeout();
+	}, []);
+
+	useEffect(() => {
+		if (!pendingChainAction) return;
+		if (chainId !== pendingChainAction.targetChainId) return;
+		const href = pendingChainAction.href;
+		clearPendingChainTimeout();
+		setPendingChainAction(null);
+		void router.push(href);
+	}, [chainId, pendingChainAction, router]);
+
+	const runChainAction = async (action: ChainAction) => {
+		if (chainId === action.targetChainId) {
+			await router.push(action.href);
+			return;
+		}
+		clearPendingChainTimeout();
+		setPendingChainAction(action);
+		pendingChainTimeoutRef.current = setTimeout(() => {
+			setPendingChainAction(null);
+			pendingChainTimeoutRef.current = null;
+		}, PENDING_CHAIN_SWITCH_MS);
+		try {
+			await appKitNetwork.switchNetwork(getChain(action.targetChainId));
+		} catch {
+			clearPendingChainTimeout();
+			setPendingChainAction(null);
+		}
 	};
 
 	const chainRows = useMemo<ChainRow[]>(() => {
