@@ -52,9 +52,7 @@ export default function SavingsPage() {
 	const account: Address = isAddress(queryAddress) ? queryAddress : address ?? zeroAddress;
 
 	const {
-		supportedChains,
 		chainRows,
-		activeAllocationRows,
 		totalEarningZchf,
 		totalInterestReadyZchf,
 		interestTotalsIncomplete,
@@ -65,18 +63,15 @@ export default function SavingsPage() {
 
 	const [selectedChainId, setSelectedChainId] = useState<ChainId>(mainnet.id as ChainId);
 	const [earnFormIntent, setEarnFormIntent] = useState<EarnFormIntent>(null);
-	const chainPickerRefs = useRef(new Map<ChainId, HTMLDivElement>());
+	const chainRowRefs = useRef(new Map<ChainId, HTMLDivElement>());
 	const autoIntentKeyRef = useRef("");
 
 	const selectedMeta = getChain(selectedChainId);
 	const selectedRow = chainRows.find((r) => r.chainId === selectedChainId);
 	const walletOnSelected = walletChainId === selectedChainId;
-	const selectedSavings = selectedRow?.savingsZchf ?? 0;
-	const selectedInterest = selectedRow?.interestZchf ?? 0;
-	const selectedWallet = selectedRow?.walletZchf ?? 0;
-	const selectedHasSavings = selectedSavings > 0;
-	const selectedHasInterest = selectedRow?.interestStatus === "ready" && selectedInterest > 0;
-	const selectedHasWalletZchf = selectedWallet > 0;
+	const selectedHasSavings = (selectedRow?.savingsZchf ?? 0) > 0;
+	const selectedHasInterest = selectedRow?.interestStatus === "ready" && (selectedRow?.interestZchf ?? 0) > 0;
+	const selectedHasWalletZchf = (selectedRow?.walletZchf ?? 0) > 0;
 	const selectedIsActiveSavings = selectedHasSavings || selectedHasInterest;
 	const selectedIsReadyToDeposit = !selectedIsActiveSavings && selectedHasWalletZchf;
 
@@ -129,17 +124,17 @@ export default function SavingsPage() {
 		[router]
 	);
 
-	const setChainPickerRef = useCallback((id: ChainId, node: HTMLDivElement | null) => {
+	const setChainRowRef = useCallback((id: ChainId, node: HTMLDivElement | null) => {
 		if (node) {
-			chainPickerRefs.current.set(id, node);
+			chainRowRefs.current.set(id, node);
 		} else {
-			chainPickerRefs.current.delete(id);
+			chainRowRefs.current.delete(id);
 		}
 	}, []);
 
-	const focusChainPickerRow = useCallback((id: ChainId) => {
+	const focusChainRow = useCallback((id: ChainId) => {
 		requestAnimationFrame(() => {
-			const row = chainPickerRefs.current.get(id);
+			const row = chainRowRefs.current.get(id);
 			if (!row) return;
 			row.scrollIntoView({ behavior: "smooth", block: "start" });
 			row.focus({ preventScroll: true });
@@ -159,9 +154,9 @@ export default function SavingsPage() {
 			const row = chainRows.find((candidate) => candidate.chainId === id);
 			setEarnFormIntent(nextIntent === "auto" ? getDefaultIntentForRow(row) : nextIntent);
 			setSelectedChain(id);
-			focusChainPickerRow(id);
+			focusChainRow(id);
 		},
-		[chainRows, focusChainPickerRow, getDefaultIntentForRow, setSelectedChain]
+		[chainRows, focusChainRow, getDefaultIntentForRow, setSelectedChain]
 	);
 
 	const handleSwitchChain = async (id: ChainId) => {
@@ -172,7 +167,23 @@ export default function SavingsPage() {
 		}
 	};
 
-	const useLedgerLayout = activeAllocationRows.length >= 3;
+	const activeEarningRows = useMemo(() => {
+		return [...chainRows]
+			.filter((row) => (row.savingsZchf ?? 0) > 0 || (row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0))
+			.sort((a, b) => {
+				const ai = a.interestStatus === "ready" ? (a.interestZchf ?? 0) : -1;
+				const bi = b.interestStatus === "ready" ? (b.interestZchf ?? 0) : -1;
+				if (bi !== ai) return bi - ai;
+				return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
+			});
+	}, [chainRows]);
+
+	const inactiveEarningRows = useMemo(() => {
+		const activeIds = new Set(activeEarningRows.map((row) => row.chainId));
+		return chainRows.filter((row) => !activeIds.has(row.chainId));
+	}, [activeEarningRows, chainRows]);
+
+	const useLedgerLayout = activeEarningRows.length >= 3;
 
 	const summaryEarningDisplay =
 		!isConnected || account === zeroAddress
@@ -196,9 +207,9 @@ export default function SavingsPage() {
 				: `${activeEarningChainCount} ${activeEarningChainCount === 1 ? "chain" : "chains"}`;
 
 	const bestStartChainId = useMemo(() => {
-		const sorted = [...chainRows].sort((a, b) => (b.walletZchf ?? 0) - (a.walletZchf ?? 0));
+		const sorted = [...inactiveEarningRows].sort((a, b) => (b.walletZchf ?? 0) - (a.walletZchf ?? 0));
 		return sorted[0]?.chainId ?? (mainnet.id as ChainId);
-	}, [chainRows]);
+	}, [inactiveEarningRows]);
 
 	const openTransferHref = useMemo(() => {
 		const params = new URLSearchParams();
@@ -267,7 +278,7 @@ export default function SavingsPage() {
 						<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary px-4 py-6 text-center text-sm text-text-secondary dark:border-menu-separator">
 							Connect your wallet to view earning allocations.
 						</div>
-					) : activeAllocationRows.length === 0 ? (
+					) : activeEarningRows.length === 0 ? (
 						<div className="rounded-xl border border-[#e0d4bd] bg-[#fffdf8] px-4 py-8 text-center dark:border-menu-separator dark:bg-card-body-primary">
 							<p className="text-text-primary font-medium">You are not earning on any ZCHF yet.</p>
 							<p className="mt-2 text-sm text-text-secondary">Choose a chain below and deposit when you are ready.</p>
@@ -288,38 +299,64 @@ export default function SavingsPage() {
 								<span className="text-right"> </span>
 							</div>
 							<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
-								{activeAllocationRows.map((row) => (
+								{activeEarningRows.map((row) => {
+									const isSelected = selectedChainId === row.chainId;
+									return (
 									<div
 										key={row.chainId}
-										className="grid grid-cols-1 gap-3 px-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center"
+										ref={(node) => setChainRowRef(row.chainId, node)}
+										tabIndex={-1}
+										className="outline-none"
 									>
-										<div className="font-semibold text-text-primary">{row.name}</div>
-										<div>
-											<span className="text-xs text-text-secondary md:hidden">Earning · </span>
-											<span className="font-medium">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</span>
+										<div className="grid grid-cols-1 gap-3 px-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center">
+											<div className="font-semibold text-text-primary">{row.name}</div>
+											<div>
+												<span className="text-xs text-text-secondary md:hidden">Earning · </span>
+												<span className="font-medium">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</span>
+											</div>
+											<div>
+												<span className="text-xs text-text-secondary md:hidden">Interest · </span>
+												<span className="font-medium text-text-primary">{interestCell(row)}</span>
+											</div>
+											<div className="flex flex-col gap-2 md:items-end">
+												<AppButtonSecondary
+													size="small"
+													className="min-h-[40px] w-full md:w-auto"
+													onClick={() => selectChainAndFocus(row.chainId)}
+												>
+													Manage
+												</AppButtonSecondary>
+											</div>
 										</div>
-										<div>
-											<span className="text-xs text-text-secondary md:hidden">Interest · </span>
-											<span className="font-medium text-text-primary">{interestCell(row)}</span>
-										</div>
-										<div className="flex flex-col gap-2 md:items-end">
-											<AppButtonSecondary
-												size="small"
-												className="min-h-[40px] w-full md:w-auto"
-												onClick={() => selectChainAndFocus(row.chainId)}
-											>
-												Manage
-											</AppButtonSecondary>
-										</div>
+										{isSelected ? (
+											<div className="px-3 pb-3">
+												<SelectedEarnChainPanel
+													row={row}
+													account={account}
+													isConnected={isConnected}
+													walletChain={walletChain}
+													walletChainId={walletChainId}
+													openTransferHref={openTransferHref}
+													earnFormIntent={earnFormIntent}
+													onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
+													onSwitchChain={() => handleSwitchChain(row.chainId)}
+												/>
+											</div>
+										) : null}
 									</div>
-								))}
+									);
+								})}
 							</div>
 						</div>
 					) : (
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{activeAllocationRows.map((row) => (
+							{activeEarningRows.map((row) => {
+								const isSelected = selectedChainId === row.chainId;
+								return (
 								<div
 									key={row.chainId}
+									ref={(node) => setChainRowRef(row.chainId, node)}
+									tabIndex={-1}
 									className="rounded-xl border border-[#e0d4bd] bg-[#fffdf8] p-4 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary"
 								>
 									<div className="text-base font-semibold text-text-primary">{row.name}</div>
@@ -342,29 +379,49 @@ export default function SavingsPage() {
 											Manage {row.name} earning
 										</AppButtonSecondary>
 									</div>
+									{isSelected ? (
+										<div className="mt-4">
+											<SelectedEarnChainPanel
+												row={row}
+												account={account}
+												isConnected={isConnected}
+												walletChain={walletChain}
+												walletChainId={walletChainId}
+												openTransferHref={openTransferHref}
+												earnFormIntent={earnFormIntent}
+												onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
+												onSwitchChain={() => handleSwitchChain(row.chainId)}
+											/>
+										</div>
+									) : null}
 								</div>
-							))}
+								);
+							})}
 						</div>
 					)}
 				</section>
 
 				<section className="space-y-3 rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 dark:border-menu-separator dark:bg-card-body-primary md:p-6">
-					<h2 className="text-lg font-semibold text-text-primary">Choose an earning chain</h2>
-					<p className="text-sm text-text-secondary">Select where you want to manage or start earning with ZCHF.</p>
+					<h2 className="text-lg font-semibold text-text-primary">Start earning on another chain</h2>
+					<p className="text-sm text-text-secondary">Choose where you want new ZCHF savings to earn.</p>
+					{inactiveEarningRows.length === 0 ? (
+						<div className="mt-3 rounded-xl border border-[#e0d4bd] bg-card-content-secondary px-4 py-5 text-sm text-text-secondary dark:border-menu-separator">
+							You are already earning on every supported chain.
+						</div>
+					) : (
 					<div className="mt-3 space-y-2">
-						{supportedChains.map((c) => {
-							const row = chainRows.find((r) => r.chainId === c.id)!;
+						{inactiveEarningRows.map((row) => {
 							const isSelected = selectedChainId === row.chainId;
 							return (
 								<div
-									key={c.id}
-									ref={(node) => setChainPickerRef(row.chainId, node)}
+									key={row.chainId}
+									ref={(node) => setChainRowRef(row.chainId, node)}
 									tabIndex={-1}
 									className="outline-none"
 								>
 									<button
 										type="button"
-										onClick={() => selectChainAndFocus(c.id as ChainId)}
+										onClick={() => selectChainAndFocus(row.chainId)}
 										className={`flex w-full flex-col gap-1 rounded-xl border px-4 py-3 text-left text-sm transition md:flex-row md:items-center md:justify-between ${
 											isSelected
 												? "rounded-b-none border-[#c4a75f] bg-[#f4ead4]/80 dark:border-[#8a7448] dark:bg-[#242b38]"
@@ -405,6 +462,7 @@ export default function SavingsPage() {
 							);
 						})}
 					</div>
+					)}
 				</section>
 
 				<div className="text-sm text-text-secondary">
