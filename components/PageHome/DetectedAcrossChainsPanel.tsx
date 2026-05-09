@@ -17,6 +17,7 @@ export type ChainRow = {
 	name: string;
 	isCurrent: boolean;
 	status: "Current network" | "No ZCHF activity" | "Data unavailable";
+	walletZchfStatus?: "loading" | "loaded" | "error" | "unsupported";
 	walletZchf?: number | null;
 	savingsZchf?: number | null;
 	claimableInterestZchf?: number | null;
@@ -31,6 +32,7 @@ interface Props {
 	isConnected: boolean;
 	dataUnavailable?: boolean;
 	borrowedZchf?: number | null;
+	walletZchfComplete?: boolean;
 	suggestion?: {
 		message: string;
 		action?: ChainAction;
@@ -40,7 +42,15 @@ interface Props {
 
 type SavingsSort = "interest" | "balance";
 
-export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUnavailable, borrowedZchf, suggestion, onAction }: Props) {
+export default function DetectedAcrossChainsPanel({
+	rows,
+	currentChainId,
+	dataUnavailable,
+	borrowedZchf,
+	walletZchfComplete,
+	suggestion,
+	onAction,
+}: Props) {
 	const [savingsSort, setSavingsSort] = useState<SavingsSort>("interest");
 
 	const savingsRows = useMemo(() => {
@@ -54,7 +64,14 @@ export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUn
 	}, [rows, savingsSort]);
 
 	const fpsRow = useMemo(() => rows.find((row) => row.chainId === mainnet.id && hasPositive(row.fpsHoldings)), [rows]);
-	const walletRow = useMemo(() => rows.find((row) => row.isCurrent), [rows]);
+	const walletRows = useMemo(() => {
+		const positiveRows = rows.filter((row) => row.walletZchfStatus === "loaded" && hasPositive(row.walletZchf));
+		const currentRow = rows.find((row) => row.isCurrent && row.walletZchfStatus === "loaded");
+		if (currentRow && !positiveRows.some((row) => row.chainId === currentRow.chainId)) return [...positiveRows, currentRow];
+		return positiveRows;
+	}, [rows]);
+	const walletReadFailures = useMemo(() => rows.filter((row) => row.walletZchfStatus === "error"), [rows]);
+	const walletReadsLoading = useMemo(() => rows.some((row) => row.walletZchfStatus === "loading"), [rows]);
 	const totalSavings = savingsRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
 	const totalInterest = savingsRows.reduce((acc, row) => acc + (row.claimableInterestZchf ?? 0), 0);
 	const hasBorrowing = typeof borrowedZchf === "number" && borrowedZchf > 0;
@@ -114,10 +131,10 @@ export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUn
 								: "Savings"
 						}
 						summary={[
-							{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "—" },
+							{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "-" },
 							{
 								label: "Claimable interest",
-								value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "—",
+								value: savingsRows.length > 0 ? `${formatCurrency(totalInterest, 2, 2)} ZCHF` : "-",
 								positive: totalInterest > 0,
 							},
 						]}
@@ -136,6 +153,32 @@ export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUn
 					</AllocationGroup>
 
 					<div className="space-y-4">
+						<AllocationGroup title="Wallet">
+							{walletRows.length > 0 ? (
+								<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
+									{walletRows.map((row) => (
+										<WalletAllocationRow key={row.chainId} row={row} onAction={onAction} />
+									))}
+								</div>
+							) : (
+								<EmptyAllocation
+									copy={
+										walletReadsLoading
+											? "Wallet ZCHF is loading."
+											: walletReadFailures.length > 0
+											? "Some wallet balances could not be loaded."
+											: "No wallet ZCHF loaded across supported chains."
+									}
+								/>
+							)}
+							{walletReadFailures.length > 0 ? (
+								<p className="mt-3 text-xs text-text-secondary">Some wallet balances could not be loaded.</p>
+							) : null}
+							{walletZchfComplete ? (
+								<p className="mt-3 text-xs text-text-secondary">Wallet balances loaded across supported ZCHF chains.</p>
+							) : null}
+						</AllocationGroup>
+
 						<AllocationGroup title="Investments">
 							{fpsRow ? (
 								<SimpleAllocationRow
@@ -161,24 +204,6 @@ export default function DetectedAcrossChainsPanel({ rows, currentChainId, dataUn
 								<EmptyAllocation
 									copy={borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing loaded."}
 								/>
-							)}
-						</AllocationGroup>
-
-						<AllocationGroup title="Wallet">
-							{walletRow ? (
-								<SimpleAllocationRow
-									chainName={walletRow.name}
-									chainId={walletRow.chainId}
-									primary={
-										walletRow.walletZchf === null || walletRow.walletZchf === undefined
-											? "Current network wallet ZCHF: —"
-											: `Current network wallet ZCHF: ${formatCurrency(walletRow.walletZchf, 2, 2)} ZCHF`
-									}
-									action={{ label: "Open Transfer", targetChainId: currentChainId, href: "/transfer" }}
-									onAction={onAction}
-								/>
-							) : (
-								<EmptyAllocation copy="Wallet ZCHF is loading." />
 							)}
 						</AllocationGroup>
 					</div>
@@ -235,6 +260,23 @@ function SavingsAllocationRow({ row, onAction }: { row: ChainRow; onAction: (act
 			</div>
 			<RowAction
 				action={{ label: "Open Earn", targetChainId: row.chainId, href: "/savings" }}
+				helper={row.isCurrent ? undefined : `Requires ${row.name}`}
+				onAction={onAction}
+			/>
+		</div>
+	);
+}
+
+function WalletAllocationRow({ row, onAction }: { row: ChainRow; onAction: (action: ChainAction) => void }) {
+	return (
+		<div className="grid grid-cols-1 gap-3 py-3 text-sm md:grid-cols-[1.2fr_1fr_auto] md:items-center">
+			<ChainCell name={row.name} />
+			<div>
+				<div className="text-xs text-text-secondary">Wallet ZCHF</div>
+				<div className="font-semibold text-text-primary">{formatCurrency(row.walletZchf ?? 0, 2, 2)} ZCHF</div>
+			</div>
+			<RowAction
+				action={{ label: "Open Transfer", targetChainId: row.chainId, href: "/transfer" }}
 				helper={row.isCurrent ? undefined : `Requires ${row.name}`}
 				onAction={onAction}
 			/>

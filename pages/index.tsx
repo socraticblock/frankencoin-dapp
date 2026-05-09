@@ -7,7 +7,7 @@ import AppPageHeader from "@components/AppPageHeader";
 import DetectedAcrossChainsPanel, { ChainAction, ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
 import WalletConnect from "@components/WalletConnect";
 import { useAppKitNetwork } from "@reown/appkit/react";
-import { useChainId, useConnection, useReadContract } from "wagmi";
+import { useChainId, useConnection, useReadContract, useReadContracts } from "wagmi";
 import { formatCurrency, getChain, normalizeAddress, shortenAddress } from "@utils";
 import { ADDRESS, BridgedFrankencoinABI, ChainId, EquityABI, FrankencoinABI } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
@@ -32,6 +32,14 @@ type CockpitCardProps = {
 	secondaryActions?: { label: string; note: string }[];
 	tone: CockpitCardTone;
 	onAction: (action: ChainAction) => void;
+};
+
+type WalletZchfStatus = "loading" | "loaded" | "error" | "unsupported";
+
+type WalletZchfByChain = {
+	chainId: ChainId;
+	status: WalletZchfStatus;
+	balance: number | null;
 };
 
 export default function MainPage() {
@@ -77,18 +85,35 @@ export default function MainPage() {
 		},
 	];
 
-	const currentZchfAddress = useMemo(() => getZchfAddress(chain.id), [chain.id]);
-	const hasCurrentZchfAddress = Boolean(currentZchfAddress);
 	const connectedAddress = address || zeroAddress;
 	const currentChainId = chain.id;
+	const supportedChains = useMemo(() => [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic], []);
 
-	const { data: walletZchfRaw, isLoading: walletZchfLoading } = useReadContract({
-		address: currentZchfAddress ?? zeroAddress,
-		chainId: currentChainId,
-		abi: currentChainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
-		functionName: "balanceOf",
-		args: [connectedAddress],
-		query: { enabled: Boolean(isConnected && address && hasCurrentZchfAddress) },
+	const walletZchfContracts = useMemo(
+		() =>
+			supportedChains
+				.map((chainItem) => {
+					const zchfAddress = getZchfAddress(chainItem.id as ChainId);
+					if (!zchfAddress) return null;
+					return {
+						address: zchfAddress,
+						chainId: chainItem.id,
+						abi: chainItem.id === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
+						functionName: "balanceOf",
+						args: [connectedAddress],
+					};
+				})
+				.filter(Boolean),
+		[connectedAddress, supportedChains]
+	);
+
+	const {
+		data: walletZchfResults,
+		isLoading: walletZchfLoading,
+		isError: walletZchfReadError,
+	} = useReadContracts({
+		contracts: walletZchfContracts as any,
+		query: { enabled: Boolean(isConnected && address && walletZchfContracts.length > 0) },
 	});
 
 	const { data: fpsHoldingsRaw, isLoading: fpsLoading } = useReadContract({
@@ -109,13 +134,41 @@ export default function MainPage() {
 
 	const savingsEntries = useMemo(() => getSavingsEntries(savingsBalance), [savingsBalance]);
 
-	const walletZchf = useMemo(() => {
-		if (!isConnected || !address) return null;
-		if (!hasCurrentZchfAddress) return null;
-		if (walletZchfLoading) return null;
-		if (typeof walletZchfRaw !== "bigint") return null;
-		return Number(formatUnits(walletZchfRaw, 18));
-	}, [isConnected, address, hasCurrentZchfAddress, walletZchfLoading, walletZchfRaw]);
+	const walletZchfByChain = useMemo<WalletZchfByChain[]>(() => {
+		let resultIndex = 0;
+		return supportedChains.map((chainItem) => {
+			const chainKey = chainItem.id as ChainId;
+			const zchfAddress = getZchfAddress(chainKey);
+			if (!zchfAddress) return { chainId: chainKey, status: "unsupported", balance: null };
+			const result = walletZchfResults?.[resultIndex++] as { status?: string; result?: unknown; error?: unknown } | undefined;
+			if (!isConnected || !address || walletZchfLoading || !walletZchfResults) {
+				return { chainId: chainKey, status: "loading", balance: null };
+			}
+			if (walletZchfReadError || !result || result.status !== "success" || typeof result.result !== "bigint") {
+				return { chainId: chainKey, status: "error", balance: null };
+			}
+			return { chainId: chainKey, status: "loaded", balance: Number(formatUnits(result.result, 18)) };
+		});
+	}, [address, isConnected, supportedChains, walletZchfLoading, walletZchfReadError, walletZchfResults]);
+
+	const currentWalletZchf = useMemo(
+		() => walletZchfByChain.find((entry) => entry.chainId === currentChainId)?.balance ?? null,
+		[currentChainId, walletZchfByChain]
+	);
+
+	const allReadableWalletZchfLoaded = useMemo(
+		() =>
+			Boolean(isConnected && address) &&
+			walletZchfByChain.filter((entry) => entry.status !== "unsupported").every((entry) => entry.status === "loaded"),
+		[address, isConnected, walletZchfByChain]
+	);
+
+	const hasWalletZchfErrors = useMemo(() => walletZchfByChain.some((entry) => entry.status === "error"), [walletZchfByChain]);
+
+	const totalWalletZchf = useMemo(() => {
+		if (!allReadableWalletZchfLoaded) return null;
+		return walletZchfByChain.reduce((acc, entry) => acc + (entry.balance ?? 0), 0);
+	}, [allReadableWalletZchfLoaded, walletZchfByChain]);
 
 	const fpsHoldings = useMemo(() => {
 		if (!isConnected || !address) return null;
@@ -158,9 +211,9 @@ export default function MainPage() {
 	};
 
 	const chainRows = useMemo<ChainRow[]>(() => {
-		const supportedChains = [mainnet, base, polygon, arbitrum, optimism, gnosis, avalanche, sonic];
 		const savingsByChain = new Map<ChainId, number>();
 		const interestByChain = new Map<ChainId, number>();
+		const walletByChain = new Map(walletZchfByChain.map((entry) => [entry.chainId, entry]));
 
 		for (const entry of savingsEntries) {
 			savingsByChain.set(entry.chainId, Number(formatUnits(entry.balance, 18)));
@@ -172,7 +225,8 @@ export default function MainPage() {
 			const chainKey = chainItem.id as ChainId;
 			const knownSavings = savingsLoaded && isConnected && address ? savingsByChain.get(chainKey) ?? 0 : null;
 			const knownInterest = savingsLoaded && isConnected && address ? interestByChain.get(chainKey) ?? 0 : null;
-			const knownWallet = isCurrent ? walletZchf : null;
+			const walletEntry = walletByChain.get(chainKey);
+			const knownWallet = walletEntry?.status === "loaded" ? walletEntry.balance : null;
 			const knownFps = chainKey === mainnet.id ? fpsHoldings : null;
 			const badges = [
 				...(isCurrent ? ["Current"] : []),
@@ -188,6 +242,7 @@ export default function MainPage() {
 				isCurrent,
 				status: dataUnavailable ? "Data unavailable" : isCurrent ? "Current network" : "No ZCHF activity",
 				walletZchf: knownWallet,
+				walletZchfStatus: walletEntry?.status ?? "unsupported",
 				savingsZchf: knownSavings,
 				claimableInterestZchf: knownInterest,
 				fpsHoldings: knownFps,
@@ -195,7 +250,17 @@ export default function MainPage() {
 				actions: [],
 			};
 		});
-	}, [savingsEntries, savingsLoaded, isConnected, address, currentChainId, walletZchf, fpsHoldings, dataUnavailable]);
+	}, [
+		savingsEntries,
+		savingsLoaded,
+		isConnected,
+		address,
+		currentChainId,
+		walletZchfByChain,
+		fpsHoldings,
+		dataUnavailable,
+		supportedChains,
+	]);
 
 	const relevantChainChips = useMemo(() => {
 		const targets = new Set<ChainId>([currentChainId as ChainId]);
@@ -243,9 +308,11 @@ export default function MainPage() {
 
 	const cards = useMemo<CockpitCardProps[]>(() => {
 		const walletCopy =
-			walletZchf === null
-				? "Wallet ZCHF is loading."
-				: `You have ${formatCurrency(walletZchf, 2, 2)} ZCHF in your wallet on the current network.`;
+			totalWalletZchf !== null
+				? `You have ${formatCurrency(totalWalletZchf, 2, 2)} ZCHF in your wallet.`
+				: hasWalletZchfErrors
+				? "Loaded wallet ZCHF is partial because some balances could not be loaded."
+				: "Wallet ZCHF is loading.";
 		const earningCopy =
 			totalSavings === null
 				? "Earning data is loading."
@@ -273,8 +340,8 @@ export default function MainPage() {
 			{
 				title: "Wallet ZCHF",
 				copy: walletCopy,
-				amount: walletZchf === null ? undefined : `${formatCurrency(walletZchf, 2, 2)} ZCHF`,
-				secondaryCopy: "Only the current-network wallet balance is shown.",
+				amount: totalWalletZchf === null ? undefined : `${formatCurrency(totalWalletZchf, 2, 2)} ZCHF`,
+				secondaryCopy: hasWalletZchfErrors ? "Some wallet balances could not be loaded." : undefined,
 				iconLabel: "ZCHF",
 				action: {
 					label: "Open Transfer",
@@ -334,7 +401,16 @@ export default function MainPage() {
 				onAction: runChainAction,
 			},
 		];
-	}, [currentChainId, fpsHoldings, hasBorrowing, myBorrowedZchf, totalClaimableInterest, totalSavings, walletZchf]);
+	}, [
+		currentChainId,
+		fpsHoldings,
+		hasBorrowing,
+		hasWalletZchfErrors,
+		myBorrowedZchf,
+		totalClaimableInterest,
+		totalSavings,
+		totalWalletZchf,
+	]);
 
 	return (
 		<>
@@ -410,6 +486,7 @@ export default function MainPage() {
 						isConnected={Boolean(isConnected && address)}
 						dataUnavailable={dataUnavailable}
 						borrowedZchf={myBorrowedZchf}
+						walletZchfComplete={allReadableWalletZchfLoaded}
 						suggestion={suggestion}
 						onAction={runChainAction}
 					/>
