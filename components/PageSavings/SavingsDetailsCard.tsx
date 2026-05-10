@@ -6,7 +6,9 @@ import AppLink from "@components/AppLink";
 import { SupportedChain } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
 import { RootState } from "../../redux/redux.store";
-import { SavingsBalance, SavingsBalanceChainIdMapping } from "@frankencoin/api";
+import { SavingsBalance } from "@frankencoin/api";
+
+export type SavingsOutcomeFlowIntent = "collect" | "deposit" | "withdraw";
 
 interface Props {
 	account: Address;
@@ -19,6 +21,8 @@ interface Props {
 	referrer: Address;
 	referralFeePPM: bigint;
 	referralFees: bigint;
+	/** When set, outcome row labels match the active earn action (collect / deposit / withdraw). */
+	flowIntent?: SavingsOutcomeFlowIntent | null;
 }
 
 export default function SavingsDetailsCard({
@@ -32,6 +36,7 @@ export default function SavingsDetailsCard({
 	referrer,
 	referralFeePPM,
 	referralFees,
+	flowIntent = null,
 }: Props) {
 	const { savingsBalance } = useSelector((state: RootState) => state.savings);
 
@@ -48,6 +53,26 @@ export default function SavingsDetailsCard({
 	const inactiveBalance = entries.filter((i) => i.chainId != chain.id);
 	const totalBalance = entries.reduce((a, b) => a + BigInt(b.balance), 0n);
 
+	const movementLabel =
+		flowIntent === "collect"
+			? "Interest to collect"
+			: flowIntent === "deposit"
+				? "Amount to deposit"
+				: flowIntent === "withdraw"
+					? "Amount to withdraw"
+					: direction
+						? "Amount to deposit"
+						: "Amount to withdraw";
+
+	const movementValue =
+		flowIntent === "collect"
+			? formatCurrency(formatUnits(interest - (referrer != zeroAddress ? referralFees : 0n), 18))
+			: formatCurrency(
+					formatUnits((change < 0n ? -change : change) - (referrer != zeroAddress ? referralFees : 0n), 18)
+			  );
+
+	const showInterestReadyRow = flowIntent == null;
+
 	return (
 		<AppCard>
 			<div className="text-lg font-bold text-center">Outcome</div>
@@ -63,18 +88,17 @@ export default function SavingsDetailsCard({
 					<div className="">{formatCurrency(formatUnits(balance, 18))} ZCHF</div>
 				</div>
 
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">Interest ready</div>
-					<div className="">{formatCurrency(formatUnits(interest, 18))} ZCHF</div>
-				</div>
+				{showInterestReadyRow ? (
+					<div className="flex">
+						<div className="flex-1 text-text-secondary">Interest ready</div>
+						<div className="">{formatCurrency(formatUnits(interest, 18))} ZCHF</div>
+					</div>
+				) : null}
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">{direction ? "Amount to deposit" : "Amount to withdraw"}</div>
+					<div className="flex-1 text-text-secondary">{movementLabel}</div>
 					<div className="">
-						{formatCurrency(
-							formatUnits((change < 0n ? -change : change) - (referrer != zeroAddress ? referralFees : 0n), 18)
-						)}{" "}
-						ZCHF
+						{movementValue} ZCHF
 					</div>
 				</div>
 

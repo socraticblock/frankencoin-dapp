@@ -146,8 +146,19 @@ export default function SavingsPage() {
 		const hasSavings = (row.savingsZchf ?? 0) > 0;
 		const hasInterest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
 		const hasWallet = (row.walletZchf ?? 0) > 0;
-		return !hasSavings && !hasInterest && hasWallet ? "deposit" : null;
+		if (hasInterest) return "collect";
+		if (!hasSavings && !hasInterest && hasWallet) return "deposit";
+		return null;
 	}, []);
+
+	const selectActiveChainWithIntent = useCallback(
+		(id: ChainId, intent: Exclude<EarnFormIntent, null>) => {
+			setEarnFormIntent(intent);
+			setSelectedChain(id);
+			focusChainRow(id);
+		},
+		[focusChainRow, setSelectedChain]
+	);
 
 	const selectChainAndFocus = useCallback(
 		(id: ChainId, nextIntent: EarnFormIntent | "auto" = "auto") => {
@@ -182,8 +193,6 @@ export default function SavingsPage() {
 		const activeIds = new Set(activeEarningRows.map((row) => row.chainId));
 		return chainRows.filter((row) => !activeIds.has(row.chainId));
 	}, [activeEarningRows, chainRows]);
-
-	const useLedgerLayout = activeEarningRows.length >= 3;
 
 	const summaryEarningDisplay =
 		!isConnected || account === zeroAddress
@@ -290,111 +299,88 @@ export default function SavingsPage() {
 								Start earning
 							</AppButton>
 						</div>
-					) : useLedgerLayout ? (
-						<div className="overflow-hidden rounded-xl border border-[#e0d4bd] dark:border-menu-separator">
-							<div className="hidden grid-cols-[1.1fr_1fr_1fr_auto] gap-2 border-b border-[#eadfcd] bg-[#f7f0e4] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary md:grid dark:border-menu-separator dark:bg-card-content-secondary">
-								<span>Chain</span>
-								<span className="text-right md:text-left">Earning</span>
-								<span className="text-right md:text-left">Interest ready</span>
-								<span className="text-right"> </span>
-							</div>
-							<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
-								{activeEarningRows.map((row) => {
-									const isSelected = selectedChainId === row.chainId;
-									return (
+					) : (
+						<div className="w-full space-y-4">
+							{activeEarningRows.map((row) => {
+								const isSelected = selectedChainId === row.chainId;
+								const interestReady =
+									row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
+								const collectDisabled = !interestReady;
+								const depositDisabled = (row.walletZchf ?? 0) <= 0;
+								const withdrawDisabled = (row.savingsZchf ?? 0) <= 0;
+								return (
 									<div
 										key={row.chainId}
 										ref={(node) => setChainRowRef(row.chainId, node)}
 										tabIndex={-1}
 										className="outline-none"
 									>
-										<div className="grid grid-cols-1 gap-3 px-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center">
-											<div className="font-semibold text-text-primary">{row.name}</div>
-											<div>
-												<span className="text-xs text-text-secondary md:hidden">Earning · </span>
-												<span className="font-medium">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</span>
+										<div className="w-full rounded-2xl border border-[#e0d4bd] bg-[#fffdf8] p-5 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary md:p-6">
+											<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+												<div className="min-w-0 flex-1 space-y-3">
+													<div className="text-lg font-semibold text-text-primary">{row.name}</div>
+													<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-10 sm:gap-y-2">
+														<div>
+															<div className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+																Earning
+															</div>
+															<div className="mt-1 text-base font-semibold tabular-nums text-text-primary">
+																{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF
+															</div>
+														</div>
+														<div>
+															<div className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+																Interest ready
+															</div>
+															<div className="mt-1 text-base font-semibold tabular-nums text-text-primary">
+																{interestCell(row)}
+															</div>
+														</div>
+													</div>
+												</div>
+												<div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-shrink-0 lg:justify-end">
+													<AppButtonSecondary
+														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
+														width="w-full sm:flex-1 lg:w-36"
+														disabled={collectDisabled}
+														onClick={() => selectActiveChainWithIntent(row.chainId, "collect")}
+													>
+														Collect
+													</AppButtonSecondary>
+													<AppButtonSecondary
+														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
+														width="w-full sm:flex-1 lg:w-36"
+														disabled={depositDisabled}
+														onClick={() => selectActiveChainWithIntent(row.chainId, "deposit")}
+													>
+														Deposit
+													</AppButtonSecondary>
+													<AppButtonSecondary
+														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
+														width="w-full sm:flex-1 lg:w-36"
+														disabled={withdrawDisabled}
+														onClick={() => selectActiveChainWithIntent(row.chainId, "withdraw")}
+													>
+														Withdraw
+													</AppButtonSecondary>
+												</div>
 											</div>
-											<div>
-												<span className="text-xs text-text-secondary md:hidden">Interest · </span>
-												<span className="font-medium text-text-primary">{interestCell(row)}</span>
-											</div>
-											<div className="flex flex-col gap-2 md:items-end">
-												<AppButtonSecondary
-													size="small"
-													className="min-h-[40px] w-full md:w-auto"
-													onClick={() => selectChainAndFocus(row.chainId)}
-												>
-													Manage
-												</AppButtonSecondary>
-											</div>
+											{isSelected ? (
+												<div className="mt-6 border-t border-[#eadfcd] pt-6 dark:border-menu-separator">
+													<ActiveEarnChainPanel
+														row={row}
+														account={account}
+														isConnected={isConnected}
+														walletChain={walletChain}
+														walletChainId={walletChainId}
+														earnFormIntent={earnFormIntent}
+														onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
+														onSwitchChain={() => handleSwitchChain(row.chainId)}
+													/>
+												</div>
+											) : null}
 										</div>
-										{isSelected ? (
-											<div className="px-3 pb-3">
-												<SelectedEarnChainPanel
-													row={row}
-													account={account}
-													isConnected={isConnected}
-													walletChain={walletChain}
-													walletChainId={walletChainId}
-													openTransferHref={openTransferHref}
-													earnFormIntent={earnFormIntent}
-													onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
-													onSwitchChain={() => handleSwitchChain(row.chainId)}
-												/>
-											</div>
-										) : null}
 									</div>
-									);
-								})}
-							</div>
-						</div>
-					) : (
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{activeEarningRows.map((row) => {
-								const isSelected = selectedChainId === row.chainId;
-								return (
-								<div
-									key={row.chainId}
-									ref={(node) => setChainRowRef(row.chainId, node)}
-									tabIndex={-1}
-									className="rounded-xl border border-[#e0d4bd] bg-[#fffdf8] p-4 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary"
-								>
-									<div className="text-base font-semibold text-text-primary">{row.name}</div>
-									<div className="mt-3 space-y-1 text-sm">
-										<div>
-											<span className="text-text-secondary">Earning · </span>
-											<span className="font-medium">{formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF</span>
-										</div>
-										<div>
-											<span className="text-text-secondary">Interest ready · </span>
-											<span className="font-medium">{interestCell(row)}</span>
-										</div>
-									</div>
-									<div className="mt-4 flex flex-col gap-2">
-										<AppButtonSecondary
-											className="min-h-[44px] w-full"
-											width="w-full"
-											onClick={() => selectChainAndFocus(row.chainId)}
-										>
-											Manage {row.name} earning
-										</AppButtonSecondary>
-									</div>
-									{isSelected ? (
-										<div className="mt-4">
-											<SelectedEarnChainPanel
-												row={row}
-												account={account}
-												isConnected={isConnected}
-												walletChain={walletChain}
-												walletChainId={walletChainId}
-												openTransferHref={openTransferHref}
-												earnFormIntent={earnFormIntent}
-												onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
-												onSwitchChain={() => handleSwitchChain(row.chainId)}
-											/>
-										</div>
-									) : null}
-								</div>
 								);
 							})}
 						</div>
@@ -446,15 +432,13 @@ export default function SavingsPage() {
 										</div>
 									</button>
 									{isSelected ? (
-										<SelectedEarnChainPanel
+										<InactiveEarnChainPanel
 											row={row}
 											account={account}
 											isConnected={isConnected}
 											walletChain={walletChain}
 											walletChainId={walletChainId}
 											openTransferHref={openTransferHref}
-											earnFormIntent={earnFormIntent}
-											onConsumeEarnFormIntent={() => setEarnFormIntent(null)}
 											onSwitchChain={() => handleSwitchChain(row.chainId)}
 										/>
 									) : null}
@@ -491,13 +475,12 @@ export default function SavingsPage() {
 	);
 }
 
-function SelectedEarnChainPanel({
+function ActiveEarnChainPanel({
 	row,
 	account,
 	isConnected,
 	walletChain,
 	walletChainId,
-	openTransferHref,
 	earnFormIntent,
 	onConsumeEarnFormIntent,
 	onSwitchChain,
@@ -507,82 +490,95 @@ function SelectedEarnChainPanel({
 	isConnected: boolean;
 	walletChain: { name: string };
 	walletChainId: ChainId;
-	openTransferHref: string;
 	earnFormIntent: EarnFormIntent;
 	onConsumeEarnFormIntent: () => void;
 	onSwitchChain: () => void;
 }) {
-	const hasSavings = (row.savingsZchf ?? 0) > 0;
-	const hasInterest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
-	const hasWalletZchf = (row.walletZchf ?? 0) > 0;
-	const isActionable = hasSavings || hasInterest || hasWalletZchf;
-	const isActiveSavings = hasSavings || hasInterest;
-	const isReadyToDeposit = !isActiveSavings && hasWalletZchf;
 	const walletOnSelected = walletChainId === row.chainId;
-	const statusLine = isActiveSavings
-		? `Ready to manage on ${row.name}.`
-		: isReadyToDeposit
-			? `Ready to start earning on ${row.name}.`
-			: `Add ZCHF on ${row.name} to start earning.`;
+
+	if (!isConnected || account === zeroAddress) {
+		return (
+			<div className="w-full rounded-xl border border-[#e0d4bd] bg-card-content-secondary p-5 dark:border-menu-separator md:p-6">
+				<p className="text-sm text-text-secondary">Connect your wallet to manage earning on {row.name}.</p>
+			</div>
+		);
+	}
+
+	if (!walletOnSelected) {
+		return (
+			<div className="w-full space-y-4 rounded-xl border border-[#e0d4bd] bg-card-content-secondary p-5 dark:border-menu-separator md:p-6">
+				<p className="text-sm text-text-secondary">
+					Your wallet is currently connected to{" "}
+					<span className="font-medium text-text-primary">{walletChain.name}</span>.
+				</p>
+				<p className="text-sm font-medium text-text-primary">Switch to {row.name} to manage.</p>
+				<AppButton className="min-h-[48px] w-full sm:w-auto" width="w-full sm:w-auto" onClick={onSwitchChain}>
+					Switch to {row.name}
+				</AppButton>
+			</div>
+		);
+	}
 
 	return (
-		<div className="space-y-4 rounded-b-xl border border-t-0 border-[#c4a75f] bg-card-content-secondary p-4 shadow-sm dark:border-[#8a7448] md:p-5">
-			<div className="space-y-1 text-sm text-text-secondary">
-				<h3 className="text-base font-semibold text-text-primary">{row.name} earning</h3>
-				{isActiveSavings ? (
-					<>
-						<p>You have {formatCurrency(row.savingsZchf ?? 0, 2, 2)} ZCHF earning on {row.name}.</p>
-						{row.interestStatus === "ready" ? (
-							<p className="text-text-primary">
-								{formatCurrency(row.interestZchf ?? 0, 2, 2)} ZCHF interest is ready to collect.
-							</p>
-						) : row.interestStatus === "loading" ? (
-							<p>Interest on this chain is loading.</p>
-						) : row.interestStatus === "error" ? (
-							<p>Interest on this chain is temporarily unavailable.</p>
-						) : null}
-					</>
-				) : isReadyToDeposit ? (
-					<>
-						<p>You have {formatCurrency(row.walletZchf ?? 0, 2, 2)} ZCHF in your wallet on {row.name}.</p>
-						<p>You are not earning on {row.name} yet.</p>
-					</>
-				) : (
-					<>
-						<p className="font-medium text-text-primary">No ZCHF available on {row.name}</p>
-						<p>You do not have ZCHF in your wallet on {row.name} yet. Add ZCHF there before starting to earn.</p>
-					</>
-				)}
-				{isActionable || !walletOnSelected ? (
-					<p>
-						Your wallet is currently connected to <span className="font-medium text-text-primary">{walletChain.name}</span>.
-					</p>
-				) : null}
-			</div>
+		<div className="w-full">
+			<SavingsInteractionCard
+				earnFormIntent={earnFormIntent}
+				onConsumeEarnFormIntent={onConsumeEarnFormIntent}
+				lockChainSelector
+			/>
+		</div>
+	);
+}
 
-			{!isConnected || account === zeroAddress ? (
-				<p className="text-sm text-text-secondary">Connect your wallet to manage earning on {row.name}.</p>
-			) : !isActionable ? (
-				<FundingActions statusLine={statusLine} openTransferHref={openTransferHref} />
-			) : !walletOnSelected ? (
-				<div className="space-y-4">
-					<p className="text-sm font-medium text-text-secondary">
-						{isActiveSavings ? `Switch to ${row.name} to manage.` : `Switch to ${row.name} to start earning.`}
-					</p>
-					<AppButton className="min-h-[48px] w-full sm:w-auto" width="w-full sm:w-auto" onClick={onSwitchChain}>
-						{isActiveSavings ? `Switch to ${row.name} to manage` : `Switch to ${row.name} to start earning`}
-					</AppButton>
-				</div>
-			) : (
-				<>
-					<p className="text-sm font-medium text-text-success">{statusLine}</p>
-					<SavingsInteractionCard
-						earnFormIntent={earnFormIntent}
-						onConsumeEarnFormIntent={onConsumeEarnFormIntent}
-						lockChainSelector
-					/>
-				</>
-			)}
+function InactiveEarnChainPanel({
+	row,
+	account,
+	isConnected,
+	walletChain,
+	walletChainId,
+	openTransferHref,
+	onSwitchChain,
+}: {
+	row: EarnChainRow;
+	account: Address;
+	isConnected: boolean;
+	walletChain: { name: string };
+	walletChainId: ChainId;
+	openTransferHref: string;
+	onSwitchChain: () => void;
+}) {
+	const walletOnSelected = walletChainId === row.chainId;
+	const hasWalletZchf = (row.walletZchf ?? 0) > 0;
+	const statusLine = hasWalletZchf
+		? `Ready to start earning on ${row.name}.`
+		: `Add ZCHF on ${row.name} to start earning.`;
+
+	if (!isConnected || account === zeroAddress) {
+		return (
+			<div className="rounded-b-xl border border-t-0 border-[#c4a75f] bg-card-content-secondary p-4 dark:border-[#8a7448] md:p-5">
+				<p className="text-sm text-text-secondary">Connect your wallet to view funding options for {row.name}.</p>
+			</div>
+		);
+	}
+
+	if (!walletOnSelected) {
+		return (
+			<div className="space-y-4 rounded-b-xl border border-t-0 border-[#c4a75f] bg-card-content-secondary p-4 dark:border-[#8a7448] md:p-5">
+				<p className="text-sm text-text-secondary">
+					Your wallet is currently connected to{" "}
+					<span className="font-medium text-text-primary">{walletChain.name}</span>.
+				</p>
+				<p className="text-sm font-medium text-text-primary">Switch to {row.name} to fund this chain.</p>
+				<AppButton className="min-h-[48px] w-full sm:w-auto" width="w-full sm:w-auto" onClick={onSwitchChain}>
+					Switch to {row.name}
+				</AppButton>
+			</div>
+		);
+	}
+
+	return (
+		<div className="rounded-b-xl border border-t-0 border-[#c4a75f] bg-card-content-secondary p-4 shadow-sm dark:border-[#8a7448] md:p-5">
+			<FundingActions statusLine={statusLine} openTransferHref={openTransferHref} />
 		</div>
 	);
 }

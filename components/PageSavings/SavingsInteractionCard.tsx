@@ -4,7 +4,7 @@ import { ADDRESS, ChainId, ChainIdMain, ChainIdSide, FrankencoinABI, SavingsABI 
 import { useConnection, useBlockNumber, useChainId } from "wagmi";
 import { Address, isAddress, parseUnits, zeroAddress } from "viem";
 import { useEffect, useRef, useState } from "react";
-import SavingsDetailsCard from "./SavingsDetailsCard";
+import SavingsDetailsCard, { SavingsOutcomeFlowIntent } from "./SavingsDetailsCard";
 import { readContract } from "wagmi/actions";
 import { WAGMI_CHAINS, WAGMI_CONFIG } from "../../app.config";
 import { useSelector } from "react-redux";
@@ -87,6 +87,16 @@ export default function SavingsInteractionCard({
 	const hasActionableFunds = userBalance > 0n || userSavingsBalance > 0n || userSavingsInterest > 0n;
 	const hasSavingsDataError = error === SAVINGS_DATA_ERROR;
 	const isSavingsDataReady = Boolean(chainStatus && isLoaded && !hasSavingsDataError);
+
+	const outcomeFlowIntent: SavingsOutcomeFlowIntent | null = onbehalfToggle
+		? null
+		: userSavingsInterest > 0n && amount === userSavingsBalance
+			? "collect"
+			: amount > userSavingsBalance + userSavingsInterest
+				? "deposit"
+				: amount < userSavingsBalance + userSavingsInterest
+					? "withdraw"
+					: null;
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -229,7 +239,7 @@ export default function SavingsInteractionCard({
 	};
 
 	return (
-		<section className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-auto">
+		<section className={`mx-auto grid gap-4 ${lockChainSelector ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
 			<AppCard>
 				<div className="flex items-center justify-between gap-3">
 					<div className="text-lg font-bold">{!onbehalfToggle ? "Earn with ZCHF" : "Save for another address"}</div>
@@ -353,6 +363,7 @@ export default function SavingsInteractionCard({
 					referrer={userSavingsReferrer}
 					referralFeePPM={userSavingsReferralFeePPM}
 					referralFees={userSavingsReferralFees}
+					flowIntent={outcomeFlowIntent}
 				/>
 			) : null}
 		</section>
