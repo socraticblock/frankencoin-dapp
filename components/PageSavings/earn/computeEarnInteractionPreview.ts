@@ -1,12 +1,8 @@
 import { getEarnPreviewDerivatives } from "./earnMath";
 import { getEarnPreviewRows } from "./earnPreview";
 import type { EarnPreviewRow } from "./earnPreview";
-import type {
-	CollectAction,
-	EarnAction,
-	SavingsAccountSnapshot,
-	SavingsOutcomeFlowIntent,
-} from "./earnTypes";
+import type { SavingsAccountSnapshot, SavingsOutcomeFlowIntent } from "./earnTypes";
+import type { EarnFlowState } from "./useEarnInteractionState";
 
 export type EarnInteractionPreviewModel = {
 	snapshot: SavingsAccountSnapshot;
@@ -27,53 +23,26 @@ export type EarnInteractionPreviewModel = {
 };
 
 export function computeEarnInteractionPreview(params: {
-	amount: bigint;
-	userBalance: bigint;
-	userSavingsBalance: bigint;
-	userSavingsInterest: bigint;
-	userSavingsLocktime: bigint;
-	userSavingsReferrer: SavingsAccountSnapshot["referrer"];
-	userSavingsReferralFeePPM: bigint;
-	userSavingsReferralFees: bigint;
 	lockChainSelector: boolean;
-	onbehalfToggle: boolean;
-	earnAction: EarnAction;
-	collectAction: CollectAction;
-	withdrawMode: "partial" | "all";
-	depositAmount: bigint;
-	withdrawAmount: bigint;
+	isLockedEarnFlow: boolean;
+	isOnBehalf: boolean;
+	legacyTargetAmount: bigint;
+	snapshot: SavingsAccountSnapshot;
+	flowState: EarnFlowState;
 }): EarnInteractionPreviewModel {
 	const {
-		amount,
-		userBalance,
-		userSavingsBalance,
-		userSavingsInterest,
-		userSavingsLocktime,
-		userSavingsReferrer,
-		userSavingsReferralFeePPM,
-		userSavingsReferralFees,
 		lockChainSelector,
-		onbehalfToggle,
-		earnAction,
-		collectAction,
-		withdrawMode,
-		depositAmount,
-		withdrawAmount,
+		isLockedEarnFlow,
+		isOnBehalf,
+		legacyTargetAmount,
+		snapshot,
+		flowState,
 	} = params;
+	const { earnAction, collectAction, withdrawMode, depositAmount, withdrawAmount } = flowState;
+	const { savingsBalance, readyInterest } = snapshot;
 
-	const change = amount - (userSavingsBalance + userSavingsInterest);
-	const direction = amount >= userSavingsBalance + userSavingsInterest;
-	const isLockedEarnFlow = Boolean(lockChainSelector && !onbehalfToggle);
-
-	const snapshot: SavingsAccountSnapshot = {
-		walletBalance: userBalance,
-		savingsBalance: userSavingsBalance,
-		readyInterest: userSavingsInterest,
-		referralFees: userSavingsReferralFees,
-		locktime: userSavingsLocktime,
-		referrer: userSavingsReferrer,
-		referralFeePPM: userSavingsReferralFeePPM,
-	};
+	const change = legacyTargetAmount - (savingsBalance + readyInterest);
+	const direction = legacyTargetAmount >= savingsBalance + readyInterest;
 
 	const {
 		savedAfterRefresh,
@@ -90,16 +59,16 @@ export function computeEarnInteractionPreview(params: {
 		depositAmount,
 		withdrawAmount,
 		isLockedEarnFlow,
-		grossSavedPlusInterest: userSavingsBalance + userSavingsInterest,
+		grossSavedPlusInterest: savingsBalance + readyInterest,
 	});
 
-	const outcomeFlowIntent: SavingsOutcomeFlowIntent | null = onbehalfToggle
+	const outcomeFlowIntent: SavingsOutcomeFlowIntent | null = isOnBehalf
 		? null
-		: userSavingsInterest > 0n && amount === userSavingsBalance
+		: readyInterest > 0n && legacyTargetAmount === savingsBalance
 			? "collect"
-			: amount > userSavingsBalance + userSavingsInterest
+			: legacyTargetAmount > savingsBalance + readyInterest
 				? "deposit"
-				: amount < userSavingsBalance + userSavingsInterest
+				: legacyTargetAmount < savingsBalance + readyInterest
 					? "withdraw"
 					: null;
 
@@ -117,7 +86,7 @@ export function computeEarnInteractionPreview(params: {
 
 	const previewActionAmount =
 		earnAction === "collect"
-			? userSavingsInterest
+			? readyInterest
 			: earnAction === "deposit"
 				? depositAmount
 				: isPartialWithdrawActive
@@ -137,13 +106,13 @@ export function computeEarnInteractionPreview(params: {
 			: earnTargetSavingsAmount;
 
 	const withdrawAllPreview = isWithdrawAllPreviewActive
-		? { principal: userSavingsBalance, totalReceived: savedAfterRefresh }
+		? { principal: savingsBalance, totalReceived: savedAfterRefresh }
 		: null;
 
 	const cardChangeForPreviewFallback = isLockedEarnFlow ? earnTargetChange : change;
 
 	const earnPreviewRows =
-		lockChainSelector && !onbehalfToggle && previewFlowIntent
+		lockChainSelector && !isOnBehalf && previewFlowIntent
 			? getEarnPreviewRows({
 					flowIntent: previewFlowIntent,
 					actionAmount:
@@ -154,8 +123,8 @@ export function computeEarnInteractionPreview(params: {
 							? cardChangeForPreviewFallback < 0n
 								? -cardChangeForPreviewFallback
 								: cardChangeForPreviewFallback
-							: userSavingsInterest),
-					interest: userSavingsInterest,
+							: readyInterest),
+					interest: readyInterest,
 					interestAlsoCollected: 0n,
 					withdrawAllPreview,
 			  })

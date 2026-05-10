@@ -26,7 +26,7 @@ export type EarnPrimaryCardFooterProps = {
 	savingsModule: Address;
 	newReferrer: Address | undefined;
 	newReferralFeePPM: bigint;
-	amount: bigint;
+	legacyTargetAmount: bigint;
 	userSavingsBalance: bigint;
 	userSavingsInterest: bigint;
 	change: bigint;
@@ -49,7 +49,7 @@ export default function EarnPrimaryCardFooter({
 	savingsModule,
 	newReferrer,
 	newReferralFeePPM,
-	amount,
+	legacyTargetAmount,
 	userSavingsBalance,
 	userSavingsInterest,
 	change,
@@ -77,7 +77,7 @@ export default function EarnPrimaryCardFooter({
 					<SavingsActionSaveOnBehalf
 						disabled={onbehalfError != "" || onbehalfAddress == ""}
 						savingsModule={savingsModule}
-						amount={amount}
+						amount={legacyTargetAmount}
 						onBehalf={onbehalfAddress as Address}
 					/>
 				) : lockChainSelector && earnAction === "collect" ? null : lockChainSelector && earnAction === "deposit" ? (
@@ -89,7 +89,7 @@ export default function EarnPrimaryCardFooter({
 						newReferrer={newReferrer}
 						newReferralFeePPM={newReferralFeePPM}
 					/>
-				) : lockChainSelector && earnAction === "withdraw" ? null : userSavingsInterest > 0 && amount == userSavingsBalance ? (
+				) : lockChainSelector && earnAction === "withdraw" ? null : userSavingsInterest > 0 && legacyTargetAmount == userSavingsBalance ? (
 					<SavingsActionInterest
 						disabled={!!error}
 						savingsModule={savingsModule}
@@ -98,11 +98,11 @@ export default function EarnPrimaryCardFooter({
 						newReferrer={newReferrer}
 						newReferralFeePPM={newReferralFeePPM}
 					/>
-				) : amount > userSavingsBalance ? (
+				) : legacyTargetAmount > userSavingsBalance ? (
 					<SavingsActionSave
 						disabled={!!error}
 						savingsModule={savingsModule}
-						amount={amount}
+						amount={legacyTargetAmount}
 						interest={userSavingsInterest}
 						newReferrer={newReferrer}
 						newReferralFeePPM={newReferralFeePPM}
@@ -111,7 +111,7 @@ export default function EarnPrimaryCardFooter({
 					<SavingsActionWithdraw
 						disabled={userSavingsBalance == 0n || !!error}
 						savingsModule={savingsModule}
-						balance={amount}
+						balance={legacyTargetAmount}
 						change={change}
 						newReferrer={newReferrer}
 						newReferralFeePPM={newReferralFeePPM}

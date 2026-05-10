@@ -5,63 +5,54 @@ import type { SupportedChain } from "@frankencoin/zchf";
 import type { Address } from "viem";
 import type { SavingsOutcomeFlowIntent } from "./earnTypes";
 
-export type EarnOutcomeAsideProps = {
-	showEarnPreview: boolean;
-	earnPreviewRows: EarnPreviewRow[];
-	previewResultingBalance: bigint | undefined;
-	earnPreviewHelperText: string | null;
-	hideEarnResultingBalance: boolean;
-	userSavingsBalance: bigint;
-	earnTargetChange: bigint;
-	userSavingsInterest: bigint;
-	userSavingsReferrer: Address;
-	userSavingsReferralFeePPM: bigint;
-	userSavingsReferralFees: bigint;
-	userSavingsLocktime: bigint;
-	chain: SupportedChain;
-	isLoaded: boolean;
-	onbehalfToggle: boolean;
-	legacyChange: bigint;
-	legacyDirection: boolean;
+export type EarnLockedPreviewModel = {
+	rows: EarnPreviewRow[];
+	resultingBalance: bigint;
+	helperText: string | null;
+	hideResultingBalance: boolean;
+	balance: bigint;
+	referrer: Address;
+	referralFeePPM: bigint;
+	referralFees: bigint;
+	locktime: bigint;
+};
+
+export type SavingsLegacyPreviewModel = {
 	account: Address;
-	previewFlowIntent: SavingsOutcomeFlowIntent | null;
+	balance: bigint;
+	change: bigint;
+	direction: boolean;
+	interest: bigint;
+	locktime: bigint;
+	referrer: Address;
+	referralFeePPM: bigint;
+	referralFees: bigint;
+	flowIntent: SavingsOutcomeFlowIntent | null;
+};
+
+export type EarnOutcomeAsideProps = {
+	chain: SupportedChain;
+	earnPreviewModel?: EarnLockedPreviewModel;
+	legacyPreviewModel: SavingsLegacyPreviewModel;
 };
 
 export default function EarnOutcomeAside({
-	showEarnPreview,
-	earnPreviewRows,
-	previewResultingBalance,
-	earnPreviewHelperText,
-	hideEarnResultingBalance,
-	userSavingsBalance,
-	earnTargetChange,
-	userSavingsInterest,
-	userSavingsReferrer,
-	userSavingsReferralFeePPM,
-	userSavingsReferralFees,
-	userSavingsLocktime,
 	chain,
-	isLoaded,
-	onbehalfToggle,
-	legacyChange,
-	legacyDirection,
-	account,
-	previewFlowIntent,
+	earnPreviewModel,
+	legacyPreviewModel,
 }: EarnOutcomeAsideProps) {
-	if (showEarnPreview) {
+	if (earnPreviewModel) {
 		return (
 			<EarnTransactionPreview
-				rows={earnPreviewRows}
-				resultingBalance={previewResultingBalance}
-				helperText={earnPreviewHelperText}
-				hideResultingBalance={hideEarnResultingBalance}
-				balance={userSavingsBalance}
-				change={isLoaded && !onbehalfToggle ? earnTargetChange : 0n}
-				interest={isLoaded && !onbehalfToggle ? userSavingsInterest : 0n}
-				referrer={userSavingsReferrer}
-				referralFeePPM={userSavingsReferralFeePPM}
-				referralFees={userSavingsReferralFees}
-				locktime={userSavingsLocktime}
+				rows={earnPreviewModel.rows}
+				resultingBalance={earnPreviewModel.resultingBalance}
+				helperText={earnPreviewModel.helperText}
+				hideResultingBalance={earnPreviewModel.hideResultingBalance}
+				balance={earnPreviewModel.balance}
+				referrer={earnPreviewModel.referrer}
+				referralFeePPM={earnPreviewModel.referralFeePPM}
+				referralFees={earnPreviewModel.referralFees}
+				locktime={earnPreviewModel.locktime}
 				chain={chain}
 			/>
 		);
@@ -69,17 +60,17 @@ export default function EarnOutcomeAside({
 
 	return (
 		<SavingsDetailsCard
-			account={account}
+			account={legacyPreviewModel.account}
 			chain={chain}
-			balance={userSavingsBalance}
-			change={isLoaded && !onbehalfToggle ? legacyChange : 0n}
-			direction={legacyDirection}
-			interest={isLoaded && !onbehalfToggle ? userSavingsInterest : 0n}
-			locktime={userSavingsLocktime}
-			referrer={userSavingsReferrer}
-			referralFeePPM={userSavingsReferralFeePPM}
-			referralFees={userSavingsReferralFees}
-			flowIntent={previewFlowIntent}
+			balance={legacyPreviewModel.balance}
+			change={legacyPreviewModel.change}
+			direction={legacyPreviewModel.direction}
+			interest={legacyPreviewModel.interest}
+			locktime={legacyPreviewModel.locktime}
+			referrer={legacyPreviewModel.referrer}
+			referralFeePPM={legacyPreviewModel.referralFeePPM}
+			referralFees={legacyPreviewModel.referralFees}
+			flowIntent={legacyPreviewModel.flowIntent}
 		/>
 	);
 }

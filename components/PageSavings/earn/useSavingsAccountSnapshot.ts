@@ -28,7 +28,7 @@ export function useSavingsAccountSnapshot(params: {
 	frankencoinAddress: Address;
 	savingsAdresse: Address;
 	chainStatus: ChainStatusSlice;
-	blockTag: bigint | undefined;
+	refreshBlock: bigint | undefined;
 	onInitialSavingsBalance?: (balance: bigint) => void;
 }): {
 	data: SavingsAccountRead | null;
@@ -36,11 +36,12 @@ export function useSavingsAccountSnapshot(params: {
 	error: string;
 	hasSavingsDataError: boolean;
 } {
-	const { account, chainId, frankencoinAddress, savingsAdresse, chainStatus, blockTag, onInitialSavingsBalance } =
+	const { account, chainId, frankencoinAddress, savingsAdresse, chainStatus, refreshBlock, onInitialSavingsBalance } =
 		params;
 
 	const initRef = useRef(onInitialSavingsBalance);
 	initRef.current = onInitialSavingsBalance;
+	const shouldInitializeRef = useRef(true);
 
 	const [isLoaded, setLoaded] = useState<boolean>(false);
 	const [error, setError] = useState("");
@@ -50,6 +51,7 @@ export function useSavingsAccountSnapshot(params: {
 		setLoaded(false);
 		setError("");
 		setData(null);
+		shouldInitializeRef.current = true;
 	}, [account, chainId]);
 
 	useEffect(() => {
@@ -57,32 +59,31 @@ export function useSavingsAccountSnapshot(params: {
 		if (!chainStatus) return;
 
 		let active = true;
-		const shouldInitializeAmount = !isLoaded;
 
 		const fetchAsync = async function () {
 			try {
-				const _balance = await readContract(WAGMI_CONFIG, {
-					address: frankencoinAddress,
-					chainId: chainId,
-					abi: FrankencoinABI,
-					functionName: "balanceOf",
-					args: [account],
-				});
-
-				const [_userSavings, _userTicks, _referrer, _referralFeePPM] = await readContract(WAGMI_CONFIG, {
-					address: savingsAdresse,
-					chainId: chainId,
-					abi: SavingsABI,
-					functionName: "savings",
-					args: [account],
-				});
-
-				const _current = await readContract(WAGMI_CONFIG, {
-					address: savingsAdresse,
-					chainId: chainId,
-					abi: SavingsABI,
-					functionName: "currentTicks",
-				});
+				const [_balance, [_userSavings, _userTicks, _referrer, _referralFeePPM], _current] = await Promise.all([
+					readContract(WAGMI_CONFIG, {
+						address: frankencoinAddress,
+						chainId: chainId,
+						abi: FrankencoinABI,
+						functionName: "balanceOf",
+						args: [account],
+					}),
+					readContract(WAGMI_CONFIG, {
+						address: savingsAdresse,
+						chainId: chainId,
+						abi: SavingsABI,
+						functionName: "savings",
+						args: [account],
+					}),
+					readContract(WAGMI_CONFIG, {
+						address: savingsAdresse,
+						chainId: chainId,
+						abi: SavingsABI,
+						functionName: "currentTicks",
+					}),
+				]);
 
 				const safeRate = BigInt(chainStatus.rate || 0);
 				const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
@@ -105,7 +106,10 @@ export function useSavingsAccountSnapshot(params: {
 					userSavingsReferralFees: _fee,
 					currentTicks: _current,
 				});
-				if (shouldInitializeAmount) initRef.current?.(_userSavings);
+				if (shouldInitializeRef.current) {
+					initRef.current?.(_userSavings);
+					shouldInitializeRef.current = false;
+				}
 				setLoaded(true);
 			} catch {
 				if (!active) return;
@@ -118,7 +122,7 @@ export function useSavingsAccountSnapshot(params: {
 		return () => {
 			active = false;
 		};
-	}, [blockTag, account, isLoaded, frankencoinAddress, savingsAdresse, chainStatus, chainId]);
+	}, [refreshBlock, account, frankencoinAddress, savingsAdresse, chainStatus, chainId]);
 
 	const hasSavingsDataError = error === SAVINGS_DATA_ERROR;
 

@@ -6,16 +6,26 @@ export function getSavedAfterRefresh(snapshot: SavingsAccountSnapshot): bigint {
 	return snapshot.savingsBalance + snapshot.readyInterest - snapshot.referralFees;
 }
 
-/** Target `saved` after collect-to-wallet (interest paid out). */
+/**
+ * Current behavior preserved from the pre-controller-extraction flow.
+ * Do not correct formulas in this refactor; protocol/product changes belong in a separate pass.
+ */
 export function getCollectWalletTarget(snapshot: SavingsAccountSnapshot): bigint {
 	return snapshot.savingsBalance;
 }
 
-/** Target `saved` after compound (interest stays in savings). */
+/**
+ * Current behavior preserved from the pre-controller-extraction flow.
+ * Do not correct formulas in this refactor; protocol/product changes belong in a separate pass.
+ */
 export function getCompoundTarget(snapshot: SavingsAccountSnapshot): bigint {
 	return snapshot.savingsBalance + snapshot.readyInterest;
 }
 
+/**
+ * Current behavior preserved from the pre-controller-extraction flow.
+ * Do not correct formulas in this refactor; protocol/product changes belong in a separate pass.
+ */
 export function getDepositTarget(snapshot: SavingsAccountSnapshot, depositAmount: bigint): bigint {
 	return snapshot.savingsBalance + depositAmount;
 }
@@ -23,6 +33,7 @@ export function getDepositTarget(snapshot: SavingsAccountSnapshot, depositAmount
 /**
  * Target savings balance for a partial withdraw `adjust` call when withdraw amount is positive.
  * Mirrors prior `partialWithdrawAdjustTarget ?? savingsBalance` fallback for `earnTargetSavingsAmount`.
+ * Current behavior preserved; protocol/product corrections belong in a separate pass.
  */
 export function getPartialWithdrawAdjustTarget(
 	snapshot: SavingsAccountSnapshot,
@@ -42,6 +53,7 @@ export function getCustomWithdrawTarget(
 	return getPartialWithdrawAdjustTarget(snapshot, withdrawAmount);
 }
 
+/** Current behavior preserved; protocol/product corrections belong in a separate pass. */
 export function getWithdrawAllTarget(): bigint {
 	return 0n;
 }

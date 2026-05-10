@@ -8,12 +8,10 @@ import type { EarnPreviewRow } from "./earnPreview";
 
 export type EarnTransactionPreviewProps = {
 	rows: EarnPreviewRow[];
-	resultingBalance?: bigint;
+	resultingBalance: bigint;
 	helperText?: string | null;
 	hideResultingBalance?: boolean;
 	balance: bigint;
-	change: bigint;
-	interest: bigint;
 	referrer: Address;
 	referralFeePPM: bigint;
 	referralFees: bigint;
@@ -27,8 +25,6 @@ export default function EarnTransactionPreview({
 	helperText,
 	hideResultingBalance,
 	balance,
-	change,
-	interest,
 	referrer,
 	referralFeePPM,
 	referralFees,
@@ -68,9 +64,7 @@ export default function EarnTransactionPreview({
 						<hr className="border-slate-700 border-dashed" />
 						<div className="flex font-bold">
 							<div className="flex-1 text-text-secondary">Resulting earning balance</div>
-							<div className="">
-								{formatCurrency(formatUnits(resultingBalance ?? balance + change + interest, 18))} ZCHF
-							</div>
+							<div className="">{formatCurrency(formatUnits(resultingBalance, 18))} ZCHF</div>
 						</div>
 					</>
 				) : null}
