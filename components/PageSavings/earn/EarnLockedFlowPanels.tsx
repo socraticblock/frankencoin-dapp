@@ -11,17 +11,17 @@ export type EarnSnapshotModel = {
 	userBalance: bigint;
 	userSavingsBalance: bigint;
 	userSavingsInterest: bigint;
+	existingReferralFees: bigint;
 	savedAfterRefresh: bigint;
 	partialWithdrawAdjustTarget: bigint | undefined;
 	compoundTargetAmount: bigint;
+	netInterestAmount: bigint;
 };
 
 export type EarnTxContext = {
 	error: string;
 	savingsModule: Address;
-	newReferrer: Address | undefined;
-	newReferralFeePPM: bigint;
-	depositBlockedByInterest: boolean;
+	readyInterestWillBeAdded: boolean;
 	hasMeaningfulWalletZchf: boolean;
 	fromSymbol: string;
 	hasSavingsDataError: boolean;
@@ -47,15 +47,21 @@ export default function EarnLockedFlowPanels({
 	customTarget,
 	customTargetActions,
 }: EarnLockedFlowPanelsProps) {
-	const { userBalance, userSavingsBalance, userSavingsInterest, savedAfterRefresh, partialWithdrawAdjustTarget, compoundTargetAmount } =
-		snapshot;
+	const {
+		userBalance,
+		userSavingsBalance,
+		userSavingsInterest,
+		existingReferralFees,
+		savedAfterRefresh,
+		partialWithdrawAdjustTarget,
+		compoundTargetAmount,
+		netInterestAmount,
+	} = snapshot;
 	const { earnAction, collectAction, depositAmount, withdrawAmount, withdrawMode } = flowState;
 	const {
 		error,
 		savingsModule,
-		newReferrer,
-		newReferralFeePPM,
-		depositBlockedByInterest,
+		readyInterestWillBeAdded,
 		hasMeaningfulWalletZchf,
 		fromSymbol,
 		hasSavingsDataError,
@@ -65,7 +71,6 @@ export default function EarnLockedFlowPanels({
 	} = txContext;
 	const { onbehalfToggle, onbehalfAddress, onbehalfError } = customTarget;
 	const {
-		handleEarnActionChange,
 		setCollectAction,
 		onChangeDepositAmount,
 		onChangeWithdrawAmount,
@@ -80,12 +85,11 @@ export default function EarnLockedFlowPanels({
 				userSavingsBalance={userSavingsBalance}
 				userSavingsInterest={userSavingsInterest}
 				compoundTargetAmount={compoundTargetAmount}
+				netInterestAmount={netInterestAmount}
 				collectAction={collectAction}
 				onCollectActionChange={setCollectAction}
 				error={!!error}
 				savingsModule={savingsModule}
-				newReferrer={newReferrer}
-				newReferralFeePPM={newReferralFeePPM}
 			/>
 		);
 	}
@@ -117,14 +121,13 @@ export default function EarnLockedFlowPanels({
 						onOnbehalfAddressChange={setOnbehalfAddress}
 						partialWithdrawAdjustTarget={partialWithdrawAdjustTarget}
 						savingsModule={savingsModule}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
 					/>
 				}
 				allPanel={
 					<EarnWithdrawAllPanel
 						userSavingsBalance={userSavingsBalance}
 						userSavingsInterest={userSavingsInterest}
+						existingReferralFees={existingReferralFees}
 						savedAfterRefresh={savedAfterRefresh}
 						chainName={chainName}
 						onbehalfToggle={onbehalfToggle}
@@ -134,8 +137,6 @@ export default function EarnLockedFlowPanels({
 						onOnbehalfAddressChange={setOnbehalfAddress}
 						errorLabel={error}
 						savingsModule={savingsModule}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
 					/>
 				}
 			/>
@@ -144,9 +145,8 @@ export default function EarnLockedFlowPanels({
 
 	return (
 		<EarnDepositPanel
-			blockedByInterest={depositBlockedByInterest}
+			readyInterestWillBeAdded={readyInterestWillBeAdded}
 			hasMeaningfulWalletZchf={hasMeaningfulWalletZchf}
-			userSavingsInterest={userSavingsInterest}
 			chainName={chainName}
 			fromSymbol={fromSymbol}
 			depositAmount={depositAmount}
@@ -156,7 +156,6 @@ export default function EarnLockedFlowPanels({
 			userBalance={userBalance}
 			onChangeChain={onChangeChain}
 			lockChainSelector={lockChainSelector}
-			onGoToCollect={() => handleEarnActionChange("collect")}
 		/>
 	);
 }

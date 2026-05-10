@@ -4,6 +4,14 @@ import type { CollectAction, EarnAction, EarnFormIntent, WithdrawMode } from "./
 
 const MIN_DEPOSIT_AMOUNT = parseUnits("0.01", 18);
 
+function parseInputBigInt(value: string): bigint {
+	try {
+		return BigInt(value || "0");
+	} catch {
+		return 0n;
+	}
+}
+
 export type EarnFlowState = {
 	earnAction: EarnAction;
 	collectAction: CollectAction;
@@ -138,12 +146,12 @@ export function useEarnInteractionState(params: {
 		flowActions: {
 			handleEarnActionChange,
 			setCollectAction,
-			onChangeDepositAmount: (value: string) => setDepositAmount(BigInt(value)),
+			onChangeDepositAmount: (value: string) => setDepositAmount(parseInputBigInt(value)),
 			onChangeWithdrawAmount: (value: string) => {
 				setWithdrawMode("partial");
-				setWithdrawAmount(BigInt(value));
+				setWithdrawAmount(parseInputBigInt(value));
 			},
-			onChangeLegacyTargetAmount: (value: string) => setLegacyTargetAmount(BigInt(value)),
+			onChangeLegacyTargetAmount: (value: string) => setLegacyTargetAmount(parseInputBigInt(value)),
 			setWithdrawMode,
 			setWithdrawAmount,
 			setLegacyTargetAmount,

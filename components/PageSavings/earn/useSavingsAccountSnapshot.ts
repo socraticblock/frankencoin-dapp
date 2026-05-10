@@ -87,11 +87,11 @@ export function useSavingsAccountSnapshot(params: {
 
 				const safeRate = BigInt(chainStatus.rate || 0);
 				const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
-				const _tickDiff = _current - _userTicks;
-				const _interest =
-					_userTicks == 0n || _locktime > 0
-						? 0n
-						: (_tickDiff * _userSavings) / (1_000_000n * 365n * 24n * 60n * 60n);
+				let _interest = 0n;
+				if (_userTicks !== 0n && _current > _userTicks) {
+					const _tickDiff = _current - _userTicks;
+					_interest = (_tickDiff * _userSavings) / (1_000_000n * 365n * 24n * 60n * 60n);
+				}
 				const _fee = (_interest * BigInt(_referralFeePPM)) / 1_000_000n;
 
 				if (!active) return;

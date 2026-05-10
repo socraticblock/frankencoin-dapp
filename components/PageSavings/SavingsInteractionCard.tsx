@@ -22,7 +22,7 @@ import { SAVINGS_DATA_ERROR, useSavingsAccountSnapshot } from "./earn/useSavings
 import { useEarnInteractionState } from "./earn/useEarnInteractionState";
 import { useEarnCustomTargetState } from "./earn/useEarnCustomTargetState";
 import { useEarnValidation } from "./earn/useEarnValidation";
-import { getCompoundTarget } from "./earn/earnMath";
+import { getCompoundTarget, getDepositTarget } from "./earn/earnMath";
 
 export type { EarnFormIntent };
 
@@ -84,11 +84,9 @@ export default function SavingsInteractionCard({
 	const userSavingsReferralFees = snapData?.userSavingsReferralFees ?? 0n;
 
 	const { customTargetState, customTargetActions } = useEarnCustomTargetState({
-		queryReferrer: router.query.referrer,
-		queryReferralFeePPM: router.query.referralFeePPM,
 		resetKey,
 	});
-	const { newReferrer, newReferralFeePPM, onbehalfToggle, onbehalfAddress, onbehalfError } = customTargetState;
+	const { onbehalfToggle, onbehalfAddress, onbehalfError } = customTargetState;
 
 	const { flowState, flowActions } = useEarnInteractionState({
 		earnFormIntent,
@@ -108,7 +106,7 @@ export default function SavingsInteractionCard({
 	const isSavingsDataReady = Boolean(chainStatus && isLoaded && loadError !== SAVINGS_DATA_ERROR);
 	const isLockedEarnFlow = Boolean(lockChainSelector && !onbehalfToggle);
 	const hasMeaningfulWalletZchf = userBalance >= 10_000_000_000_000_000n;
-	const depositBlockedByInterest = isLockedEarnFlow && earnAction === "deposit" && userSavingsInterest > 0n;
+	const readyInterestWillBeAdded = isLockedEarnFlow && earnAction === "deposit" && userSavingsInterest > 0n;
 
 	const previewModel = computeEarnInteractionPreview({
 		lockChainSelector,
@@ -203,18 +201,18 @@ export default function SavingsInteractionCard({
 									userBalance,
 									userSavingsBalance,
 									userSavingsInterest,
+									existingReferralFees: userSavingsReferralFees,
 									savedAfterRefresh,
 									partialWithdrawAdjustTarget,
 									compoundTargetAmount: getCompoundTarget(snapshot),
+									netInterestAmount: getCompoundTarget(snapshot) - userSavingsBalance,
 								}}
 								flowState={flowState}
 								flowActions={flowActions}
 								txContext={{
 									error,
 									savingsModule: savingsAdresse,
-									newReferrer,
-									newReferralFeePPM,
-									depositBlockedByInterest,
+									readyInterestWillBeAdded,
 									hasMeaningfulWalletZchf,
 									fromSymbol,
 									hasSavingsDataError,
@@ -259,12 +257,10 @@ export default function SavingsInteractionCard({
 							onOnbehalfAddressChange={customTargetActions.setOnbehalfAddress}
 							hasActionableFunds={hasActionableFunds}
 							error={error}
-							depositBlockedByInterest={depositBlockedByInterest}
+							depositTargetAmount={getDepositTarget(snapshot, depositAmount)}
 							hasMeaningfulWalletZchf={hasMeaningfulWalletZchf}
 							depositAmount={depositAmount}
 							savingsModule={savingsAdresse}
-							newReferrer={newReferrer}
-							newReferralFeePPM={newReferralFeePPM}
 							legacyTargetAmount={legacyTargetAmount}
 							userSavingsBalance={userSavingsBalance}
 							userSavingsInterest={userSavingsInterest}

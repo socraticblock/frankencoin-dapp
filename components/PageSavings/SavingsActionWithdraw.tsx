@@ -13,23 +13,19 @@ import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 
 interface Props {
 	savingsModule: Address;
-	balance: bigint;
-	change: bigint;
+	targetSavingsAmount: bigint;
+	displayActionAmount: bigint;
 	disabled?: boolean;
 	setLoaded?: (val: boolean) => Dispatch<SetStateAction<boolean>>;
-	newReferrer?: Address | undefined;
-	newReferralFeePPM: bigint;
 	buttonLabel?: string;
 }
 
 export default function SavingsActionWithdraw({
 	savingsModule,
-	balance,
-	change,
+	targetSavingsAmount,
+	displayActionAmount,
 	disabled,
 	setLoaded,
-	newReferrer,
-	newReferralFeePPM,
 	buttonLabel = "Withdraw ZCHF",
 }: Props) {
 	const [isAction, setAction] = useState<boolean>(false);
@@ -50,17 +46,18 @@ export default function SavingsActionWithdraw({
 				chainId: chainId,
 				abi: SavingsABI,
 				functionName: "adjust",
-				args: newReferrer != undefined ? [balance, newReferrer, Number(newReferralFeePPM)] : [balance],
+				args: [targetSavingsAmount],
 			});
 
+			const actionLabel = buttonLabel === "Withdraw all to wallet" ? "Total received in wallet: " : "Amount received in wallet: ";
 			const toastContent = [
 				{
-					title: `Saved amount: `,
-					value: `${formatCurrency(formatUnits(balance, 18))} ZCHF`,
+					title: `Target earning balance: `,
+					value: `${formatCurrency(formatUnits(targetSavingsAmount, 18))} ZCHF`,
 				},
 				{
-					title: `Withdraw: `,
-					value: `${formatCurrency(formatUnits(change < 0n ? -change : change, 18))} ZCHF`,
+					title: actionLabel,
+					value: `${formatCurrency(formatUnits(displayActionAmount, 18))} ZCHF`,
 				},
 				{
 					title: "Transaction: ",
@@ -77,7 +74,7 @@ export default function SavingsActionWithdraw({
 				},
 			});
 
-			track("savings_withdrawn", { amount: formatUnits(change < 0n ? -change : change, 18) });
+			track("savings_withdrawn", { amount: formatUnits(displayActionAmount, 18) });
 			setHidden(true);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));

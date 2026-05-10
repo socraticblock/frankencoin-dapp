@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import { isAddress } from "viem";
 
@@ -15,46 +15,27 @@ export type EarnCustomTargetActions = {
 	setOnbehalfAddress: (value: string) => void;
 };
 
-function parseReferralFeePPM(value: string | string[] | undefined): bigint {
-	if (typeof value !== "string" || value.length === 0) return 0n;
-	try {
-		const parsed = BigInt(value);
-		return parsed > 0n ? parsed : 0n;
-	} catch {
-		return 0n;
-	}
-}
-
 export function useEarnCustomTargetState(params: {
-	queryReferrer: string | string[] | undefined;
-	queryReferralFeePPM: string | string[] | undefined;
 	resetKey: string;
 }): {
 	customTargetState: EarnCustomTargetState;
 	customTargetActions: EarnCustomTargetActions;
 } {
-	const { queryReferrer, queryReferralFeePPM, resetKey } = params;
+	const { resetKey } = params;
 
-	const [newReferrer, setNewReferrer] = useState<Address | undefined>(undefined);
-	const [newReferralFeePPM, setNewReferralFeePPM] = useState(0n);
 	const [onbehalfToggle, setOnbehalfToggle] = useState(false);
 	const [onbehalfAddress, setOnbehalfAddress] = useState("");
 	const [onbehalfError, setOnbehalfError] = useState("");
+	// Builder referral fee disabled for ZCHF Desk launch.
+	// Existing on-chain referrer data is still read from savings(account), but this app does not set a new referrer.
+	const newReferrer = useMemo<Address | undefined>(() => undefined, []);
+	const newReferralFeePPM = 0n;
 
 	useEffect(() => {
-		setNewReferrer(undefined);
-		setNewReferralFeePPM(0n);
 		setOnbehalfToggle(false);
 		setOnbehalfAddress("");
 		setOnbehalfError("");
 	}, [resetKey]);
-
-	useEffect(() => {
-		if (typeof queryReferrer === "string" && queryReferrer.length !== 0 && isAddress(queryReferrer)) {
-			setNewReferrer(queryReferrer);
-		}
-		setNewReferralFeePPM(parseReferralFeePPM(queryReferralFeePPM));
-	}, [queryReferrer, queryReferralFeePPM]);
 
 	useEffect(() => {
 		if (isAddress(onbehalfAddress) || onbehalfAddress == "") {

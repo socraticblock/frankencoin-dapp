@@ -15,19 +15,18 @@ export function getCollectWalletTarget(snapshot: SavingsAccountSnapshot): bigint
 }
 
 /**
- * Current behavior preserved from the pre-controller-extraction flow.
- * Do not correct formulas in this refactor; protocol/product changes belong in a separate pass.
+ * Contract-aware target: `adjust(target)` refreshes first, so compound keeps the
+ * post-refresh saved balance (gross interest minus any existing referral fee).
  */
 export function getCompoundTarget(snapshot: SavingsAccountSnapshot): bigint {
-	return snapshot.savingsBalance + snapshot.readyInterest;
+	return getSavedAfterRefresh(snapshot);
 }
 
 /**
- * Current behavior preserved from the pre-controller-extraction flow.
- * Do not correct formulas in this refactor; protocol/product changes belong in a separate pass.
+ * Contract-aware target: `adjust(target)` refreshes first, then adds the wallet deposit.
  */
 export function getDepositTarget(snapshot: SavingsAccountSnapshot, depositAmount: bigint): bigint {
-	return snapshot.savingsBalance + depositAmount;
+	return getSavedAfterRefresh(snapshot) + depositAmount;
 }
 
 /**

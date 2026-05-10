@@ -20,8 +20,6 @@ export type EarnCustomWithdrawPanelProps = {
 	onOnbehalfAddressChange: (value: string) => void;
 	partialWithdrawAdjustTarget: bigint | undefined;
 	savingsModule: Address;
-	newReferrer: Address | undefined;
-	newReferralFeePPM: bigint;
 };
 
 export default function EarnCustomWithdrawPanel({
@@ -41,8 +39,6 @@ export default function EarnCustomWithdrawPanel({
 	onOnbehalfAddressChange,
 	partialWithdrawAdjustTarget,
 	savingsModule,
-	newReferrer,
-	newReferralFeePPM,
 }: EarnCustomWithdrawPanelProps) {
 	return (
 		<div className="space-y-4">
@@ -74,10 +70,8 @@ export default function EarnCustomWithdrawPanel({
 			<SavingsActionWithdraw
 				disabled={withdrawAmount === 0n || !!errorLabel || partialWithdrawAdjustTarget === undefined}
 				savingsModule={savingsModule}
-				balance={partialWithdrawAdjustTarget ?? 0n}
-				change={withdrawAmount}
-				newReferrer={newReferrer}
-				newReferralFeePPM={newReferralFeePPM}
+				targetSavingsAmount={partialWithdrawAdjustTarget ?? 0n}
+				displayActionAmount={withdrawAmount}
 				buttonLabel="Withdraw ZCHF"
 			/>
 		</div>

@@ -13,23 +13,19 @@ import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 
 interface Props {
 	savingsModule: Address;
-	amount: bigint;
-	interest: bigint;
+	targetSavingsAmount: bigint;
+	displayActionAmount: bigint;
 	disabled?: boolean;
 	setLoaded?: (val: boolean) => Dispatch<SetStateAction<boolean>>;
-	newReferrer?: Address | undefined;
-	newReferralFeePPM: bigint;
 	buttonLabel?: string;
 }
 
 export default function SavingsActionSave({
 	savingsModule,
-	amount,
-	interest,
+	targetSavingsAmount,
+	displayActionAmount,
 	disabled,
 	setLoaded,
-	newReferrer,
-	newReferralFeePPM,
 	buttonLabel = "Deposit ZCHF",
 }: Props) {
 	const [isAction, setAction] = useState<boolean>(false);
@@ -50,17 +46,18 @@ export default function SavingsActionSave({
 				chainId: chainId,
 				abi: SavingsABI,
 				functionName: "adjust",
-				args: newReferrer != undefined ? [amount, newReferrer, Number(newReferralFeePPM)] : [amount],
+				args: [targetSavingsAmount],
 			});
 
+			const actionLabel = buttonLabel === "Compound interest" ? "Interest compounded: " : "Amount deposited: ";
 			const toastContent = [
 				{
-					title: `Saving: `,
-					value: `${formatCurrency(formatUnits(amount, 18))} ZCHF`,
+					title: `Target earning balance: `,
+					value: `${formatCurrency(formatUnits(targetSavingsAmount, 18))} ZCHF`,
 				},
 				{
-					title: `Accured Interest: `,
-					value: `${formatCurrency(formatUnits(interest, 18))} ZCHF`,
+					title: actionLabel,
+					value: `${formatCurrency(formatUnits(displayActionAmount, 18))} ZCHF`,
 				},
 				{
 					title: "Transaction: ",
@@ -77,7 +74,7 @@ export default function SavingsActionSave({
 				},
 			});
 
-			track("savings_deposited", { amount: formatUnits(amount, 18) });
+			track("savings_deposited", { amount: formatUnits(displayActionAmount, 18) });
 			setHidden(true);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));

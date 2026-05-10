@@ -13,23 +13,19 @@ import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 
 interface Props {
 	savingsModule: Address;
-	balance: bigint;
-	interest: bigint;
+	targetSavingsAmount: bigint;
+	displayActionAmount: bigint;
 	disabled?: boolean;
 	setLoaded?: (val: boolean) => Dispatch<SetStateAction<boolean>>;
-	newReferrer?: Address | undefined;
-	newReferralFeePPM: bigint;
 	buttonLabel?: string;
 }
 
 export default function SavingsActionInterest({
 	savingsModule,
-	balance,
-	interest,
+	targetSavingsAmount,
+	displayActionAmount,
 	disabled,
 	setLoaded,
-	newReferrer,
-	newReferralFeePPM,
 	buttonLabel = "Collect interest",
 }: Props) {
 	const [isAction, setAction] = useState<boolean>(false);
@@ -53,17 +49,17 @@ export default function SavingsActionInterest({
 				chainId: chainId,
 				abi: SavingsABI,
 				functionName: "adjust",
-				args: newReferrer != undefined ? [balance, newReferrer, Number(newReferralFeePPM)] : [balance],
+				args: [targetSavingsAmount],
 			});
 
 			const toastContent = [
 				{
-					title: `Saved amount: `,
-					value: `${formatCurrency(formatUnits(balance, 18))} ZCHF`,
+					title: `Target earning balance: `,
+					value: `${formatCurrency(formatUnits(targetSavingsAmount, 18))} ZCHF`,
 				},
 				{
-					title: `Claim Interest: `,
-					value: `${formatCurrency(formatUnits(interest, 18))} ZCHF`,
+					title: `Interest collected: `,
+					value: `${formatCurrency(formatUnits(displayActionAmount, 18))} ZCHF`,
 				},
 				{
 					title: "Transaction: ",
@@ -80,7 +76,7 @@ export default function SavingsActionInterest({
 				},
 			});
 
-			track("interest_claimed", { amount: formatUnits(interest, 18) });
+			track("interest_claimed", { amount: formatUnits(displayActionAmount, 18) });
 			setHidden(true);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));

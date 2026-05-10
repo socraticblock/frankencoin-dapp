@@ -9,24 +9,22 @@ export type EarnCollectPanelProps = {
 	userSavingsBalance: bigint;
 	userSavingsInterest: bigint;
 	compoundTargetAmount: bigint;
+	netInterestAmount: bigint;
 	collectAction: CollectAction;
 	onCollectActionChange: (next: CollectAction) => void;
 	error: boolean;
 	savingsModule: Address;
-	newReferrer: Address | undefined;
-	newReferralFeePPM: bigint;
 };
 
 export default function EarnCollectPanel({
 	userSavingsBalance,
 	userSavingsInterest,
 	compoundTargetAmount,
+	netInterestAmount,
 	collectAction,
 	onCollectActionChange,
 	error,
 	savingsModule,
-	newReferrer,
-	newReferralFeePPM,
 }: EarnCollectPanelProps) {
 	return (
 		<div className="mt-8 space-y-4 rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-5 dark:border-menu-separator dark:bg-card-body-primary">
@@ -69,20 +67,16 @@ export default function EarnCollectPanel({
 							<SavingsActionSave
 								disabled={!!error}
 								savingsModule={savingsModule}
-								amount={compoundTargetAmount}
-								interest={userSavingsInterest}
-								newReferrer={newReferrer}
-								newReferralFeePPM={newReferralFeePPM}
+								targetSavingsAmount={compoundTargetAmount}
+								displayActionAmount={netInterestAmount}
 								buttonLabel="Compound interest"
 							/>
 						) : (
 							<SavingsActionInterest
 								disabled={!!error}
 								savingsModule={savingsModule}
-								balance={userSavingsBalance}
-								interest={userSavingsInterest}
-								newReferrer={newReferrer}
-								newReferralFeePPM={newReferralFeePPM}
+								targetSavingsAmount={userSavingsBalance}
+								displayActionAmount={netInterestAmount}
 								buttonLabel="Collect to wallet"
 							/>
 						)}

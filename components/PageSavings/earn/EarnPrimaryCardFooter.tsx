@@ -3,8 +3,6 @@ import SavingsActionInterest from "../SavingsActionInterest";
 import SavingsActionSave from "../SavingsActionSave";
 import SavingsActionWithdraw from "../SavingsActionWithdraw";
 import SavingsActionSaveOnBehalf from "../SavingsActionSaveOnBehalf";
-import AppLink from "@components/AppLink";
-import { ContractUrl, shortenAddress } from "@utils";
 import type { SupportedChain } from "@frankencoin/zchf";
 import type { Address } from "viem";
 import type { EarnAction } from "./earnTypes";
@@ -20,12 +18,10 @@ export type EarnPrimaryCardFooterProps = {
 	onOnbehalfAddressChange: (v: string) => void;
 	hasActionableFunds: boolean;
 	error: string;
-	depositBlockedByInterest: boolean;
 	hasMeaningfulWalletZchf: boolean;
 	depositAmount: bigint;
+	depositTargetAmount: bigint;
 	savingsModule: Address;
-	newReferrer: Address | undefined;
-	newReferralFeePPM: bigint;
 	legacyTargetAmount: bigint;
 	userSavingsBalance: bigint;
 	userSavingsInterest: bigint;
@@ -43,12 +39,10 @@ export default function EarnPrimaryCardFooter({
 	onOnbehalfAddressChange,
 	hasActionableFunds,
 	error,
-	depositBlockedByInterest,
 	hasMeaningfulWalletZchf,
 	depositAmount,
+	depositTargetAmount,
 	savingsModule,
-	newReferrer,
-	newReferralFeePPM,
 	legacyTargetAmount,
 	userSavingsBalance,
 	userSavingsInterest,
@@ -82,59 +76,34 @@ export default function EarnPrimaryCardFooter({
 					/>
 				) : lockChainSelector && earnAction === "collect" ? null : lockChainSelector && earnAction === "deposit" ? (
 					<SavingsActionSave
-						disabled={!!error || depositBlockedByInterest || !hasMeaningfulWalletZchf || depositAmount === 0n}
+						disabled={!!error || !hasMeaningfulWalletZchf || depositAmount === 0n}
 						savingsModule={savingsModule}
-						amount={userSavingsBalance + depositAmount}
-						interest={0n}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
+						targetSavingsAmount={depositTargetAmount}
+						displayActionAmount={depositAmount}
 					/>
 				) : lockChainSelector && earnAction === "withdraw" ? null : userSavingsInterest > 0 && legacyTargetAmount == userSavingsBalance ? (
 					<SavingsActionInterest
 						disabled={!!error}
 						savingsModule={savingsModule}
-						balance={userSavingsBalance}
-						interest={userSavingsInterest}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
+						targetSavingsAmount={userSavingsBalance}
+						displayActionAmount={userSavingsInterest}
 					/>
 				) : legacyTargetAmount > userSavingsBalance ? (
 					<SavingsActionSave
 						disabled={!!error}
 						savingsModule={savingsModule}
-						amount={legacyTargetAmount}
-						interest={userSavingsInterest}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
+						targetSavingsAmount={legacyTargetAmount}
+						displayActionAmount={change < 0n ? -change : change}
 					/>
 				) : (
 					<SavingsActionWithdraw
 						disabled={userSavingsBalance == 0n || !!error}
 						savingsModule={savingsModule}
-						balance={legacyTargetAmount}
-						change={change}
-						newReferrer={newReferrer}
-						newReferralFeePPM={newReferralFeePPM}
+						targetSavingsAmount={legacyTargetAmount}
+						displayActionAmount={change < 0n ? -change : change}
 					/>
 				)}
 			</div>
-
-			{newReferrer ? (
-				<div className="flex mt-8">
-					<div className={`flex-1 text-text-secondary`}>
-						<span className="font-semibold">Notice: </span>
-						You are about to set a referrer{" "}
-						<AppLink
-							className="pr-2"
-							label={shortenAddress(newReferrer)}
-							href={ContractUrl(newReferrer, chain)}
-							external={true}
-						/>
-						who will receive{" "}
-						<span className="font-semibold">{Math.round(Number(newReferralFeePPM / 1000n)) / 10}%</span> of your earned interest.
-					</div>
-				</div>
-			) : null}
 		</>
 	);
 }

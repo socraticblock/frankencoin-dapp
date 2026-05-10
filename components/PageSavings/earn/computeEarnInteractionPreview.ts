@@ -125,6 +125,7 @@ export function computeEarnInteractionPreview(params: {
 								: cardChangeForPreviewFallback
 							: readyInterest),
 					interest: readyInterest,
+					referralFees: snapshot.referralFees,
 					interestAlsoCollected: 0n,
 					withdrawAllPreview,
 			  })
