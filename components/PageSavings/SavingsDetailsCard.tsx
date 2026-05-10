@@ -38,6 +38,10 @@ interface Props {
 	totalReceived?: bigint;
 	/** Principal (pre-refresh) and net total to wallet for withdraw-all preview rows. */
 	withdrawAllPreview?: { principal: bigint; totalReceived: bigint } | null;
+	/** When true, hides the dashed separator and resulting earning balance row (e.g. custom withdraw with amount 0). */
+	hideResultingBalance?: boolean;
+	/** Extra helper line below preview rows for earn transaction panel only. */
+	earnPreviewHelperText?: string | null;
 }
 
 export default function SavingsDetailsCard({
@@ -58,6 +62,8 @@ export default function SavingsDetailsCard({
 	interestAlsoCollected = 0n,
 	totalReceived,
 	withdrawAllPreview = null,
+	hideResultingBalance = false,
+	earnPreviewHelperText = null,
 }: Props) {
 	const { savingsBalance } = useSelector((state: RootState) => state.savings);
 
@@ -101,7 +107,7 @@ export default function SavingsDetailsCard({
 			: flowIntent === "deposit"
 				? "Amount to deposit"
 				: flowIntent === "withdraw" || flowIntent === "withdraw_partial"
-					? "Amount from earning"
+					? "Amount received in wallet"
 					: flowIntent === "withdraw_all"
 						? "Total to receive"
 						: direction
@@ -119,7 +125,7 @@ export default function SavingsDetailsCard({
 
 	return (
 		<AppCard>
-			<div className="text-lg font-bold text-center">Outcome</div>
+			<div className="text-lg font-bold text-center">{isEarnTransactionPreview ? "Preview" : "Outcome"}</div>
 			<div className="p-4 flex flex-col gap-2">
 				{showPortfolioOverview ? (
 					<>
@@ -163,6 +169,10 @@ export default function SavingsDetailsCard({
 					</>
 				)}
 
+				{earnPreviewHelperText ? (
+					<div className="mt-1 text-sm text-text-secondary">{earnPreviewHelperText}</div>
+				) : null}
+
 				{referrer != zeroAddress ? (
 					<div className="flex">
 						<div className="flex-1 text-text-secondary">
@@ -173,14 +183,18 @@ export default function SavingsDetailsCard({
 					</div>
 				) : null}
 
-				<hr className="border-slate-700 border-dashed" />
+				{!hideResultingBalance ? (
+					<>
+						<hr className="border-slate-700 border-dashed" />
 
-				<div className="flex font-bold">
-					<div className="flex-1 text-text-secondary">
-						{isEarnTransactionPreview ? "Resulting earning balance" : "Resulting savings balance"}
-					</div>
-					<div className="">{formatCurrency(formatUnits(resultingBalance ?? balance + change + interest, 18))} ZCHF</div>
-				</div>
+						<div className="flex font-bold">
+							<div className="flex-1 text-text-secondary">
+								{isEarnTransactionPreview ? "Resulting earning balance" : "Resulting savings balance"}
+							</div>
+							<div className="">{formatCurrency(formatUnits(resultingBalance ?? balance + change + interest, 18))} ZCHF</div>
+						</div>
+					</>
+				) : null}
 
 				<div className="flex mt-8">
 					<div className={`flex-1 text-text-secondary`}>
@@ -227,20 +241,19 @@ function getEarnTransactionPreviewRows({
 		return [{ label: "Amount to deposit", value: actionAmount }];
 	}
 	if (flowIntent === "withdraw_partial") {
-		const rows: { label: string; value: bigint }[] = [{ label: "Amount from earning", value: actionAmount }];
 		if (actionAmount === 0n) {
-			rows.push({ label: "Interest ready", value: interest });
-		} else {
-			rows.push({ label: "Interest stays earning", value: interest });
-			rows.push({ label: "Received in wallet", value: actionAmount });
+			return [{ label: "Ready interest", value: interest }];
 		}
-		return rows;
+		return [
+			{ label: "Ready interest added to earning", value: interest },
+			{ label: "Amount received in wallet", value: actionAmount },
+		];
 	}
 	if (flowIntent === "withdraw_all") {
 		if (withdrawAllPreview) {
 			return [
 				{ label: "Earning balance", value: withdrawAllPreview.principal },
-				{ label: "Interest collected", value: interest },
+				{ label: "Ready interest", value: interest },
 				{ label: "Total received in wallet", value: withdrawAllPreview.totalReceived },
 			];
 		}

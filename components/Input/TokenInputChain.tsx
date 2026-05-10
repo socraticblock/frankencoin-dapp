@@ -38,6 +38,12 @@ interface Props {
 	error?: string;
 	prefixLabel?: string;
 	tokenLogo?: string;
+	/** When false, hides the Min shortcut even if `min` is set. Defaults to true. */
+	showMinShortcut?: boolean;
+	/** When false, hides the Reset shortcut even if `reset` is set. Defaults to true. */
+	showResetShortcut?: boolean;
+	/** When false, hides the Max shortcut even if `max` is set. Defaults to true. */
+	showMaxShortcut?: boolean;
 }
 
 export default function TokenInputChain({
@@ -69,6 +75,9 @@ export default function TokenInputChain({
 	error,
 	prefixLabel,
 	tokenLogo,
+	showMinShortcut = true,
+	showResetShortcut = true,
+	showMaxShortcut = true,
 }: Props) {
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -147,7 +156,7 @@ export default function TokenInputChain({
 							)}
 						</div>
 
-						{!disabled && min != undefined && min != BigInt(value) && min != max && (
+						{!disabled && showMinShortcut && min != undefined && min != BigInt(value) && min != max && (
 							<div
 								className="text-card-input-min cursor-pointer hover:text-card-input-focus font-extrabold"
 								onClick={() => {
@@ -160,7 +169,7 @@ export default function TokenInputChain({
 								Min
 							</div>
 						)}
-						{!disabled && reset != undefined && reset != BigInt(value) && reset != min && reset != max && (
+						{!disabled && showResetShortcut && reset != undefined && reset != BigInt(value) && reset != min && reset != max && (
 							<div
 								className="text-card-input-reset cursor-pointer hover:text-card-input-focus font-extrabold"
 								onClick={() => {
@@ -173,7 +182,7 @@ export default function TokenInputChain({
 								Reset
 							</div>
 						)}
-						{!disabled && max != undefined && max != BigInt(value) && (
+						{!disabled && showMaxShortcut && max != undefined && max != BigInt(value) && (
 							<div
 								className="text-card-input-max cursor-pointer hover:text-card-input-focus font-extrabold"
 								onClick={() => {

@@ -102,12 +102,15 @@ export default function SavingsInteractionCard({
 	/** On-chain `adjust` calls `refresh` first, compounding gross interest minus referral into `saved` before any withdraw. */
 	const savedAfterRefresh = userSavingsBalance + userSavingsInterest - userSavingsReferralFees;
 	const partialWithdrawAdjustTarget =
-		earnAction === "withdraw" && withdrawAmount > 0n && savedAfterRefresh >= withdrawAmount
+		earnAction === "withdraw" &&
+		withdrawMode === "partial" &&
+		withdrawAmount > 0n &&
+		savedAfterRefresh >= withdrawAmount
 			? savedAfterRefresh - withdrawAmount
 			: undefined;
-	const isPartialWithdrawActive = earnAction === "withdraw" && withdrawAmount > 0n;
-	const isWithdrawAllPreviewActive =
-		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "all" && withdrawAmount === 0n;
+	const isPartialWithdrawActive =
+		earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount > 0n;
+	const isWithdrawAllPreviewActive = isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "all";
 	const earnTargetSavingsAmount =
 		earnAction === "collect"
 			? collectAction === "compound"
@@ -115,13 +118,13 @@ export default function SavingsInteractionCard({
 				: userSavingsBalance
 			: earnAction === "deposit"
 				? userSavingsBalance + depositAmount
-				: isPartialWithdrawActive
-					? partialWithdrawAdjustTarget ?? userSavingsBalance
-					: withdrawMode === "all"
-						? 0n
+				: withdrawMode === "all"
+					? 0n
+					: isPartialWithdrawActive
+						? partialWithdrawAdjustTarget ?? userSavingsBalance
 						: userSavingsBalance;
 	const isPartialWithdrawIdle =
-		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode !== "all" && withdrawAmount === 0n;
+		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount === 0n;
 	const earnTargetChange = isPartialWithdrawIdle ? 0n : earnTargetSavingsAmount - (userSavingsBalance + userSavingsInterest);
 
 	const outcomeFlowIntent: SavingsOutcomeFlowIntent | null = onbehalfToggle
@@ -297,8 +300,8 @@ export default function SavingsInteractionCard({
 		if (error === SAVINGS_DATA_ERROR) return;
 		if (isLockedEarnFlow && earnAction === "deposit" && depositAmount > userBalance) {
 			setError(`Not enough ${fromSymbol} in your wallet.`);
-		} else if (isLockedEarnFlow && earnAction === "withdraw" && withdrawAmount > userSavingsBalance) {
-			setError("Not enough ZCHF in your earning balance.");
+		} else if (isLockedEarnFlow && earnAction === "withdraw" && withdrawAmount > savedAfterRefresh) {
+			setError("Amount exceeds available earning.");
 		} else if (!isLockedEarnFlow && amount > userBalance + (!onbehalfToggle ? userSavingsBalance + userSavingsInterest : 0n)) {
 			setError(`Not enough ${fromSymbol} in your wallet.`);
 		} else {
@@ -314,6 +317,7 @@ export default function SavingsInteractionCard({
 		userBalance,
 		userSavingsBalance,
 		userSavingsInterest,
+		savedAfterRefresh,
 		withdrawAmount,
 	]);
 
@@ -495,69 +499,136 @@ export default function SavingsInteractionCard({
 								</div>
 							) : earnAction === "withdraw" ? (
 								<div className="mt-8 space-y-4">
-									<div
-										className="space-y-3"
-										onMouseDown={() => setWithdrawMode("partial")}
-										onFocusCapture={() => setWithdrawMode("partial")}
-									>
-										<TokenInputChain
-											label="Amount from earning"
-											chain={chain.name}
-											min={BigInt("0")}
-											max={userSavingsBalance}
-											maxLabel="Max earning"
-											reset={BigInt("0")}
-											symbol={fromSymbol}
-											placeholder={fromSymbol + " Amount"}
-											value={withdrawAmount.toString()}
-											onChange={onChangeWithdrawAmount}
-											error={hasSavingsDataError ? "" : error}
-											limit={userSavingsBalance}
-											limitDigit={18}
-											limitLabel="Earning"
-											note={withdrawAmount === 0n ? "Enter an amount to withdraw from earning." : undefined}
-											onChangeChain={onChangeChain}
-											lockChainSelector={lockChainSelector}
-											tokenLogo={"ZCHF"}
-										/>
+									<div className="grid gap-2 sm:grid-cols-2">
+										<button
+											type="button"
+											onClick={() => setWithdrawMode("partial")}
+											className={`min-h-[44px] rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+												withdrawMode === "partial"
+													? "border-[#c4a75f] bg-[#f4ead4]/90 text-text-primary shadow-sm dark:border-[#8a7448] dark:bg-[#2a3244]"
+													: "border-[#e0d4bd] bg-[#fffdf8] text-text-secondary hover:border-[#c4a75f]/60 dark:border-menu-separator dark:bg-card-body-primary"
+											}`}
+										>
+											Custom amount
+										</button>
+										<button
+											type="button"
+											onClick={() => {
+												setWithdrawMode("all");
+												setWithdrawAmount(0n);
+											}}
+											className={`min-h-[44px] rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+												withdrawMode === "all"
+													? "border-[#c4a75f] bg-[#f4ead4]/90 text-text-primary shadow-sm dark:border-[#8a7448] dark:bg-[#2a3244]"
+													: "border-[#e0d4bd] bg-[#fffdf8] text-text-secondary hover:border-[#c4a75f]/60 dark:border-menu-separator dark:bg-card-body-primary"
+											}`}
+										>
+											Withdraw all
+										</button>
 									</div>
-									<div
-										className="space-y-4 rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-5 dark:border-menu-separator dark:bg-card-body-primary"
-										onMouseDown={() => setWithdrawMode("all")}
-									>
-										<div className="text-sm font-semibold text-text-primary">Withdraw all to wallet</div>
-										<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-											<span className="text-text-secondary">Earning balance</span>
-											<span className="font-semibold tabular-nums text-text-primary">
-												{formatCurrency(formatUnits(userSavingsBalance, 18))} ZCHF
-											</span>
+									{withdrawMode === "partial" ? (
+										<div className="space-y-4">
+											<TokenInputChain
+												label="Amount to receive in wallet"
+												chain={chain.name}
+												symbol={fromSymbol}
+												placeholder={fromSymbol + " Amount"}
+												value={withdrawAmount.toString()}
+												onChange={onChangeWithdrawAmount}
+												error={hasSavingsDataError ? "" : error}
+												limit={savedAfterRefresh}
+												limitDigit={18}
+												limitLabel="Available earning"
+												onChangeChain={onChangeChain}
+												lockChainSelector={lockChainSelector}
+												tokenLogo={"ZCHF"}
+												showMinShortcut={false}
+												showResetShortcut={false}
+												showMaxShortcut={false}
+											/>
+											{onbehalfToggle ? (
+												<AddressInput
+													label="To address"
+													placeholder="0x1a2b3c..."
+													error={onbehalfError}
+													value={onbehalfAddress}
+													onChange={setOnbehalfAddress}
+												/>
+											) : null}
+											<AppToggle
+												disabled={false}
+												label="Custom target address"
+												enabled={onbehalfToggle}
+												onChange={setOnbehalfToggle}
+											/>
+											<SavingsActionWithdraw
+												disabled={
+													withdrawAmount === 0n || !!error || partialWithdrawAdjustTarget === undefined
+												}
+												savingsModule={savingsAdresse}
+												balance={partialWithdrawAdjustTarget ?? 0n}
+												change={withdrawAmount}
+												newReferrer={newReferrer}
+												newReferralFeePPM={newReferralFeePPM}
+												buttonLabel="Withdraw ZCHF"
+											/>
 										</div>
-										<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-											<span className="text-text-secondary">Interest ready</span>
-											<span className="font-semibold tabular-nums text-text-primary">
-												{formatCurrency(formatUnits(userSavingsInterest, 18))} ZCHF
-											</span>
+									) : (
+										<div className="space-y-4 rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-5 dark:border-menu-separator dark:bg-card-body-primary">
+											<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+												<span className="text-text-secondary">Earning balance</span>
+												<span className="font-semibold tabular-nums text-text-primary">
+													{formatCurrency(formatUnits(userSavingsBalance, 18))} ZCHF
+												</span>
+											</div>
+											<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+												<span className="text-text-secondary">Ready interest</span>
+												<span className="font-semibold tabular-nums text-text-primary">
+													{formatCurrency(formatUnits(userSavingsInterest, 18))} ZCHF
+												</span>
+											</div>
+											<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+												<span className="text-text-secondary">Total received in wallet</span>
+												<span className="font-semibold tabular-nums text-text-primary">
+													{formatCurrency(formatUnits(savedAfterRefresh, 18))} ZCHF
+												</span>
+											</div>
+											<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+												<span className="text-text-secondary">Resulting earning balance</span>
+												<span className="font-semibold tabular-nums text-text-primary">
+													{formatCurrency(formatUnits(0n, 18))} ZCHF
+												</span>
+											</div>
+											<p className="text-xs text-text-secondary">
+												Closes your earning position on {chain.name}. The savings module compounds ready interest into your
+												balance before paying out; nothing stays earning after this action.
+											</p>
+											{onbehalfToggle ? (
+												<AddressInput
+													label="To address"
+													placeholder="0x1a2b3c..."
+													error={onbehalfError}
+													value={onbehalfAddress}
+													onChange={setOnbehalfAddress}
+												/>
+											) : null}
+											<AppToggle
+												disabled={false}
+												label="Custom target address"
+												enabled={onbehalfToggle}
+												onChange={setOnbehalfToggle}
+											/>
+											<SavingsActionWithdraw
+												disabled={savedAfterRefresh === 0n || !!error}
+												savingsModule={savingsAdresse}
+												balance={0n}
+												change={savedAfterRefresh}
+												newReferrer={newReferrer}
+												newReferralFeePPM={newReferralFeePPM}
+												buttonLabel="Withdraw all to wallet"
+											/>
 										</div>
-										<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-											<span className="text-text-secondary">Total to receive</span>
-											<span className="font-semibold tabular-nums text-text-primary">
-												{formatCurrency(formatUnits(savedAfterRefresh, 18))} ZCHF
-											</span>
-										</div>
-										<p className="text-xs text-text-secondary">
-											Closes your earning position on {chain.name}. The savings module compounds ready interest into your balance
-											before paying out; nothing stays earning after this action.
-										</p>
-										<SavingsActionWithdraw
-											disabled={savedAfterRefresh === 0n || !!error}
-											savingsModule={savingsAdresse}
-											balance={0n}
-											change={savedAfterRefresh}
-											newReferrer={newReferrer}
-											newReferralFeePPM={newReferralFeePPM}
-											buttonLabel="Withdraw all to wallet"
-										/>
-									</div>
+									)}
 								</div>
 							) : (
 								<div className="mt-8 space-y-3">
@@ -605,16 +676,25 @@ export default function SavingsInteractionCard({
 						)}
 
 						<div className="">
-							{onbehalfToggle ? (
-								<AddressInput
-									label="To address"
-									placeholder="0x1a2b3c..."
-									error={onbehalfError}
-									value={onbehalfAddress}
-									onChange={setOnbehalfAddress}
-								/>
+							{!(lockChainSelector && earnAction === "withdraw") ? (
+								<>
+									{onbehalfToggle ? (
+										<AddressInput
+											label="To address"
+											placeholder="0x1a2b3c..."
+											error={onbehalfError}
+											value={onbehalfAddress}
+											onChange={setOnbehalfAddress}
+										/>
+									) : null}
+									<AppToggle
+										disabled={false}
+										label="Custom target address"
+										enabled={onbehalfToggle}
+										onChange={setOnbehalfToggle}
+									/>
+								</>
 							) : null}
-							<AppToggle disabled={false} label="Custom target address" enabled={onbehalfToggle} onChange={setOnbehalfToggle} />
 						</div>
 
 						<div className="mx-auto my-4 w-full flex-col flex gap-4">
@@ -638,19 +718,8 @@ export default function SavingsInteractionCard({
 									newReferrer={newReferrer}
 									newReferralFeePPM={newReferralFeePPM}
 								/>
-							) : lockChainSelector && earnAction === "withdraw" ? (
-								<div onMouseDown={() => setWithdrawMode("partial")}>
-								<SavingsActionWithdraw
-									disabled={withdrawAmount === 0n || !!error || partialWithdrawAdjustTarget === undefined}
-									savingsModule={savingsAdresse}
-									balance={partialWithdrawAdjustTarget ?? 0n}
-									change={withdrawAmount}
-									newReferrer={newReferrer}
-									newReferralFeePPM={newReferralFeePPM}
-									buttonLabel="Withdraw ZCHF"
-								/>
-								</div>
-							) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
+							) : lockChainSelector && earnAction === "withdraw" ? null : userSavingsInterest > 0 &&
+							  amount == userSavingsBalance ? (
 								<SavingsActionInterest
 									disabled={!!error}
 									savingsModule={savingsAdresse}
@@ -718,6 +787,20 @@ export default function SavingsInteractionCard({
 					actionAmount={previewActionAmount}
 					resultingBalance={previewResultingBalance}
 					withdrawAllPreview={withdrawAllPreview}
+					hideResultingBalance={
+						isLockedEarnFlow &&
+						earnAction === "withdraw" &&
+						withdrawMode === "partial" &&
+						withdrawAmount === 0n
+					}
+					earnPreviewHelperText={
+						isLockedEarnFlow &&
+						earnAction === "withdraw" &&
+						withdrawMode === "partial" &&
+						withdrawAmount === 0n
+							? "Enter an amount to receive in wallet."
+							: null
+					}
 				/>
 			) : null}
 		</section>
