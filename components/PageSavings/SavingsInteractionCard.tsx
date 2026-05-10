@@ -102,9 +102,12 @@ export default function SavingsInteractionCard({
 	/** On-chain `adjust` calls `refresh` first, compounding gross interest minus referral into `saved` before any withdraw. */
 	const savedAfterRefresh = userSavingsBalance + userSavingsInterest - userSavingsReferralFees;
 	const partialWithdrawAdjustTarget =
-		withdrawMode === "partial" && withdrawAmount > 0n && savedAfterRefresh >= withdrawAmount
+		earnAction === "withdraw" && withdrawAmount > 0n && savedAfterRefresh >= withdrawAmount
 			? savedAfterRefresh - withdrawAmount
 			: undefined;
+	const isPartialWithdrawActive = earnAction === "withdraw" && withdrawAmount > 0n;
+	const isWithdrawAllPreviewActive =
+		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "all" && withdrawAmount === 0n;
 	const earnTargetSavingsAmount =
 		earnAction === "collect"
 			? collectAction === "compound"
@@ -112,11 +115,13 @@ export default function SavingsInteractionCard({
 				: userSavingsBalance
 			: earnAction === "deposit"
 				? userSavingsBalance + depositAmount
-				: withdrawMode === "all"
-					? 0n
-					: partialWithdrawAdjustTarget ?? userSavingsBalance;
+				: isPartialWithdrawActive
+					? partialWithdrawAdjustTarget ?? userSavingsBalance
+					: withdrawMode === "all"
+						? 0n
+						: userSavingsBalance;
 	const isPartialWithdrawIdle =
-		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount === 0n;
+		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode !== "all" && withdrawAmount === 0n;
 	const earnTargetChange = isPartialWithdrawIdle ? 0n : earnTargetSavingsAmount - (userSavingsBalance + userSavingsInterest);
 
 	const outcomeFlowIntent: SavingsOutcomeFlowIntent | null = onbehalfToggle
@@ -133,9 +138,11 @@ export default function SavingsInteractionCard({
 		? earnAction === "collect"
 			? collectAction
 			: earnAction === "withdraw"
-				? withdrawMode === "all"
-					? "withdraw_all"
-					: "withdraw_partial"
+				? isPartialWithdrawActive
+					? "withdraw_partial"
+					: withdrawMode === "all"
+						? "withdraw_all"
+						: "withdraw_partial"
 				: earnAction
 		: outcomeFlowIntent;
 	const previewActionAmount =
@@ -143,22 +150,21 @@ export default function SavingsInteractionCard({
 			? userSavingsInterest
 			: earnAction === "deposit"
 				? depositAmount
-				: withdrawMode === "all"
-					? savedAfterRefresh
-					: withdrawAmount;
+				: isPartialWithdrawActive
+					? withdrawAmount
+					: withdrawMode === "all"
+						? savedAfterRefresh
+						: withdrawAmount;
 	const previewResultingBalance = !isLockedEarnFlow
 		? undefined
 		: earnAction === "withdraw"
-			? withdrawMode === "partial" && withdrawAmount === 0n
-				? undefined
-				: withdrawMode === "partial"
-					? partialWithdrawAdjustTarget
+			? isPartialWithdrawActive
+				? partialWithdrawAdjustTarget
+				: withdrawMode !== "all"
+					? undefined
 					: 0n
 			: earnTargetSavingsAmount;
-	const withdrawAllPreview =
-		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "all"
-			? { principal: userSavingsBalance, totalReceived: savedAfterRefresh }
-			: null;
+	const withdrawAllPreview = isWithdrawAllPreviewActive ? { principal: userSavingsBalance, totalReceived: savedAfterRefresh } : null;
 
 	const applyEarnActionAmounts = (next: EarnAction) => {
 		if (next === "collect") {
@@ -310,6 +316,12 @@ export default function SavingsInteractionCard({
 		userSavingsInterest,
 		withdrawAmount,
 	]);
+
+	useEffect(() => {
+		if (earnAction === "withdraw" && withdrawAmount > 0n && withdrawMode !== "partial") {
+			setWithdrawMode("partial");
+		}
+	}, [earnAction, withdrawAmount, withdrawMode]);
 
 	useEffect(() => {
 		if (!earnFormIntent || !isLoaded || onbehalfToggle) return;
