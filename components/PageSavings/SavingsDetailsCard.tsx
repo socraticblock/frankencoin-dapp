@@ -8,7 +8,14 @@ import { useSelector } from "react-redux";
 import { RootState } from "../../redux/redux.store";
 import { SavingsBalance } from "@frankencoin/api";
 
-export type SavingsOutcomeFlowIntent = "collect" | "collect_wallet" | "compound" | "deposit" | "withdraw";
+export type SavingsOutcomeFlowIntent =
+	| "collect"
+	| "collect_wallet"
+	| "compound"
+	| "deposit"
+	| "withdraw"
+	| "withdraw_partial"
+	| "withdraw_all";
 
 interface Props {
 	account: Address;
@@ -29,6 +36,8 @@ interface Props {
 	resultingBalance?: bigint;
 	interestAlsoCollected?: bigint;
 	totalReceived?: bigint;
+	/** Principal (pre-refresh) and net total to wallet for withdraw-all preview rows. */
+	withdrawAllPreview?: { principal: bigint; totalReceived: bigint } | null;
 }
 
 export default function SavingsDetailsCard({
@@ -48,6 +57,7 @@ export default function SavingsDetailsCard({
 	resultingBalance,
 	interestAlsoCollected = 0n,
 	totalReceived,
+	withdrawAllPreview = null,
 }: Props) {
 	const { savingsBalance } = useSelector((state: RootState) => state.savings);
 
@@ -69,10 +79,17 @@ export default function SavingsDetailsCard({
 		isEarnTransactionPreview && flowIntent
 			? getEarnTransactionPreviewRows({
 					flowIntent,
-					actionAmount: actionAmount ?? (flowIntent === "deposit" || flowIntent === "withdraw" ? change < 0n ? -change : change : interest),
+					actionAmount:
+						actionAmount ??
+						(flowIntent === "deposit" || flowIntent === "withdraw" || flowIntent === "withdraw_partial"
+							? change < 0n
+								? -change
+								: change
+							: interest),
 					interest,
 					interestAlsoCollected,
 					totalReceived,
+					withdrawAllPreview,
 			  })
 			: null;
 
@@ -83,9 +100,11 @@ export default function SavingsDetailsCard({
 				? "Interest to compound"
 			: flowIntent === "deposit"
 				? "Amount to deposit"
-				: flowIntent === "withdraw"
-					? "Amount to withdraw"
-					: direction
+				: flowIntent === "withdraw" || flowIntent === "withdraw_partial"
+					? "Amount from earning"
+					: flowIntent === "withdraw_all"
+						? "Total to receive"
+						: direction
 						? "Amount to deposit"
 						: "Amount to withdraw";
 
@@ -189,12 +208,14 @@ function getEarnTransactionPreviewRows({
 	interest,
 	interestAlsoCollected,
 	totalReceived,
+	withdrawAllPreview,
 }: {
 	flowIntent: SavingsOutcomeFlowIntent;
 	actionAmount: bigint;
 	interest: bigint;
 	interestAlsoCollected: bigint;
 	totalReceived?: bigint;
+	withdrawAllPreview?: { principal: bigint; totalReceived: bigint } | null;
 }): { label: string; value: bigint }[] {
 	if (flowIntent === "collect" || flowIntent === "collect_wallet") {
 		return [{ label: "Interest to collect", value: interest }];
@@ -204,6 +225,26 @@ function getEarnTransactionPreviewRows({
 	}
 	if (flowIntent === "deposit") {
 		return [{ label: "Amount to deposit", value: actionAmount }];
+	}
+	if (flowIntent === "withdraw_partial") {
+		const rows: { label: string; value: bigint }[] = [{ label: "Amount from earning", value: actionAmount }];
+		if (actionAmount === 0n) {
+			rows.push({ label: "Interest ready", value: interest });
+		} else {
+			rows.push({ label: "Interest stays earning", value: interest });
+			rows.push({ label: "Received in wallet", value: actionAmount });
+		}
+		return rows;
+	}
+	if (flowIntent === "withdraw_all") {
+		if (withdrawAllPreview) {
+			return [
+				{ label: "Earning balance", value: withdrawAllPreview.principal },
+				{ label: "Interest collected", value: interest },
+				{ label: "Total received in wallet", value: withdrawAllPreview.totalReceived },
+			];
+		}
+		return [];
 	}
 	const rows = [{ label: "Amount to withdraw", value: actionAmount }];
 	if (interestAlsoCollected > 0n) {
