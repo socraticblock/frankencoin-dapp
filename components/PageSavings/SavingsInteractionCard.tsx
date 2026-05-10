@@ -153,6 +153,24 @@ export default function SavingsInteractionCard({
 		fromSymbol,
 	});
 
+	const hideEarnResultingBalance =
+		isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount === 0n;
+	const earnPreviewResultingBalance = hideEarnResultingBalance ? 0n : previewResultingBalance;
+	const earnPreviewModel =
+		lockChainSelector && !onbehalfToggle && (hideEarnResultingBalance || earnPreviewResultingBalance !== undefined)
+			? {
+					rows: earnPreviewRows,
+					resultingBalance: earnPreviewResultingBalance as bigint,
+					helperText: hideEarnResultingBalance ? "Enter an amount to receive in wallet." : null,
+					hideResultingBalance: hideEarnResultingBalance,
+					balance: userSavingsBalance,
+					referrer: userSavingsReferrer,
+					referralFeePPM: userSavingsReferralFeePPM,
+					referralFees: userSavingsReferralFees,
+					locktime: userSavingsLocktime,
+			  }
+			: undefined;
+
 	const onChangeChain = (value: string) => {
 		if (lockChainSelector) return;
 		const net = WAGMI_CHAINS.find((c) => c.name == value) as AppKitNetwork;
@@ -259,25 +277,7 @@ export default function SavingsInteractionCard({
 			{isSavingsDataReady && (onbehalfToggle || hasActionableFunds) ? (
 				<EarnOutcomeAside
 					chain={chain}
-					earnPreviewModel={
-						lockChainSelector && !onbehalfToggle
-							? {
-									rows: earnPreviewRows,
-									resultingBalance: previewResultingBalance ?? 0n,
-									helperText:
-										isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount === 0n
-											? "Enter an amount to receive in wallet."
-											: null,
-									hideResultingBalance:
-										isLockedEarnFlow && earnAction === "withdraw" && withdrawMode === "partial" && withdrawAmount === 0n,
-									balance: userSavingsBalance,
-									referrer: userSavingsReferrer,
-									referralFeePPM: userSavingsReferralFeePPM,
-									referralFees: userSavingsReferralFees,
-									locktime: userSavingsLocktime,
-							  }
-							: undefined
-					}
+					earnPreviewModel={earnPreviewModel}
 					legacyPreviewModel={{
 						account,
 						balance: userSavingsBalance,
