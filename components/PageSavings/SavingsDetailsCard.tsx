@@ -23,6 +23,8 @@ interface Props {
 	referralFees: bigint;
 	/** When set, outcome row labels match the active earn action (collect / deposit / withdraw). */
 	flowIntent?: SavingsOutcomeFlowIntent | null;
+	/** Earn-page transaction preview: hide portfolio totals; focus on this action only. */
+	variant?: "full" | "earnTransaction";
 }
 
 export default function SavingsDetailsCard({
@@ -37,6 +39,7 @@ export default function SavingsDetailsCard({
 	referralFeePPM,
 	referralFees,
 	flowIntent = null,
+	variant = "full",
 }: Props) {
 	const { savingsBalance } = useSelector((state: RootState) => state.savings);
 
@@ -49,9 +52,9 @@ export default function SavingsDetailsCard({
 			.filter((m) => BigInt(m.balance) > 0n);
 	}
 
-	const activeBalance = entries.filter((i) => i.chainId == chain.id);
 	const inactiveBalance = entries.filter((i) => i.chainId != chain.id);
 	const totalBalance = entries.reduce((a, b) => a + BigInt(b.balance), 0n);
+	const showPortfolioOverview = variant === "full";
 
 	const movementLabel =
 		flowIntent === "collect"
@@ -77,13 +80,17 @@ export default function SavingsDetailsCard({
 		<AppCard>
 			<div className="text-lg font-bold text-center">Outcome</div>
 			<div className="p-4 flex flex-col gap-2">
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">Your total balance</div>
-					<div className="text-text-secondary">{formatCurrency(formatUnits(totalBalance, 18))} ZCHF</div>
-				</div>
-				{...inactiveBalance.map((i, idx) => <SavingsSavedItem savings={i} key={`SavingsSavedItem_${idx}`} />)}
+				{showPortfolioOverview ? (
+					<>
+						<div className="flex">
+							<div className="flex-1 text-text-secondary">Your total balance</div>
+							<div className="text-text-secondary">{formatCurrency(formatUnits(totalBalance, 18))} ZCHF</div>
+						</div>
+						{...inactiveBalance.map((i, idx) => <SavingsSavedItem savings={i} key={`SavingsSavedItem_${idx}`} />)}
+					</>
+				) : null}
 
-				<div className="flex mt-4">
+				<div className={`flex ${showPortfolioOverview ? "mt-4" : ""}`}>
 					<div className="flex-1 text-text-secondary">Current savings balance</div>
 					<div className="">{formatCurrency(formatUnits(balance, 18))} ZCHF</div>
 				</div>
@@ -129,9 +136,11 @@ export default function SavingsDetailsCard({
 					</div>
 				</div>
 
-				<div className="flex mt-6">
-					<SavingsActionRedeem />
-				</div>
+				{showPortfolioOverview ? (
+					<div className="flex mt-6">
+						<SavingsActionRedeem />
+					</div>
+				) : null}
 			</div>
 		</AppCard>
 	);

@@ -147,18 +147,10 @@ export default function SavingsPage() {
 		const hasInterest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
 		const hasWallet = (row.walletZchf ?? 0) > 0;
 		if (hasInterest) return "collect";
+		if (hasSavings && !hasInterest) return "withdraw";
 		if (!hasSavings && !hasInterest && hasWallet) return "deposit";
 		return null;
 	}, []);
-
-	const selectActiveChainWithIntent = useCallback(
-		(id: ChainId, intent: Exclude<EarnFormIntent, null>) => {
-			setEarnFormIntent(intent);
-			setSelectedChain(id);
-			focusChainRow(id);
-		},
-		[focusChainRow, setSelectedChain]
-	);
 
 	const selectChainAndFocus = useCallback(
 		(id: ChainId, nextIntent: EarnFormIntent | "auto" = "auto") => {
@@ -303,11 +295,6 @@ export default function SavingsPage() {
 						<div className="w-full space-y-4">
 							{activeEarningRows.map((row) => {
 								const isSelected = selectedChainId === row.chainId;
-								const interestReady =
-									row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
-								const collectDisabled = !interestReady;
-								const depositDisabled = (row.walletZchf ?? 0) <= 0;
-								const withdrawDisabled = (row.savingsZchf ?? 0) <= 0;
 								return (
 									<div
 										key={row.chainId}
@@ -317,7 +304,11 @@ export default function SavingsPage() {
 									>
 										<div className="w-full rounded-2xl border border-[#e0d4bd] bg-[#fffdf8] p-5 shadow-sm dark:border-menu-separator dark:bg-card-content-secondary md:p-6">
 											<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-												<div className="min-w-0 flex-1 space-y-3">
+												<button
+													type="button"
+													onClick={() => selectChainAndFocus(row.chainId)}
+													className="min-w-0 flex-1 space-y-3 rounded-xl text-left outline-none ring-[#c4a75f] ring-offset-2 ring-offset-[#fffdf8] transition hover:opacity-95 focus-visible:ring-2 dark:ring-offset-card-content-secondary"
+												>
 													<div className="text-lg font-semibold text-text-primary">{row.name}</div>
 													<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-10 sm:gap-y-2">
 														<div>
@@ -337,31 +328,14 @@ export default function SavingsPage() {
 															</div>
 														</div>
 													</div>
-												</div>
-												<div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-shrink-0 lg:justify-end">
+												</button>
+												<div className="flex w-full flex-shrink-0 flex-col gap-2 lg:w-auto lg:justify-end">
 													<AppButtonSecondary
-														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
-														width="w-full sm:flex-1 lg:w-36"
-														disabled={collectDisabled}
-														onClick={() => selectActiveChainWithIntent(row.chainId, "collect")}
+														className="min-h-[44px] w-full lg:min-w-[10rem] lg:w-44"
+														width="w-full lg:w-44"
+														onClick={() => selectChainAndFocus(row.chainId)}
 													>
-														Collect
-													</AppButtonSecondary>
-													<AppButtonSecondary
-														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
-														width="w-full sm:flex-1 lg:w-36"
-														disabled={depositDisabled}
-														onClick={() => selectActiveChainWithIntent(row.chainId, "deposit")}
-													>
-														Deposit
-													</AppButtonSecondary>
-													<AppButtonSecondary
-														className="min-h-[44px] w-full sm:min-w-[7.5rem] sm:flex-1 lg:w-36 lg:flex-none"
-														width="w-full sm:flex-1 lg:w-36"
-														disabled={withdrawDisabled}
-														onClick={() => selectActiveChainWithIntent(row.chainId, "withdraw")}
-													>
-														Withdraw
+														Manage
 													</AppButtonSecondary>
 												</div>
 											</div>

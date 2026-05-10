@@ -2,7 +2,7 @@ import AppCard from "@components/AppCard";
 import TokenInputChain from "@components/Input/TokenInputChain";
 import { ADDRESS, ChainId, ChainIdMain, ChainIdSide, FrankencoinABI, SavingsABI } from "@frankencoin/zchf";
 import { useConnection, useBlockNumber, useChainId } from "wagmi";
-import { Address, isAddress, parseUnits, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress, parseUnits, zeroAddress } from "viem";
 import { useEffect, useRef, useState } from "react";
 import SavingsDetailsCard, { SavingsOutcomeFlowIntent } from "./SavingsDetailsCard";
 import { readContract } from "wagmi/actions";
@@ -15,7 +15,7 @@ import SavingsActionWithdraw from "./SavingsActionWithdraw";
 import AppToggle from "@components/AppToggle";
 import AddressInput from "@components/Input/AddressInput";
 import SavingsActionSaveOnBehalf from "./SavingsActionSaveOnBehalf";
-import { ContractUrl, getChain, normalizeAddress, shortenAddress } from "@utils";
+import { ContractUrl, formatCurrency, getChain, normalizeAddress, shortenAddress } from "@utils";
 import { useRouter } from "next/router";
 import AppLink from "@components/AppLink";
 import { AppKitNetwork } from "@reown/appkit/networks";
@@ -23,6 +23,7 @@ import { useAppKitNetwork } from "@reown/appkit/react";
 import AppChainBadge from "@components/AppChainBadge";
 
 export type EarnFormIntent = "collect" | "deposit" | "withdraw" | null;
+export type EarnAction = "collect" | "deposit" | "withdraw";
 const SAVINGS_DATA_ERROR = "Savings data could not be loaded for this chain.";
 
 type SavingsInteractionCardProps = {
@@ -62,6 +63,7 @@ export default function SavingsInteractionCard({
 	const [onbehalfToggle, setOnbehalfToggle] = useState(false);
 	const [onbehalfAddress, setOnbehalfAddress] = useState("");
 	const [onbehalfError, setOnbehalfError] = useState("");
+	const [earnAction, setEarnAction] = useState<EarnAction>("collect");
 
 	const frankencoinAddress =
 		chainId == 1 ? ADDRESS[chainId as ChainIdMain].frankencoin : ADDRESS[chainId as ChainIdSide].ccipBridgedFrankencoin;
@@ -97,6 +99,33 @@ export default function SavingsInteractionCard({
 				: amount < userSavingsBalance + userSavingsInterest
 					? "withdraw"
 					: null;
+
+	const previewFlowIntent: SavingsOutcomeFlowIntent | null =
+		lockChainSelector && !onbehalfToggle ? earnAction : outcomeFlowIntent;
+
+	const applyEarnActionAmounts = (next: EarnAction) => {
+		if (next === "collect") {
+			setAmount(userSavingsBalance);
+		} else if (next === "withdraw") {
+			setAmount(0n);
+		} else {
+			const bump = userBalance > 0n ? (userBalance >= parseUnits("0.01", 18) ? parseUnits("0.01", 18) : userBalance) : 0n;
+			const maxTarget = userSavingsBalance + userSavingsInterest + userBalance;
+			const nextAmt = userSavingsBalance + userSavingsInterest + bump;
+			setAmount(
+				nextAmt > maxTarget
+					? maxTarget
+					: nextAmt > userSavingsBalance + userSavingsInterest
+						? nextAmt
+						: userSavingsBalance + userSavingsInterest
+			);
+		}
+	};
+
+	const handleEarnActionChange = (next: EarnAction) => {
+		setEarnAction(next);
+		applyEarnActionAmounts(next);
+	};
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -125,6 +154,7 @@ export default function SavingsInteractionCard({
 		setUserSavingsReferrer(zeroAddress);
 		setUserSavingsReferralFeePPM(0n);
 		setUserSavingsReferralFees(0n);
+		setEarnAction("collect");
 	}, [account, chainId]);
 
 	useEffect(() => {
@@ -212,6 +242,9 @@ export default function SavingsInteractionCard({
 
 	useEffect(() => {
 		if (!earnFormIntent || !isLoaded || onbehalfToggle) return;
+		if (lockChainSelector) {
+			setEarnAction(earnFormIntent);
+		}
 		if (earnFormIntent === "collect") {
 			setAmount(userSavingsBalance);
 		} else if (earnFormIntent === "deposit") {
@@ -223,7 +256,7 @@ export default function SavingsInteractionCard({
 			setAmount(0n);
 		}
 		onConsumeRef.current?.();
-	}, [earnFormIntent, isLoaded, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest]);
+	}, [earnFormIntent, isLoaded, onbehalfToggle, userBalance, userSavingsBalance, userSavingsInterest, lockChainSelector]);
 
 	// ---------------------------------------------------------------------------
 
@@ -254,26 +287,96 @@ export default function SavingsInteractionCard({
 
 				{isSavingsDataReady ? (
 					<>
-						<div className="mt-8">
-							<TokenInputChain
-								label={!onbehalfToggle ? "Your savings" : "You save"}
-								chain={chain.name}
-								min={!onbehalfToggle ? BigInt("0") : undefined}
-								max={!onbehalfToggle ? userBalance + userSavingsBalance + userSavingsInterest : userBalance}
-								reset={!onbehalfToggle ? userSavingsBalance : 0n}
-								symbol={fromSymbol}
-								placeholder={fromSymbol + " Amount"}
-								value={amount.toString()}
-								onChange={onChangeAmount}
-								error={hasSavingsDataError ? "" : error}
-								limit={userBalance}
-								limitDigit={18}
-								limitLabel="Balance"
-								onChangeChain={onChangeChain}
-								lockChainSelector={lockChainSelector}
-								tokenLogo={"ZCHF"}
-							/>
-						</div>
+						{lockChainSelector && !onbehalfToggle ? (
+							<div className="mt-6 flex w-full flex-col gap-2 sm:flex-row">
+								{(["collect", "deposit", "withdraw"] as const).map((tab) => (
+									<button
+										key={tab}
+										type="button"
+										onClick={() => handleEarnActionChange(tab)}
+										disabled={tab === "collect" && userSavingsInterest === 0n}
+										className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+											earnAction === tab
+												? "border-[#c4a75f] bg-[#f4ead4]/90 text-text-primary shadow-sm dark:border-[#8a7448] dark:bg-[#2a3244]"
+												: "border-[#e0d4bd] bg-[#fffdf8] text-text-secondary hover:border-[#c4a75f]/60 dark:border-menu-separator dark:bg-card-body-primary"
+										} ${tab === "collect" && userSavingsInterest === 0n ? "cursor-not-allowed opacity-50" : ""}`}
+									>
+										{tab === "collect" ? "Collect" : tab === "deposit" ? "Deposit" : "Withdraw"}
+									</button>
+								))}
+							</div>
+						) : null}
+
+						{!onbehalfToggle && lockChainSelector ? (
+							earnAction === "collect" ? (
+								<div className="mt-8 space-y-4 rounded-xl border border-[#e0d4bd] bg-[#fffaf0] p-5 dark:border-menu-separator dark:bg-card-body-primary">
+									<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+										<span className="text-text-secondary">Current savings balance</span>
+										<span className="font-semibold tabular-nums text-text-primary">
+											{formatCurrency(formatUnits(userSavingsBalance, 18))} ZCHF
+										</span>
+									</div>
+									<div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+										<span className="text-text-secondary">Interest ready</span>
+										<span className="font-semibold tabular-nums text-text-primary">
+											{formatCurrency(formatUnits(userSavingsInterest, 18))} ZCHF
+										</span>
+									</div>
+									<div className="pt-1">
+										<SavingsActionInterest
+											disabled={!!error || userSavingsInterest === 0n}
+											savingsModule={savingsAdresse}
+											balance={userSavingsBalance}
+											interest={userSavingsInterest}
+											newReferrer={newReferrer}
+											newReferralFeePPM={newReferralFeePPM}
+										/>
+									</div>
+								</div>
+							) : (
+								<div className="mt-8">
+									<TokenInputChain
+										label={earnAction === "deposit" ? "Amount to deposit" : "Amount to withdraw"}
+										chain={chain.name}
+										min={BigInt("0")}
+										max={userBalance + userSavingsBalance + userSavingsInterest}
+										reset={userSavingsBalance}
+										symbol={fromSymbol}
+										placeholder={fromSymbol + " Amount"}
+										value={amount.toString()}
+										onChange={onChangeAmount}
+										error={hasSavingsDataError ? "" : error}
+										limit={userBalance}
+										limitDigit={18}
+										limitLabel="Balance"
+										onChangeChain={onChangeChain}
+										lockChainSelector={lockChainSelector}
+										tokenLogo={"ZCHF"}
+									/>
+								</div>
+							)
+						) : (
+							<div className="mt-8">
+								<TokenInputChain
+									label={!onbehalfToggle ? "Your savings" : "You save"}
+									chain={chain.name}
+									min={!onbehalfToggle ? BigInt("0") : undefined}
+									max={!onbehalfToggle ? userBalance + userSavingsBalance + userSavingsInterest : userBalance}
+									reset={!onbehalfToggle ? userSavingsBalance : 0n}
+									symbol={fromSymbol}
+									placeholder={fromSymbol + " Amount"}
+									value={amount.toString()}
+									onChange={onChangeAmount}
+									error={hasSavingsDataError ? "" : error}
+									limit={userBalance}
+									limitDigit={18}
+									limitLabel="Balance"
+									onChangeChain={onChangeChain}
+									lockChainSelector={lockChainSelector}
+									tokenLogo={"ZCHF"}
+								/>
+							</div>
+						)}
 
 						<div className="">
 							{onbehalfToggle ? (
@@ -299,6 +402,24 @@ export default function SavingsInteractionCard({
 									savingsModule={savingsAdresse}
 									amount={amount}
 									onBehalf={onbehalfAddress as Address}
+								/>
+							) : lockChainSelector && earnAction === "collect" ? null : lockChainSelector && earnAction === "deposit" ? (
+								<SavingsActionSave
+									disabled={!!error}
+									savingsModule={savingsAdresse}
+									amount={amount}
+									interest={userSavingsInterest}
+									newReferrer={newReferrer}
+									newReferralFeePPM={newReferralFeePPM}
+								/>
+							) : lockChainSelector && earnAction === "withdraw" ? (
+								<SavingsActionWithdraw
+									disabled={userSavingsBalance == 0n || !!error}
+									savingsModule={savingsAdresse}
+									balance={amount}
+									change={change}
+									newReferrer={newReferrer}
+									newReferralFeePPM={newReferralFeePPM}
 								/>
 							) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
 								<SavingsActionInterest
@@ -363,7 +484,8 @@ export default function SavingsInteractionCard({
 					referrer={userSavingsReferrer}
 					referralFeePPM={userSavingsReferralFeePPM}
 					referralFees={userSavingsReferralFees}
-					flowIntent={outcomeFlowIntent}
+					flowIntent={previewFlowIntent}
+					variant={lockChainSelector && !onbehalfToggle ? "earnTransaction" : "full"}
 				/>
 			) : null}
 		</section>
