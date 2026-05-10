@@ -36,17 +36,16 @@ export default function Equity() {
 				title="Invest in Frankencoin Pool Shares"
 				description="FPS represents participation in the Frankencoin reserve pool and governance. FPS transactions happen on Ethereum mainnet."
 			>
-				<AppNotice
-					variant="warning"
-					title="FPS is available on Ethereum mainnet only."
-					message="To buy or redeem Frankencoin Pool Shares, switch your wallet to Ethereum."
-				>
-					<div className="mt-3 max-w-xs">
-						<AppButtonSecondary onClick={() => appKitNetwork.switchNetwork(mainnet)}>Switch to Ethereum</AppButtonSecondary>
-					</div>
-				</AppNotice>
 				{chainId !== mainnet.id ? (
-					<p className="text-sm text-text-secondary">Current network is not Ethereum mainnet. FPS interactions require Ethereum.</p>
+					<AppNotice
+						variant="warning"
+						title="FPS is available on Ethereum mainnet only."
+						message="To buy or redeem Frankencoin Pool Shares, switch your wallet to Ethereum."
+					>
+						<div className="mt-3 max-w-xs">
+							<AppButtonSecondary onClick={() => appKitNetwork.switchNetwork(mainnet)}>Switch to Ethereum</AppButtonSecondary>
+						</div>
+					</AppNotice>
 				) : null}
 			</AppPageHeader>
 

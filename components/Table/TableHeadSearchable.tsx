@@ -228,7 +228,7 @@ export default function TableHeadSearchable({
 							{tab === header ? (
 								<FontAwesomeIcon
 									icon={reverse ? faArrowUpShortWide : faArrowDownWideShort}
-									className="ml-2 cursor-pointer"
+									className="ml-2 inline-block h-4 w-4 cursor-pointer align-middle"
 									color="#092f62"
 								/>
 							) : null}
