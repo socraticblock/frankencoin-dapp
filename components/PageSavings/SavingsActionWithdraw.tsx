@@ -19,6 +19,7 @@ interface Props {
 	setLoaded?: (val: boolean) => Dispatch<SetStateAction<boolean>>;
 	newReferrer?: Address | undefined;
 	newReferralFeePPM: bigint;
+	buttonLabel?: string;
 }
 
 export default function SavingsActionWithdraw({
@@ -29,6 +30,7 @@ export default function SavingsActionWithdraw({
 	setLoaded,
 	newReferrer,
 	newReferralFeePPM,
+	buttonLabel = "Withdraw ZCHF",
 }: Props) {
 	const [isAction, setAction] = useState<boolean>(false);
 	const [isHidden, setHidden] = useState<boolean>(false);
@@ -88,7 +90,7 @@ export default function SavingsActionWithdraw({
 	return (
 		<GuardSupportedChain chain={chain}>
 			<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-				Withdraw ZCHF
+				{buttonLabel}
 			</AppButton>
 		</GuardSupportedChain>
 	);

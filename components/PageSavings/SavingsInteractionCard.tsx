@@ -126,6 +126,7 @@ export default function SavingsInteractionCard({
 	const previewInterestAlsoCollected = isLockedEarnFlow && earnAction === "withdraw" ? userSavingsInterest : 0n;
 	const previewTotalReceived =
 		isLockedEarnFlow && earnAction === "withdraw" ? withdrawAmount + userSavingsInterest : undefined;
+	const isWithdrawingAll = earnAction === "withdraw" && userSavingsBalance > 0n && withdrawAmount === userSavingsBalance;
 
 	const applyEarnActionAmounts = (next: EarnAction) => {
 		if (next === "collect") {
@@ -445,7 +446,7 @@ export default function SavingsInteractionCard({
 									<p className="text-text-secondary">No wallet ZCHF available to deposit.</p>
 								</div>
 							) : (
-								<div className="mt-8">
+								<div className="mt-8 space-y-3">
 									<TokenInputChain
 										label={earnAction === "deposit" ? "Amount to deposit" : "Amount to withdraw"}
 										chain={chain.name}
@@ -464,6 +465,18 @@ export default function SavingsInteractionCard({
 										lockChainSelector={lockChainSelector}
 										tokenLogo={"ZCHF"}
 									/>
+									{earnAction === "withdraw" ? (
+										<div className="flex justify-end">
+											<button
+												type="button"
+												onClick={() => setWithdrawAmount(userSavingsBalance)}
+												disabled={userSavingsBalance === 0n || isWithdrawingAll}
+												className="min-h-[40px] rounded-lg border border-[#c4a75f] px-4 py-2 text-sm font-medium text-text-primary transition hover:bg-[#f4ead4]/70 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#8a7448] dark:hover:bg-[#2a3244]"
+											>
+												Withdraw all to wallet
+											</button>
+										</div>
+									) : null}
 								</div>
 							)
 						) : (
@@ -531,6 +544,7 @@ export default function SavingsInteractionCard({
 									change={withdrawAmount}
 									newReferrer={newReferrer}
 									newReferralFeePPM={newReferralFeePPM}
+									buttonLabel={isWithdrawingAll ? "Withdraw all to wallet" : "Withdraw ZCHF"}
 								/>
 							) : userSavingsInterest > 0 && amount == userSavingsBalance ? (
 								<SavingsActionInterest
