@@ -123,9 +123,9 @@ export default function SavingsInteractionCard({
 	const previewActionAmount =
 		earnAction === "collect" ? userSavingsInterest : earnAction === "deposit" ? depositAmount : withdrawAmount;
 	const previewResultingBalance = isLockedEarnFlow ? earnTargetSavingsAmount : undefined;
-	const previewInterestAlsoCollected = isLockedEarnFlow && earnAction === "withdraw" ? userSavingsInterest : 0n;
+	const previewInterestAlsoCollected = isLockedEarnFlow && earnAction === "withdraw" && withdrawAmount > 0n ? userSavingsInterest : 0n;
 	const previewTotalReceived =
-		isLockedEarnFlow && earnAction === "withdraw" ? withdrawAmount + userSavingsInterest : undefined;
+		isLockedEarnFlow && earnAction === "withdraw" && withdrawAmount > 0n ? withdrawAmount + userSavingsInterest : undefined;
 	const isWithdrawingAll = earnAction === "withdraw" && userSavingsBalance > 0n && withdrawAmount === userSavingsBalance;
 
 	const applyEarnActionAmounts = (next: EarnAction) => {
@@ -452,6 +452,7 @@ export default function SavingsInteractionCard({
 										chain={chain.name}
 										min={BigInt("0")}
 										max={earnAction === "deposit" ? userBalance : userSavingsBalance}
+										maxLabel={earnAction === "withdraw" ? "Withdraw all" : undefined}
 										reset={BigInt("0")}
 										symbol={fromSymbol}
 										placeholder={fromSymbol + " Amount"}
@@ -461,22 +462,11 @@ export default function SavingsInteractionCard({
 										limit={earnAction === "deposit" ? userBalance : userSavingsBalance}
 										limitDigit={18}
 										limitLabel={earnAction === "deposit" ? "Wallet" : "Earning"}
+										note={earnAction === "withdraw" && withdrawAmount === 0n ? "Enter an amount to withdraw, or use Withdraw all." : undefined}
 										onChangeChain={onChangeChain}
 										lockChainSelector={lockChainSelector}
 										tokenLogo={"ZCHF"}
 									/>
-									{earnAction === "withdraw" ? (
-										<div className="flex justify-end">
-											<button
-												type="button"
-												onClick={() => setWithdrawAmount(userSavingsBalance)}
-												disabled={userSavingsBalance === 0n || isWithdrawingAll}
-												className="min-h-[40px] rounded-lg border border-[#c4a75f] px-4 py-2 text-sm font-medium text-text-primary transition hover:bg-[#f4ead4]/70 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#8a7448] dark:hover:bg-[#2a3244]"
-											>
-												Withdraw all to wallet
-											</button>
-										</div>
-									) : null}
 								</div>
 							)
 						) : (

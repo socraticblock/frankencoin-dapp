@@ -14,6 +14,7 @@ interface Props {
 	balanceLabel?: string;
 	min?: bigint;
 	max?: bigint;
+	maxLabel?: string;
 	reset?: bigint;
 	digit?: bigint | number;
 	hideMaxLabel?: boolean;
@@ -45,6 +46,7 @@ export default function TokenInputChain({
 	symbol,
 	min,
 	max,
+	maxLabel = "Max",
 	reset,
 	digit = 18n,
 	limit = 0n,
@@ -181,7 +183,7 @@ export default function TokenInputChain({
 									}
 								}}
 							>
-								Max
+								{maxLabel}
 							</div>
 						)}
 					</div>
