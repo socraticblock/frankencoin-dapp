@@ -145,10 +145,11 @@ export default function SavingsPage() {
 		if (!row) return null;
 		const hasSavings = (row.savingsZchf ?? 0) > 0;
 		const hasInterest = row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0;
-		const hasWallet = (row.walletZchf ?? 0) > 0;
+		const hasMeaningfulWallet = (row.walletZchf ?? 0) >= 0.01;
 		if (hasInterest) return "collect";
-		if (hasSavings && !hasInterest) return "withdraw";
-		if (!hasSavings && !hasInterest && hasWallet) return "deposit";
+		if (!hasSavings && hasMeaningfulWallet) return "deposit";
+		if (hasSavings && hasMeaningfulWallet) return "deposit";
+		if (hasSavings) return "withdraw";
 		return null;
 	}, []);
 

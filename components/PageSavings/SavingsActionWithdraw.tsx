@@ -58,7 +58,7 @@ export default function SavingsActionWithdraw({
 				},
 				{
 					title: `Withdraw: `,
-					value: `${formatCurrency(formatUnits(change, 18))} ZCHF`,
+					value: `${formatCurrency(formatUnits(change < 0n ? -change : change, 18))} ZCHF`,
 				},
 				{
 					title: "Transaction: ",
@@ -75,7 +75,7 @@ export default function SavingsActionWithdraw({
 				},
 			});
 
-			track("savings_withdrawn", { amount: formatUnits(change, 18) });
+			track("savings_withdrawn", { amount: formatUnits(change < 0n ? -change : change, 18) });
 			setHidden(true);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));

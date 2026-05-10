@@ -8,7 +8,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "../../redux/redux.store";
 import { SavingsBalance } from "@frankencoin/api";
 
-export type SavingsOutcomeFlowIntent = "collect" | "deposit" | "withdraw";
+export type SavingsOutcomeFlowIntent = "collect" | "collect_wallet" | "compound" | "deposit" | "withdraw";
 
 interface Props {
 	account: Address;
@@ -25,6 +25,10 @@ interface Props {
 	flowIntent?: SavingsOutcomeFlowIntent | null;
 	/** Earn-page transaction preview: hide portfolio totals; focus on this action only. */
 	variant?: "full" | "earnTransaction";
+	actionAmount?: bigint;
+	resultingBalance?: bigint;
+	interestAlsoCollected?: bigint;
+	totalReceived?: bigint;
 }
 
 export default function SavingsDetailsCard({
@@ -40,6 +44,10 @@ export default function SavingsDetailsCard({
 	referralFees,
 	flowIntent = null,
 	variant = "full",
+	actionAmount,
+	resultingBalance,
+	interestAlsoCollected = 0n,
+	totalReceived,
 }: Props) {
 	const { savingsBalance } = useSelector((state: RootState) => state.savings);
 
@@ -55,10 +63,24 @@ export default function SavingsDetailsCard({
 	const inactiveBalance = entries.filter((i) => i.chainId != chain.id);
 	const totalBalance = entries.reduce((a, b) => a + BigInt(b.balance), 0n);
 	const showPortfolioOverview = variant === "full";
+	const isEarnTransactionPreview = variant === "earnTransaction";
+
+	const previewRows =
+		isEarnTransactionPreview && flowIntent
+			? getEarnTransactionPreviewRows({
+					flowIntent,
+					actionAmount: actionAmount ?? (flowIntent === "deposit" || flowIntent === "withdraw" ? change < 0n ? -change : change : interest),
+					interest,
+					interestAlsoCollected,
+					totalReceived,
+			  })
+			: null;
 
 	const movementLabel =
-		flowIntent === "collect"
+		flowIntent === "collect" || flowIntent === "collect_wallet"
 			? "Interest to collect"
+			: flowIntent === "compound"
+				? "Interest to compound"
 			: flowIntent === "deposit"
 				? "Amount to deposit"
 				: flowIntent === "withdraw"
@@ -68,7 +90,7 @@ export default function SavingsDetailsCard({
 						: "Amount to withdraw";
 
 	const movementValue =
-		flowIntent === "collect"
+		flowIntent === "collect" || flowIntent === "collect_wallet" || flowIntent === "compound"
 			? formatCurrency(formatUnits(interest - (referrer != zeroAddress ? referralFees : 0n), 18))
 			: formatCurrency(
 					formatUnits((change < 0n ? -change : change) - (referrer != zeroAddress ? referralFees : 0n), 18)
@@ -91,23 +113,36 @@ export default function SavingsDetailsCard({
 				) : null}
 
 				<div className={`flex ${showPortfolioOverview ? "mt-4" : ""}`}>
-					<div className="flex-1 text-text-secondary">Current savings balance</div>
+					<div className="flex-1 text-text-secondary">
+						{isEarnTransactionPreview ? "Current earning balance" : "Current savings balance"}
+					</div>
 					<div className="">{formatCurrency(formatUnits(balance, 18))} ZCHF</div>
 				</div>
 
-				{showInterestReadyRow ? (
-					<div className="flex">
-						<div className="flex-1 text-text-secondary">Interest ready</div>
-						<div className="">{formatCurrency(formatUnits(interest, 18))} ZCHF</div>
-					</div>
-				) : null}
+				{previewRows ? (
+					previewRows.map((row) => (
+						<div className="flex" key={row.label}>
+							<div className="flex-1 text-text-secondary">{row.label}</div>
+							<div className="">{formatCurrency(formatUnits(row.value, 18))} ZCHF</div>
+						</div>
+					))
+				) : (
+					<>
+						{showInterestReadyRow ? (
+							<div className="flex">
+								<div className="flex-1 text-text-secondary">Interest ready</div>
+								<div className="">{formatCurrency(formatUnits(interest, 18))} ZCHF</div>
+							</div>
+						) : null}
 
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">{movementLabel}</div>
-					<div className="">
-						{movementValue} ZCHF
-					</div>
-				</div>
+						<div className="flex">
+							<div className="flex-1 text-text-secondary">{movementLabel}</div>
+							<div className="">
+								{movementValue} ZCHF
+							</div>
+						</div>
+					</>
+				)}
 
 				{referrer != zeroAddress ? (
 					<div className="flex">
@@ -122,8 +157,10 @@ export default function SavingsDetailsCard({
 				<hr className="border-slate-700 border-dashed" />
 
 				<div className="flex font-bold">
-					<div className="flex-1 text-text-secondary">Resulting savings balance</div>
-					<div className="">{formatCurrency(formatUnits(balance + change + interest, 18))} ZCHF</div>
+					<div className="flex-1 text-text-secondary">
+						{isEarnTransactionPreview ? "Resulting earning balance" : "Resulting savings balance"}
+					</div>
+					<div className="">{formatCurrency(formatUnits(resultingBalance ?? balance + change + interest, 18))} ZCHF</div>
 				</div>
 
 				<div className="flex mt-8">
@@ -144,6 +181,38 @@ export default function SavingsDetailsCard({
 			</div>
 		</AppCard>
 	);
+}
+
+function getEarnTransactionPreviewRows({
+	flowIntent,
+	actionAmount,
+	interest,
+	interestAlsoCollected,
+	totalReceived,
+}: {
+	flowIntent: SavingsOutcomeFlowIntent;
+	actionAmount: bigint;
+	interest: bigint;
+	interestAlsoCollected: bigint;
+	totalReceived?: bigint;
+}): { label: string; value: bigint }[] {
+	if (flowIntent === "collect" || flowIntent === "collect_wallet") {
+		return [{ label: "Interest to collect", value: interest }];
+	}
+	if (flowIntent === "compound") {
+		return [{ label: "Interest to compound", value: interest }];
+	}
+	if (flowIntent === "deposit") {
+		return [{ label: "Amount to deposit", value: actionAmount }];
+	}
+	const rows = [{ label: "Amount to withdraw", value: actionAmount }];
+	if (interestAlsoCollected > 0n) {
+		rows.push({ label: "Interest also collected", value: interestAlsoCollected });
+	}
+	if (totalReceived != undefined) {
+		rows.push({ label: "Total received in wallet", value: totalReceived });
+	}
+	return rows;
 }
 
 interface SavingsSavedItemProps {
