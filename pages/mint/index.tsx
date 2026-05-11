@@ -4,6 +4,7 @@ import BorrowTable from "@components/PageBorrow/BorrowTable";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useConnection } from "wagmi";
+import { ChallengesQueryItem } from "@frankencoin/api";
 import { store } from "../../redux/redux.store";
 import { fetchPositionsList } from "../../redux/slices/positions.slice";
 import AppHeroSteps from "@components/AppHeroSteps";
@@ -22,16 +23,35 @@ import { useBorrowingOverview } from "@hooks";
 import { ADDRESS } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 
+const BORROW_STEPS = [
+	{
+		icon: 1,
+		title: "Choose collateral",
+		description: "Select an approved asset to secure your position.",
+	},
+	{
+		icon: 2,
+		title: "Review terms",
+		description: "Check loan-to-value, interest, maturity, and liquidation conditions.",
+	},
+	{
+		icon: 3,
+		title: "Borrow ZCHF",
+		description: "Confirm the transaction in your wallet.",
+	},
+];
+
 export default function Borrow() {
 	const { address } = useConnection();
 	const overview = useBorrowingOverview();
 	const positions = useSelector((state: RootState) => state.positions.openPositions);
 	const challengesMap = useSelector((state: RootState) => state.challenges.positions.map);
+	const hasActiveChallenge = (challenges: ChallengesQueryItem[]) => challenges.some((challenge) => challenge.status === "Active");
 
 	const challengedPosition = positions.find((position) => {
 		if (!address || normalizeAddress(position.owner) !== normalizeAddress(address)) return false;
-		const positionChallenges = challengesMap[normalizeAddress(position.position)] ?? [];
-		return positionChallenges.some((challenge: any) => challenge?.status === "Active");
+		const positionChallenges = (challengesMap[normalizeAddress(position.position)] ?? []) as ChallengesQueryItem[];
+		return hasActiveChallenge(positionChallenges);
 	});
 
 	const challengeStatus = overview.activePositionCount === 0
@@ -64,23 +84,7 @@ export default function Borrow() {
 			</AppPageHeader>
 
 			<AppHeroSteps
-				steps={[
-					{
-						icon: 1,
-						title: "Choose collateral",
-						description: "Select an approved asset to secure your position.",
-					},
-					{
-						icon: 2,
-						title: "Review terms",
-						description: "Check loan-to-value, interest, maturity, and liquidation conditions.",
-					},
-					{
-						icon: 3,
-						title: "Borrow ZCHF",
-						description: "Confirm the transaction in your wallet.",
-					},
-				]}
+				steps={BORROW_STEPS}
 			/>
 
 			<section className="mt-6">

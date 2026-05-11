@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useConnection } from "wagmi";
+import { ChallengesQueryItem } from "@frankencoin/api";
 import { zeroAddress } from "viem";
 import { RootState } from "../redux/redux.store";
 import { normalizeAddress } from "@utils";
@@ -22,6 +23,7 @@ export const useBorrowingOverview = (): BorrowingOverview => {
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const { address } = useConnection();
 	const account = normalizeAddress(address ?? zeroAddress);
+	const hasActiveChallenge = (challenges: ChallengesQueryItem[]) => challenges.some((challenge) => challenge.status === "Active");
 
 	return useMemo(() => {
 		const matchingPositions = positions.filter((p) => normalizeAddress(p.owner) === account);
@@ -36,9 +38,8 @@ export const useBorrowingOverview = (): BorrowingOverview => {
 			totalMinted += minted;
 			totalReserves += (minted * reserve) / 1_000_000n;
 
-			const positionChallenges = challengesMap[normalizeAddress(position.position)] ?? [];
-			const hasActive = positionChallenges.some((challenge: any) => challenge?.status === "Active");
-			if (hasActive) challengedPositionCount += 1;
+			const positionChallenges = (challengesMap[normalizeAddress(position.position)] ?? []) as ChallengesQueryItem[];
+			if (hasActiveChallenge(positionChallenges)) challengedPositionCount += 1;
 		}
 
 		return {

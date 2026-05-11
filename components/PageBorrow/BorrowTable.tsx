@@ -140,42 +140,42 @@ export default function BorrowTable({ inMyWalletLabel = "Only assets in connecte
 				<p className="mt-1">Maturity is the latest repayment date under the selected position terms.</p>
 			</div>
 			<Table>
-			<TableHeadSearchable
-				headers={headers}
-				tab={tab}
-				reverse={reverse}
-				tabOnChange={handleTabOnChange}
-				actionCol
-				searchPlaceholder="Search Positions"
-				searchValue={searchQuery}
-				onSearchChange={setSearchQuery}
-				hideMyWallet={!walletAddress}
-				inMyWallet={inMyWallet}
-				onInMyWalletChange={setInMyWallet}
-				inMyWalletLabel={inMyWalletLabel}
-				filterOptions={FILTER_OPTIONS}
-				activeFilters={activeCategories}
-				onFiltersChange={setActiveCategories}
-			/>
-			<TableBody>
-				{list.length == 0 ? (
-					<TableRowEmpty>
-						{!walletAddress ? "There are no other positions yet." : "You don't have any available collaterals in your wallet."}
-					</TableRowEmpty>
-				) : (
-					list.map((pos, idx) => (
-						<BorrowRow
-							headers={headers}
-							tab={tab}
-							position={pos}
-							vchfBridge={vchfBridge}
-							hideMyWallet={!walletAddress}
-							walletBalance={walletBalanceMap}
-							key={`BorrowRow_${pos.position || idx}`}
-						/>
-					))
-				)}
-			</TableBody>
+				<TableHeadSearchable
+					headers={headers}
+					tab={tab}
+					reverse={reverse}
+					tabOnChange={handleTabOnChange}
+					actionCol
+					searchPlaceholder="Search Positions"
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					hideMyWallet={!walletAddress}
+					inMyWallet={inMyWallet}
+					onInMyWalletChange={setInMyWallet}
+					inMyWalletLabel={inMyWalletLabel}
+					filterOptions={FILTER_OPTIONS}
+					activeFilters={activeCategories}
+					onFiltersChange={setActiveCategories}
+				/>
+				<TableBody>
+					{list.length == 0 ? (
+						<TableRowEmpty>
+							{!walletAddress ? "There are no other positions yet." : "You don't have any available collaterals in your wallet."}
+						</TableRowEmpty>
+					) : (
+						list.map((pos, idx) => (
+							<BorrowRow
+								headers={headers}
+								tab={tab}
+								position={pos}
+								vchfBridge={vchfBridge}
+								hideMyWallet={!walletAddress}
+								walletBalance={walletBalanceMap}
+								key={`BorrowRow_${pos.position || idx}`}
+							/>
+						))
+					)}
+				</TableBody>
 			</Table>
 		</div>
 	);

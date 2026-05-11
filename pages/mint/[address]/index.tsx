@@ -153,6 +153,7 @@ export default function PositionBorrow({}) {
 			: account.address && collAmount > userBalance
 			? `Not enough ${position.collateralSymbol} in your wallet.`
 			: "";
+	const hasInsufficientCollateral = errorColl.includes("Not enough");
 
 	const borrowersReserveContribution = (BigInt(position.reserveContribution) * amount) / 1_000_000n;
 
@@ -332,7 +333,7 @@ export default function PositionBorrow({}) {
 							limitLabel="Mintable"
 						/>
 					</div>
-					{errorColl.includes("Not enough") ? (
+					{hasInsufficientCollateral ? (
 						<p className="mt-1 px-1 text-sm text-text-secondary">
 							You need {position.collateralSymbol} collateral in this wallet before you can open the position.
 						</p>
@@ -553,7 +554,7 @@ export default function PositionBorrow({}) {
 								{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF will be sent to your wallet.
 							</div>
 						) : null}
-						{errorColl.includes("Not enough") ? (
+						{hasInsufficientCollateral ? (
 							<div className="mb-2 text-sm text-text-warning">
 								Not enough {position.collateralSymbol} to approve. Add collateral to this wallet to continue.
 							</div>
