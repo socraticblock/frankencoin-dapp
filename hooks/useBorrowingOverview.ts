@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useConnection } from "wagmi";
-import { zeroAddress } from "viem";
+import { Address, zeroAddress } from "viem";
 import { RootState } from "../redux/redux.store";
 import { normalizeAddress } from "@utils";
 
@@ -15,13 +15,13 @@ export type BorrowingOverview = {
 	isLoading?: boolean;
 };
 
-export const useBorrowingOverview = (): BorrowingOverview => {
+export const useBorrowingOverview = (addressOverride?: Address): BorrowingOverview => {
 	const positions = useSelector((state: RootState) => state.positions.openPositions);
 	const positionsLoaded = useSelector((state: RootState) => state.positions.loaded);
 	const challengesMap = useSelector((state: RootState) => state.challenges.positions.map);
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const { address } = useConnection();
-	const account = normalizeAddress(address ?? zeroAddress);
+	const account = normalizeAddress(addressOverride ?? address ?? zeroAddress);
 
 	return useMemo(() => {
 		const matchingPositions = positions.filter((p) => normalizeAddress(p.owner) === account);

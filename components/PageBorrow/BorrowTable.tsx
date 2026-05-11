@@ -14,7 +14,11 @@ import { useBorrowPositions, useSwapVCHFStats } from "@hooks";
 
 const FILTER_OPTIONS: FilterOption[] = ALL_CATEGORIES.map((c) => ({ label: c, value: c }));
 
-export default function BorrowTable() {
+interface Props {
+	inMyWalletLabel?: string;
+}
+
+export default function BorrowTable({ inMyWalletLabel = "Only assets in connected wallet" }: Props) {
 	const headers: string[] = ["Collateral", "Loan-to-Value", "Interest", "Maturity"];
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
@@ -148,7 +152,7 @@ export default function BorrowTable() {
 				hideMyWallet={!walletAddress}
 				inMyWallet={inMyWallet}
 				onInMyWalletChange={setInMyWallet}
-				inMyWalletLabel="Only assets in my wallet"
+				inMyWalletLabel={inMyWalletLabel}
 				filterOptions={FILTER_OPTIONS}
 				activeFilters={activeCategories}
 				onFiltersChange={setActiveCategories}

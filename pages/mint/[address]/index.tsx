@@ -163,6 +163,7 @@ export default function PositionBorrow({}) {
 	const availableAmount = BigInt(position.availableForClones);
 	const fees = (feePercent * amount) / 1_000_000n;
 	const paidOutToWallet = amount - borrowersReserveContribution - fees;
+	const repayFromWalletAtMaturity = (amount * BigInt(100 - position.reserveContribution / 10000)) / 100n;
 	const availableByCollateralPrice = (collAmount * mintPrice) / parseUnits("1", 18);
 	const borrowingLimit = min(availableAmount, availableByCollateralPrice);
 	const mintableAtNewPrice = min((collAmount * newPrice) / parseUnits("1", 18), availableAmount);
@@ -377,7 +378,7 @@ export default function PositionBorrow({}) {
 							limitLabel="LTV"
 							limitUnit="%"
 							error={newPrice == 0n ? "Needs to be greater than zero" : ""}
-							note={`This is the reference price where the position becomes vulnerable. Frankencoin challenges are initiated by market participants, not by a central oracle. Lower liquidation price usually means more safety buffer. Safety buffer: ${formatCurrency(
+							note={`The liquidation price defines the reference price used for this position's borrowing limit and challenge risk. If the market value falls near or below this level, the position can become attractive to challenge. Frankencoin uses market challenges instead of a central price oracle. Lower liquidation price usually means more safety buffer. Safety buffer: ${formatCurrency(
 								Math.max(0, 100 - parseFloat(formatUnits(ltvLimit, 6))),
 								2,
 								2
@@ -406,6 +407,24 @@ export default function PositionBorrow({}) {
 					</div>
 
 					<div className="flex-1 mb-4 space-y-4">
+						<AppBox tight={true}>
+							<div className="text-base font-semibold text-text-primary">Borrowing result</div>
+							<div className="mt-2 space-y-2">
+								<div className="flex items-center justify-between">
+									<span className="text-text-secondary">You will receive</span>
+									<span className="font-semibold text-text-primary">{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
+								</div>
+								<div className="flex items-center justify-between">
+									<span className="text-text-secondary">Total position size</span>
+									<span>{formatCurrency(formatUnits(amount, 18))} ZCHF</span>
+								</div>
+								<div className="flex items-center justify-between">
+									<span className="text-text-secondary">Repay from wallet at maturity</span>
+									<span>{formatCurrency(formatUnits(repayFromWalletAtMaturity, 18))} ZCHF</span>
+								</div>
+							</div>
+						</AppBox>
+
 						<div>
 							<h3 className="text-base font-semibold text-text-primary">Where your minted ZCHF goes</h3>
 							<p className="text-sm text-text-secondary">
@@ -423,14 +442,22 @@ export default function PositionBorrow({}) {
 								</div>
 							</div>
 
+							<div className="mt-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">Deductions before payout</div>
+
 							<div className="mt-0 flex">
 								<div className="flex-1 text-text-secondary">
 									<span>Retained reserve</span>
 									<span className="text-xs ml-1">({formatCurrency(position.reserveContribution / 10000)}%)</span>
 									<p className="mt-1 text-xs">
-										A portion of the minted ZCHF is retained by the protocol as reserve and is not sent to your wallet when opening the
-										position.
+										A portion of the minted ZCHF is retained as reserve and is not sent to your wallet.
 									</p>
+									<details className="mt-1 text-xs">
+										<summary className="cursor-pointer text-text-secondary">More about reserve</summary>
+										<p className="mt-1 text-text-secondary">
+											When you repay and close the position, the reserve usually helps reduce the ZCHF you need to return, but it can be
+											used to cover losses if the position is liquidated.
+										</p>
+									</details>
 								</div>
 								<div className="text-right">
 									<span>
@@ -457,27 +484,34 @@ export default function PositionBorrow({}) {
 								</div>
 							</div>
 
-							<div className="mt-2 flex font-extrabold">
+							<div className="mt-3 border-t border-menu-separator pt-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+								Sent today
+							</div>
+
+							<div className="mt-1 flex items-center rounded-lg bg-card-content-primary px-3 py-2 font-extrabold">
 								<div className="flex-1 text-text-secondary">
 									<span>Sent to your wallet</span>
 								</div>
 								<div className="text-right">
-									<span>{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
+									<span className="text-lg">{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
 								</div>
 							</div>
 
-							<div className="mt-2 flex">
+							<div className="mt-3 border-t border-menu-separator pt-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+								Future repayment
+							</div>
+
+							<div className="mt-1 flex">
 								<div className="flex-1 text-text-secondary">
-									<span>Debt to repay at maturity</span>
+									<span>Repay from wallet at maturity</span>
 									<span className="text-xs ml-1">({formatCurrency(100 - position.reserveContribution / 10000)}%)</span>
+									<p className="mt-1 text-xs">
+										The retained reserve usually helps close the position, so the amount you need to return from your wallet can be lower
+										than the total position size.
+									</p>
 								</div>
 								<div className="text-right">
-									<span>
-										{formatCurrency(
-											formatUnits((amount * BigInt(100 - position.reserveContribution / 10000)) / 100n, 18)
-										)}{" "}
-										ZCHF
-									</span>
+									<span>{formatCurrency(formatUnits(repayFromWalletAtMaturity, 18))} ZCHF</span>
 								</div>
 							</div>
 						</AppBox>
@@ -553,7 +587,8 @@ export default function PositionBorrow({}) {
 						<summary className="cursor-pointer font-medium text-text-primary">Why do I receive less than the amount minted?</summary>
 						<p className="mt-2 text-sm text-text-secondary">
 							The minted amount is the total position size. Part of it is retained by the protocol as reserve, and upfront interest is deducted
-							for the selected borrowing period. The remaining amount is sent to your wallet.
+							for the selected borrowing period. The remaining amount is sent to your wallet. When you repay and close the position, the
+							retained reserve usually helps reduce the amount you need to return from your wallet.
 						</p>
 					</details>
 				</AppCard>

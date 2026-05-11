@@ -1,9 +1,11 @@
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import BorrowTable from "@components/PageBorrow/BorrowTable";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { useConnection } from "wagmi";
+import { Address, isAddress } from "viem";
 import { store } from "../../redux/redux.store";
 import { fetchPositionsList } from "../../redux/slices/positions.slice";
 import AppHeroSteps from "@components/AppHeroSteps";
@@ -23,13 +25,22 @@ import { ADDRESS } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 
 export default function Borrow() {
+	const router = useRouter();
 	const { address } = useConnection();
-	const overview = useBorrowingOverview();
+	const [inspectAddressInput, setInspectAddressInput] = useState("");
+	const queryAddressRaw = typeof router.query.address === "string" ? router.query.address : "";
+	const viewedAddress: Address | undefined = useMemo(
+		() => (queryAddressRaw && isAddress(queryAddressRaw) ? queryAddressRaw : undefined),
+		[queryAddressRaw]
+	);
+	const showingPublicView = !!viewedAddress && (!address || normalizeAddress(viewedAddress) !== normalizeAddress(address));
+	const overview = useBorrowingOverview(viewedAddress);
 	const positions = useSelector((state: RootState) => state.positions.openPositions);
 	const challengesMap = useSelector((state: RootState) => state.challenges.positions.map);
 
 	const challengedPosition = positions.find((position) => {
-		if (!address || normalizeAddress(position.owner) !== normalizeAddress(address)) return false;
+		const ownerAddress = viewedAddress ?? address;
+		if (!ownerAddress || normalizeAddress(position.owner) !== normalizeAddress(ownerAddress)) return false;
 		const positionChallenges = challengesMap[normalizeAddress(position.position)] ?? [];
 		return positionChallenges.some((challenge: any) => challenge?.status === "Active");
 	});
@@ -46,6 +57,18 @@ export default function Borrow() {
 		store.dispatch(fetchPositionsList());
 		store.dispatch(fetchChallengesList());
 	}, []);
+
+	const addressInputError = inspectAddressInput.length > 0 && !isAddress(inspectAddressInput) ? "Enter a valid wallet address." : "";
+
+	const onClickViewAddress = () => {
+		if (!inspectAddressInput || !isAddress(inspectAddressInput)) return;
+		router.push({ pathname: "/mint", query: { address: inspectAddressInput } });
+	};
+
+	const onClickUseConnectedWallet = () => {
+		setInspectAddressInput("");
+		router.push("/mint");
+	};
 
 	return (
 		<>
@@ -86,6 +109,35 @@ export default function Borrow() {
 			<section className="mt-6">
 				<AppCard>
 					<h2 className="text-lg font-semibold text-text-primary">Your borrowing overview</h2>
+					<div className="mt-3 rounded-lg border border-menu-separator bg-card-content-primary p-3">
+						<div className="text-sm font-medium text-text-primary">Inspect wallet</div>
+						<div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+							<input
+								type="text"
+								placeholder="Enter wallet address"
+								value={inspectAddressInput}
+								onChange={(e) => setInspectAddressInput(e.target.value.trim())}
+								className="rounded-lg border border-menu-separator bg-card-body-primary px-3 py-2 text-sm outline-none focus:border-button-default"
+							/>
+							<AppButtonSecondary disabled={!inspectAddressInput || !!addressInputError} onClick={onClickViewAddress}>
+								View
+							</AppButtonSecondary>
+							<AppButtonSecondary onClick={onClickUseConnectedWallet}>Use connected wallet</AppButtonSecondary>
+						</div>
+						{addressInputError ? <p className="mt-2 text-sm text-text-warning">{addressInputError}</p> : null}
+						{showingPublicView ? (
+							<div className="mt-2 text-sm text-text-secondary">
+								<p>
+									Viewing public borrowing data for{" "}
+									<span className="font-medium text-text-primary">
+										{viewedAddress?.slice(0, 6)}...{viewedAddress?.slice(-4)}
+									</span>
+									.
+								</p>
+								<p>Read-only public view. Transactions still use your connected wallet.</p>
+							</div>
+						) : null}
+					</div>
 					<div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
 						<AppBox>
 							<DisplayLabel label="Total owed" />
@@ -136,7 +188,7 @@ export default function Borrow() {
 			) : null}
 
 			<div className="mt-8">
-				<BorrowTable />
+				<BorrowTable inMyWalletLabel="Only assets in connected wallet" />
 			</div>
 
 			<section className="mt-8">
