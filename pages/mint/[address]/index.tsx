@@ -163,7 +163,7 @@ export default function PositionBorrow({}) {
 	const availableAmount = BigInt(position.availableForClones);
 	const fees = (feePercent * amount) / 1_000_000n;
 	const paidOutToWallet = amount - borrowersReserveContribution - fees;
-	const repayFromWalletAtMaturity = (amount * BigInt(100 - position.reserveContribution / 10000)) / 100n;
+	const repayFromWalletAtMaturity = amount - borrowersReserveContribution;
 	const availableByCollateralPrice = (collAmount * mintPrice) / parseUnits("1", 18);
 	const borrowingLimit = min(availableAmount, availableByCollateralPrice);
 	const mintableAtNewPrice = min((collAmount * newPrice) / parseUnits("1", 18), availableAmount);
