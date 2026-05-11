@@ -271,6 +271,11 @@ export default function PositionBorrow({}) {
 		onChangeExpiration(expirationTabDates[t] ?? expirationMax);
 	};
 
+	const formattedLiquidationPrice = `${formatCurrency(formatUnits(newPrice, priceDigit), 2, 2)} ZCHF`;
+	const formattedLtv = `${formatCurrency(parseFloat(formatUnits(ltvLimit, 6)), 2, 2)}%`;
+	const safetyBufferPct = Math.max(0, 100 - parseFloat(formatUnits(ltvLimit, 6)));
+	const formattedSafetyBuffer = `${formatCurrency(safetyBufferPct, 2, 2)}%`;
+
 	return (
 		<div className="flex flex-col md:max-w-2xl mx-auto">
 			<Head>
@@ -379,11 +384,6 @@ export default function PositionBorrow({}) {
 							limitLabel="LTV"
 							limitUnit="%"
 							error={newPrice == 0n ? "Needs to be greater than zero" : ""}
-							note={`The liquidation price defines the reference price used for this position's borrowing limit and challenge risk. If the market value falls near or below this level, the position can become attractive to challenge. Frankencoin uses market challenges instead of a central price oracle. Lower liquidation price usually means more safety buffer. Safety buffer: ${formatCurrency(
-								Math.max(0, 100 - parseFloat(formatUnits(ltvLimit, 6))),
-								2,
-								2
-							)}%.`}
 							warning={
 								newPrice > priceBigInt
 									? `Liquidation prices above the reference become effective after a 3-day cooldown. Afterwards, up to ${formatCurrency(
@@ -392,6 +392,24 @@ export default function PositionBorrow({}) {
 									: undefined
 							}
 						/>
+						<div className="-mt-1 rounded-lg border border-menu-separator bg-card-content-primary px-3 py-2.5">
+							<div className="flex flex-wrap items-center gap-4 text-sm">
+								<span>
+									LTV <span className="font-semibold text-text-primary">{formattedLtv}</span>
+								</span>
+								<span>
+									Safety buffer <span className="font-semibold text-text-primary">{formattedSafetyBuffer}</span>
+								</span>
+							</div>
+							<p className="mt-2 text-sm text-text-secondary">
+								If the collateral price falls to about {formattedLiquidationPrice}, this position may be challenged.
+							</p>
+							<p className="mt-1 text-xs text-text-secondary">
+								Lower liquidation price means more room before challenge. Your current safety buffer is {formattedSafetyBuffer}, meaning
+								the market could fall about {formattedSafetyBuffer} from the current reference price before this position reaches its
+								challenge level. Frankencoin uses market challenges instead of a central liquidation oracle.
+							</p>
+						</div>
 
 						<DateInput
 							label="Repay by"
