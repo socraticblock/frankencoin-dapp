@@ -1,11 +1,11 @@
 {
 	"name": "frankencoin-dapp",
 	"version": "0.2.20",
-	"private": false,
+	"private": true,
 	"license": "MIT",
 	"scripts": {
-		"dev": "yarn install && next dev",
-		"dev3000": "yarn install && next dev -p 3000",
+		"dev": "next dev",
+		"dev3000": "next dev -p 3000",
 		"build": "next build",
 		"export": "next export",
 		"start": "next start",
