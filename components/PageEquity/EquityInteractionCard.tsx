@@ -141,6 +141,14 @@ export default function EquityInteractionCard() {
 		    : "Unwrap WFPS";
 	const buttonDisabled = amount === 0n || !!error || (isRedeem && !poolStats.equityCanRedeem);
 	const showMintMoreWarning = poolStats.equityBalance > 0n && amount > 0n && isMint;
+	const showMintNoZchfHelper = isMint && !isApproving && !isInvesting && poolStats.frankenBalance === 0n;
+	const showMintDisabledHelper =
+		isMint &&
+		!isApproving &&
+		!isInvesting &&
+		!showMintNoZchfHelper &&
+		amount === 0n &&
+		!error;
 
 	useEffect(() => {
 		setAmount(0n);
@@ -393,7 +401,7 @@ export default function EquityInteractionCard() {
 							label={inputLabel}
 							limit={fromBalance}
 							limitDigit={18}
-							limitLabel="Balance"
+							limitLabel={isMint ? "Wallet ZCHF balance" : "Balance"}
 						/>
 
 						<TokenInputSelect
@@ -404,15 +412,37 @@ export default function EquityInteractionCard() {
 							output={formatTokenAmount(outputAmount).toFixed(4)}
 							label={outputLabel}
 							disabled={true}
-							limit={isUnwrap ? poolStats.equityBalance : isRedeem || isMint ? poolStats.frankenBalance : wfpsBalance}
+							limit={
+								isMint
+									? poolStats.equityBalance
+									: isUnwrap
+										? poolStats.equityBalance
+										: isRedeem
+											? poolStats.frankenBalance
+											: wfpsBalance
+							}
 							limitDigit={18}
-							limitLabel="Balance"
+							limitLabel={
+								isMint
+									? "Current FPS balance"
+									: isRedeem
+										? "Wallet ZCHF balance"
+										: isWrap
+											? "Current WFPS balance"
+											: "Current FPS balance"
+							}
 						/>
 
 						{showMintMoreWarning ? (
 							<div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
 								Adding new FPS can lower your average holding duration and may delay direct protocol redemption.
 							</div>
+						) : null}
+
+						{showMintNoZchfHelper ? (
+							<p className="text-sm text-text-secondary">No ZCHF available in this wallet.</p>
+						) : showMintDisabledHelper ? (
+							<p className="text-sm text-text-secondary">Enter an amount of ZCHF to mint FPS.</p>
 						) : null}
 
 						<GuardSupportedChain chain={mainnet}>
