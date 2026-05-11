@@ -448,12 +448,12 @@ export default function PositionBorrow({}) {
 								<div className="flex-1 text-text-secondary">
 									<span>Retained reserve</span>
 									<span className="text-xs ml-1">({formatCurrency(position.reserveContribution / 10000)}%)</span>
-									<p className="mt-1 text-xs">
+									<p className="mt-1 text-xs text-text-secondary/90">
 										A portion of the minted ZCHF is retained as reserve and is not sent to your wallet.
 									</p>
-									<details className="mt-1 text-xs">
-										<summary className="cursor-pointer text-text-secondary">More about reserve</summary>
-										<p className="mt-1 text-text-secondary">
+									<details className="mt-1 text-xs text-text-secondary">
+										<summary className="cursor-pointer">More about reserve</summary>
+										<p className="mt-1">
 											When you repay and close the position, the reserve usually helps reduce the ZCHF you need to return, but it can be
 											used to cover losses if the position is liquidated.
 										</p>
@@ -470,11 +470,15 @@ export default function PositionBorrow({}) {
 							<div className="mt-0 flex">
 								<div className="flex-1 text-text-secondary">
 									<span>Upfront interest</span>
-									<span className="text-xs ml-1">({formatCurrency(effectiveInterest * 100)}% per year)</span>
-									<p className="mt-1 text-xs">
-										Interest is charged upfront for the selected borrowing period. A longer repayment period increases the upfront interest
-										amount. The displayed interest rate is annualized; the upfront amount depends on the selected repay-by date.
-									</p>
+									<span className="text-xs ml-1 text-text-secondary/80">({formatCurrency(effectiveInterest * 100)}% per year)</span>
+									<details className="mt-1 text-xs text-text-secondary/85">
+										<summary className="cursor-pointer">How upfront interest works</summary>
+										<p className="mt-1">
+											Interest is charged upfront for the selected borrowing period. A longer repayment period increases the upfront
+											interest amount. The displayed interest rate is annualized; the upfront amount depends on the selected repay-by
+											date.
+										</p>
+									</details>
 								</div>
 								<div className="text-right">
 									<span>
@@ -488,12 +492,12 @@ export default function PositionBorrow({}) {
 								Sent today
 							</div>
 
-							<div className="mt-1 flex items-center rounded-lg bg-card-content-primary px-3 py-2 font-extrabold">
+							<div className="mt-1 flex items-center rounded-lg border border-button-default/20 bg-button-default/10 px-3 py-2 font-extrabold">
 								<div className="flex-1 text-text-secondary">
 									<span>Sent to your wallet</span>
 								</div>
 								<div className="text-right">
-									<span className="text-lg">{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
+									<span className="text-xl">{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
 								</div>
 							</div>
 
@@ -547,6 +551,11 @@ export default function PositionBorrow({}) {
 							<div className="mb-3 rounded-lg border border-menu-separator bg-card-content-primary p-3 text-sm text-text-secondary">
 								You are opening a {formatCurrency(formatUnits(amount, 18))} ZCHF position. After reserve and upfront interest, about{" "}
 								{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF will be sent to your wallet.
+							</div>
+						) : null}
+						{errorColl.includes("Not enough") ? (
+							<div className="mb-2 text-sm text-text-warning">
+								Not enough {position.collateralSymbol} to approve. Add collateral to this wallet to continue.
 							</div>
 						) : null}
 						{position.version == 2 && newPrice !== priceBigInt ? (
