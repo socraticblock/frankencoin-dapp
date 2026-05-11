@@ -19,3 +19,4 @@ export * from "./useDelegationHelpers";
 export * from "./useVotesSynced";
 export * from "./useBorrowPositions";
 export * from "./useAnalytics";
+export * from "./useBorrowingOverview";

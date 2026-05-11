@@ -277,7 +277,7 @@ export default function PositionBorrow({}) {
 
 			<AppTitle
 				title={`${position.collateralName} (${position.collateralSymbol})`}
-				subtitle="Deposit collateral and borrow new Frankencoins"
+				subtitle="Deposit collateral and mint ZCHF under this position's terms."
 				badges={[
 					{ label: positionStatus.label, className: positionStatus.cls },
 					{ label: `V${position.version}`, className: "bg-blue-500/20 text-blue-400" },
@@ -300,10 +300,10 @@ export default function PositionBorrow({}) {
 
 			<div className="mt-8">
 				<AppCard>
-					<div className="text-lg font-bold text-center">Borrow Frankencoins</div>
+					<div className="text-lg font-bold text-center">Review and borrow ZCHF</div>
 					<div className="grid md:grid-cols-2 gap-4">
 						<TokenInput
-							label="Deposit"
+							label="Collateral to deposit"
 							max={userBalance >= minColl ? userBalance : undefined}
 							min={mintPrice > 0n ? (amount * parseUnits("1", 18) + mintPrice - 1n) / mintPrice : undefined}
 							reset={minColl}
@@ -318,7 +318,7 @@ export default function PositionBorrow({}) {
 							limitLabel="Balance"
 						/>
 						<TokenInput
-							label="Mint now"
+							label="ZCHF to mint now"
 							symbol="ZCHF"
 							value={amount.toString()}
 							onChange={onChangeAmount}
@@ -331,6 +331,11 @@ export default function PositionBorrow({}) {
 							limitLabel="Mintable"
 						/>
 					</div>
+					{errorColl.includes("Not enough") ? (
+						<p className="mt-1 px-1 text-sm text-text-secondary">
+							You need {position.collateralSymbol} collateral in this wallet before you can open the position.
+						</p>
+					) : null}
 
 					<div className="-mt-4 text-center">
 						{linked ? (
@@ -372,6 +377,11 @@ export default function PositionBorrow({}) {
 							limitLabel="LTV"
 							limitUnit="%"
 							error={newPrice == 0n ? "Needs to be greater than zero" : ""}
+							note={`This is the reference price where the position becomes vulnerable. Frankencoin challenges are initiated by market participants, not by a central oracle. Lower liquidation price usually means more safety buffer. Safety buffer: ${formatCurrency(
+								Math.max(0, 100 - parseFloat(formatUnits(ltvLimit, 6))),
+								2,
+								2
+							)}%.`}
 							warning={
 								newPrice > priceBigInt
 									? `Liquidation prices above the reference become effective after a 3-day cooldown. Afterwards, up to ${formatCurrency(
@@ -391,14 +401,21 @@ export default function PositionBorrow({}) {
 							tabDates={expirationTabDates}
 							tab={expirationTab}
 							onTab={onTabExpiration}
+							note="This is the latest repayment date for this borrowing position. A longer borrowing period increases upfront interest."
 						/>
 					</div>
 
 					<div className="flex-1 mb-4 space-y-4">
+						<div>
+							<h3 className="text-base font-semibold text-text-primary">Where your minted ZCHF goes</h3>
+							<p className="text-sm text-text-secondary">
+								The minted amount is the total position size. Not all of it is sent to your wallet.
+							</p>
+						</div>
 						<AppBox tight={true}>
 							<div className="flex">
 								<div className="flex-1 text-text-secondary">
-									<span>{newPrice > priceBigInt ? "Minted now" : "Minted"}</span>
+									<span>{newPrice > priceBigInt ? "Total position size now" : "Total position size"}</span>
 									<span className="text-xs ml-1">(100%)</span>
 								</div>
 								<div className="text-right">
@@ -410,6 +427,10 @@ export default function PositionBorrow({}) {
 								<div className="flex-1 text-text-secondary">
 									<span>Retained reserve</span>
 									<span className="text-xs ml-1">({formatCurrency(position.reserveContribution / 10000)}%)</span>
+									<p className="mt-1 text-xs">
+										A portion of the minted ZCHF is retained by the protocol as reserve and is not sent to your wallet when opening the
+										position.
+									</p>
 								</div>
 								<div className="text-right">
 									<span>
@@ -419,25 +440,14 @@ export default function PositionBorrow({}) {
 								</div>
 							</div>
 
-							<div className="mt-2 flex">
-								<div className="flex-1 text-text-secondary">
-									<span>To be repaid in the end</span>
-									<span className="text-xs ml-1">({formatCurrency(100 - position.reserveContribution / 10000)}%)</span>
-								</div>
-								<div className="text-right">
-									<span>
-										{formatCurrency(
-											formatUnits((amount * BigInt(100 - position.reserveContribution / 10000)) / 100n, 18)
-										)}{" "}
-										ZCHF
-									</span>
-								</div>
-							</div>
-
 							<div className="mt-0 flex">
 								<div className="flex-1 text-text-secondary">
 									<span>Upfront interest</span>
 									<span className="text-xs ml-1">({formatCurrency(effectiveInterest * 100)}% per year)</span>
+									<p className="mt-1 text-xs">
+										Interest is charged upfront for the selected borrowing period. A longer repayment period increases the upfront interest
+										amount. The displayed interest rate is annualized; the upfront amount depends on the selected repay-by date.
+									</p>
 								</div>
 								<div className="text-right">
 									<span>
@@ -453,6 +463,21 @@ export default function PositionBorrow({}) {
 								</div>
 								<div className="text-right">
 									<span>{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF</span>
+								</div>
+							</div>
+
+							<div className="mt-2 flex">
+								<div className="flex-1 text-text-secondary">
+									<span>Debt to repay at maturity</span>
+									<span className="text-xs ml-1">({formatCurrency(100 - position.reserveContribution / 10000)}%)</span>
+								</div>
+								<div className="text-right">
+									<span>
+										{formatCurrency(
+											formatUnits((amount * BigInt(100 - position.reserveContribution / 10000)) / 100n, 18)
+										)}{" "}
+										ZCHF
+									</span>
 								</div>
 							</div>
 						</AppBox>
@@ -484,6 +509,12 @@ export default function PositionBorrow({}) {
 					</div>
 
 					<div className="mx-auto w-full flex-col">
+						{amount > 0n ? (
+							<div className="mb-3 rounded-lg border border-menu-separator bg-card-content-primary p-3 text-sm text-text-secondary">
+								You are opening a {formatCurrency(formatUnits(amount, 18))} ZCHF position. After reserve and upfront interest, about{" "}
+								{formatCurrency(formatUnits(paidOutToWallet, 18))} ZCHF will be sent to your wallet.
+							</div>
+						) : null}
 						{position.version == 2 && newPrice !== priceBigInt ? (
 							<BorrowClonePriceAction
 								position={position}
@@ -517,6 +548,14 @@ export default function PositionBorrow({}) {
 								: "This position is in a cooldown period."}
 						</div>
 					)}
+
+					<details className="mt-4 rounded-lg border border-menu-separator bg-card-content-primary p-4">
+						<summary className="cursor-pointer font-medium text-text-primary">Why do I receive less than the amount minted?</summary>
+						<p className="mt-2 text-sm text-text-secondary">
+							The minted amount is the total position size. Part of it is retained by the protocol as reserve, and upfront interest is deducted
+							for the selected borrowing period. The remaining amount is sent to your wallet.
+						</p>
+					</details>
 				</AppCard>
 
 				<div className="grid gap-4 mt-8">

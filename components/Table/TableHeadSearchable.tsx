@@ -18,6 +18,7 @@ interface Props {
 	hideMyWallet?: boolean;
 	inMyWallet: boolean;
 	onInMyWalletChange: (value: boolean) => void;
+	inMyWalletLabel?: string;
 
 	// Category filter
 	filterOptions: FilterOption[];
@@ -47,6 +48,7 @@ export default function TableHeadSearchable({
 	hideMyWallet,
 	inMyWallet,
 	onInMyWalletChange,
+	inMyWalletLabel = "In my wallet",
 	filterOptions,
 	activeFilters,
 	onFiltersChange,
@@ -136,7 +138,7 @@ export default function TableHeadSearchable({
 								}`}
 							/>
 						</button>
-						<span className="text-sm text-text-secondary whitespace-nowrap">In my wallet</span>
+						<span className="text-sm text-text-secondary whitespace-nowrap">{inMyWalletLabel}</span>
 					</div>
 
 					{/* Filter button + dropdown */}

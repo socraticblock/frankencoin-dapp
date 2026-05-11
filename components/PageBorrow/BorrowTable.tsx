@@ -128,7 +128,14 @@ export default function BorrowTable() {
 	};
 
 	return (
-		<Table>
+		<div className="space-y-3">
+			<div className="px-1 text-sm text-text-secondary">
+				<p>
+					Loan-to-Value shows how much ZCHF can be minted compared with collateral value. Higher LTV means less safety buffer.
+				</p>
+				<p className="mt-1">Maturity is the latest repayment date under the selected position terms.</p>
+			</div>
+			<Table>
 			<TableHeadSearchable
 				headers={headers}
 				tab={tab}
@@ -141,6 +148,7 @@ export default function BorrowTable() {
 				hideMyWallet={!walletAddress}
 				inMyWallet={inMyWallet}
 				onInMyWalletChange={setInMyWallet}
+				inMyWalletLabel="Only assets in my wallet"
 				filterOptions={FILTER_OPTIONS}
 				activeFilters={activeCategories}
 				onFiltersChange={setActiveCategories}
@@ -164,7 +172,8 @@ export default function BorrowTable() {
 					))
 				)}
 			</TableBody>
-		</Table>
+			</Table>
+		</div>
 	);
 }
 
