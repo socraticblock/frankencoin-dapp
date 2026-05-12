@@ -419,10 +419,11 @@ export default function MainPage() {
 				secondaryCopy: hasWalletZchfErrors ? "Some wallet balances could not be loaded." : undefined,
 				iconLabel: "ZCHF",
 				action: {
-					label: "Open Transfer",
+					label: "Move ZCHF",
 					targetChainId: currentChainId as ChainId,
 					href: "/transfer",
 				},
+				help: "Transfer ZCHF to another wallet or bridge it to another chain.",
 				secondaryActions: [
 					{ label: "Buy with bank", note: "Coming soon" },
 					{ label: "Buy on DEX", note: "Coming soon" },

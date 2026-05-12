@@ -98,9 +98,24 @@ export function BigNumberInput({
 		onChange?.(newValue.toString());
 	};
 
+	const handleFocus = () => {
+		if (inputValue === "0") {
+			setInputvalue("");
+		}
+	};
+
+	const handleBlur = () => {
+		if (inputValue === "") {
+			setInputvalue("0");
+			onChange?.("0");
+		}
+	};
+
 	const inputProps = {
 		placeholder,
 		onChange: updateValue,
+		onFocus: handleFocus,
+		onBlur: handleBlur,
 		type: "text",
 		value: inputValue,
 		className: "truncate bg-transparent " + className,

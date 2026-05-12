@@ -22,7 +22,9 @@ interface Props {
 	reference: string;
 	amount: bigint;
 	disabled?: boolean;
+	buttonLabel?: string;
 	setLoaded?: Dispatch<SetStateAction<boolean>>;
+	onSubmitted?: (hash: Hash) => void;
 }
 
 export default function TransferActionMainnet({
@@ -33,7 +35,9 @@ export default function TransferActionMainnet({
 	addReference = false,
 	amount,
 	disabled,
+	buttonLabel = "Transfer ZCHF",
 	setLoaded,
+	onSubmitted,
 }: Props) {
 	const [isApproving, setApproving] = useState<boolean>(false);
 	const [isAction, setAction] = useState<boolean>(false);
@@ -164,6 +168,7 @@ export default function TransferActionMainnet({
 
 			track("zchf_transferred", { amount: formatUnits(amount, 18), chain: recipientChain.name, crossChain: !isSameChain });
 			if (setLoaded != undefined) setLoaded(true);
+			onSubmitted?.(writeHash);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));
 		} finally {
@@ -179,7 +184,7 @@ export default function TransferActionMainnet({
 				</AppButton>
 			) : (
 				<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-					Transfer
+					{buttonLabel}
 				</AppButton>
 			)}
 		</GuardSupportedChain>

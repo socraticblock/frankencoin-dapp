@@ -2,85 +2,141 @@ import AppCard from "@components/AppCard";
 import { Address, formatUnits, isAddress, zeroAddress } from "viem";
 import AppLink from "@components/AppLink";
 import { useConnection } from "wagmi";
-import { ContractUrl, shortenAddress } from "@utils";
+import { ContractUrl, shortenAddress, TxUrl } from "@utils";
 import { SupportedChain } from "@frankencoin/zchf";
+import { Hash } from "viem";
 
 interface Props {
+	mode: "transfer" | "bridge";
+	amount: bigint;
 	senderAddress: Address | undefined;
 	recipientAddress: Address | undefined;
-	chain: SupportedChain | undefined;
-	recipientChain: SupportedChain | undefined;
+	fromChain: SupportedChain | undefined;
+	toChain: SupportedChain | undefined;
 	ccipFee: bigint;
+	lastTxHash?: Hash;
+	isSubmitted?: boolean;
+	disabledReason?: string | null;
 }
 
-export default function TransferDetailsCard({ senderAddress, recipientAddress, chain, recipientChain, ccipFee }: Props) {
+export default function TransferDetailsCard({
+	mode,
+	amount,
+	senderAddress,
+	recipientAddress,
+	fromChain,
+	toChain,
+	ccipFee,
+	lastTxHash,
+	isSubmitted = false,
+	disabledReason,
+}: Props) {
 	const { address } = useConnection();
-	const isSameChain = recipientChain?.id == chain?.id;
+	const isBridge = mode === "bridge";
+	const hasAmount = amount > 0n;
+	const hasRecipient = Boolean(recipientAddress && isAddress(recipientAddress));
 
 	senderAddress = senderAddress || zeroAddress;
 	recipientAddress = recipientAddress || zeroAddress;
 
 	return (
 		<AppCard>
-			<div className="md:mt-4 text-lg font-bold text-center">Outcome</div>
+			<div className="md:mt-4 text-lg font-bold text-center">{isBridge ? "Before you bridge" : "Before you transfer"}</div>
 			<div className="p-4 flex flex-col gap-2">
+				{!hasAmount ? <p className="text-sm text-text-secondary">Enter an amount to preview the transfer.</p> : null}
+				{!hasRecipient ? <p className="text-sm text-text-secondary">Enter a recipient wallet.</p> : null}
+
+				{hasAmount ? (
+					<div className="flex">
+						<div className="flex-1 text-text-secondary">{isBridge ? "You are moving" : "You are sending"}</div>
+						<div>{Math.round(Number(formatUnits(amount, 18)) * 10000) / 10000} ZCHF</div>
+					</div>
+				) : null}
+
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">Sender</div>
+					<div className="flex-1 text-text-secondary">From wallet</div>
 					<AppLink
 						className=""
 						label={isAddress(senderAddress) ? shortenAddress(senderAddress) : "Invalid Input"}
-						href={ContractUrl(senderAddress || zeroAddress, chain)}
+						href={ContractUrl(senderAddress || zeroAddress, fromChain)}
 						external={true}
 					/>
 				</div>
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">From</div>
-					<div className="">{chain?.name}</div>
+					<div className="flex-1 text-text-secondary">From chain</div>
+					<div className="">{fromChain?.name}</div>
 				</div>
 
-				<div className="md:mt-4 text-lg font-bold text-center"></div>
+				{isBridge ? (
+					<div className="flex">
+						<div className="flex-1 text-text-secondary">To chain</div>
+						<div className="">{toChain?.name}</div>
+					</div>
+				) : null}
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">Recipient</div>
+					<div className="flex-1 text-text-secondary">Recipient wallet</div>
 					<AppLink
 						className=""
 						label={isAddress(recipientAddress) ? shortenAddress(recipientAddress) : "Invalid Input"}
-						href={ContractUrl(recipientAddress || zeroAddress, recipientChain)}
+						href={ContractUrl(recipientAddress || zeroAddress, toChain)}
 						external={true}
 					/>
 				</div>
 
 				<div className="flex">
-					<div className="flex-1 text-text-secondary">To</div>
-					<div className="">{recipientChain?.name}</div>
+					<div className="flex-1 text-text-secondary">Transfer type</div>
+					<div className="">{isBridge ? "Cross-chain bridge via CCIP" : "Same-chain ZCHF transfer"}</div>
 				</div>
 			</div>
 
-			<div className="md:mt-8 text-lg font-bold text-center">CCIP Details</div>
-			<div className="p-4 flex flex-col gap-2">
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">Bridging ZCHF</div>
-					<div className="">{isSameChain ? "False" : "True"}</div>
-				</div>
-
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">CCIP Fee</div>
-					<div className="">
-						{Math.round(Number(formatUnits(ccipFee, 18)) * 100000000) / 100000000} {chain?.nativeCurrency.symbol}
+			{isBridge ? (
+				<div className="px-4 pb-4">
+					<p className="text-sm text-text-secondary">
+						Cross-chain transfers use CCIP and may take longer to arrive on the destination chain.
+					</p>
+					<p className="mt-1 text-sm text-text-secondary">CCIP handles the cross-chain delivery of ZCHF.</p>
+					<div className="mt-3 flex">
+						<div className="flex-1 text-text-secondary">Estimated CCIP fee</div>
+						<div>
+							{Math.round(Number(formatUnits(ccipFee, 18)) * 100000000) / 100000000} {fromChain?.nativeCurrency.symbol}
+						</div>
+					</div>
+					<div className="mt-2 flex">
+						<div className="flex-1 text-text-secondary">Status</div>
+						<AppLink className="" label="Check CCIP status" external={true} href={`https://ccip.chain.link${address ? `/address/${address}` : ""}`} />
 					</div>
 				</div>
+			) : null}
 
-				<div className="flex">
-					<div className="flex-1 text-text-secondary">CCIP Explorer</div>
-					<AppLink
-						className=""
-						label="Check Status"
-						external={true}
-						href={`https://ccip.chain.link${address ? `/address/${address}` : ""}`}
-					/>
+			{disabledReason ? <p className="px-4 pb-3 text-sm text-text-warning">{disabledReason}</p> : null}
+
+			{isSubmitted ? (
+				<div className="mx-4 mb-4 rounded-lg border border-menu-separator bg-card-content-primary p-3">
+					<p className="font-semibold text-text-primary">{isBridge ? "Bridge submitted" : "Transfer submitted"}</p>
+					<p className="mt-1 text-sm text-text-secondary">
+						{isBridge
+							? `${Math.round(Number(formatUnits(amount, 18)) * 10000) / 10000} ZCHF is moving from ${fromChain?.name} to ${toChain?.name}.`
+							: `Your ZCHF transfer was submitted on ${fromChain?.name}.`}
+					</p>
+					{isBridge ? (
+						<div className="mt-2 text-sm text-text-secondary">
+							<p>Step 1: Sent from source chain</p>
+							<p>Step 2: Waiting for CCIP delivery</p>
+							<p>Step 3: Available on destination chain</p>
+							<p className="mt-1">Track delivery in CCIP Explorer.</p>
+						</div>
+					) : null}
+					<div className="mt-2">
+						{isBridge ? (
+							<AppLink className="" label="Check CCIP status" external={true} href={`https://ccip.chain.link${address ? `/address/${address}` : ""}`} />
+						) : lastTxHash ? (
+							<AppLink className="" label="View transaction" external={true} href={TxUrl(lastTxHash, fromChain)} />
+						) : null}
+					</div>
 				</div>
-			</div>
+			) : null}
 		</AppCard>
 	);
 }

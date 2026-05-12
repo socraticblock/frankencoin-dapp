@@ -16,6 +16,7 @@ interface Props {
 	disabled?: boolean;
 	isTextLeft?: boolean;
 	note?: string;
+	ownLabel?: string;
 }
 
 export default function AddressInput({
@@ -34,6 +35,7 @@ export default function AddressInput({
 	disabled,
 	isTextLeft,
 	note,
+	ownLabel = "Own",
 }: Props) {
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -87,7 +89,7 @@ export default function AddressInput({
 									}
 								}}
 							>
-								Own
+								{ownLabel}
 							</div>
 						)}
 						{!disabled && reset != undefined && reset != value && reset != own && (

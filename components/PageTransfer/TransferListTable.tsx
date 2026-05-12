@@ -2,201 +2,199 @@ import TableHeader from "../Table/TableHead";
 import TableBody from "../Table/TableBody";
 import Table from "../Table";
 import TableRowEmpty from "../Table/TableRowEmpty";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TransferListRow from "./TransferListRow";
 import AppCard from "@components/AppCard";
-import AddressInput from "@components/Input/AddressInput";
 import DateInput from "@components/Input/DateInput";
-import { Address, isAddress } from "viem";
 import { useConnection } from "wagmi";
-import { FRANKENCOIN_API_CLIENT } from "../../app.config";
-import { ApiTransferReferenceList, TransferReferenceQuery } from "@frankencoin/api";
+import { WAGMI_CHAINS } from "../../app.config";
+import AppButtonSecondary from "@components/AppButtonSecondary";
+import { ChainId } from "@frankencoin/zchf";
 import { shortenAddress } from "@utils";
+import { useWalletTransferHistory } from "@hooks";
+import {
+	orderedZchfBalanceChainNames,
+	sortTransferHistory,
+	TRANSFER_HISTORY_HEADERS,
+	transferDirection,
+	transferIsBridge,
+} from "./transferShared";
 
 const RESET_DATE = new Date(new Date().getUTCFullYear().toString());
+const PAGE_SIZE = 25;
+
+type HistoryTypeFilter = "all" | "transfer" | "bridge";
+type DirectionFilter = "all" | "sent" | "received";
 
 export default function TransferListTable() {
-	const headers: string[] = ["Date", "Sender", "Recipient", "Reference", "Amount"];
+	const headers = useMemo(() => [...TRANSFER_HISTORY_HEADERS], []);
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
-	const [fetchedList, setFetchedList] = useState<TransferReferenceQuery[]>([]);
-	const [list, setList] = useState<TransferReferenceQuery[]>([]);
-
 	const { address } = useConnection();
-	const [sender, setSender] = useState<Address | string>("");
-	const [recipient, setRecipient] = useState<Address | string>(address || "");
-	const [reference, setReference] = useState<string>("");
 	const [start, setStart] = useState<Date>(RESET_DATE);
-	const [end, setEnd] = useState<Date | string>("Today");
+	const [end, setEnd] = useState<Date | "Today">("Today");
+	const [typeFilter, setTypeFilter] = useState<HistoryTypeFilter>("all");
+	const [directionFilter, setDirectionFilter] = useState<DirectionFilter>("all");
+	const [chainFilter, setChainFilter] = useState<string>("all");
+	const [visibleRows, setVisibleRows] = useState<number>(PAGE_SIZE);
+
+	const { walletHistory, isLoading } = useWalletTransferHistory(address, start, end);
+
+	const chainFilterOptions = useMemo(
+		() => [{ value: "all", label: "All" }, ...orderedZchfBalanceChainNames(WAGMI_CHAINS).map((name) => ({ value: name, label: name }))],
+		[]
+	);
+
+	const filtered = useMemo(() => {
+		if (!address) return [];
+		return walletHistory.filter((item) => {
+			const isBridge = transferIsBridge(item);
+			const direction = transferDirection(item, address);
+			const chainName = WAGMI_CHAINS.find((c) => c.id === (item.chainId as ChainId))?.name ?? "Unknown";
+
+			if (typeFilter === "bridge" && !isBridge) return false;
+			if (typeFilter === "transfer" && isBridge) return false;
+			if (directionFilter !== "all" && direction !== directionFilter) return false;
+			if (chainFilter !== "all" && chainName !== chainFilter) return false;
+			return true;
+		});
+	}, [address, chainFilter, directionFilter, typeFilter, walletHistory]);
+
+	const sorted = useMemo(
+		() => sortTransferHistory(filtered, tab, reverse, address ?? ""),
+		[address, filtered, reverse, tab]
+	);
+	const visible = sorted.slice(0, visibleRows);
+	const canLoadMore = sorted.length > visible.length;
 
 	useEffect(() => {
-		// load all, if non is selected.
-		if (sender.length == 0 && recipient.length == 0) {
-			const fetcher = async () => {
-				const data = await FRANKENCOIN_API_CLIENT.get<ApiTransferReferenceList>(`/transfer/reference/list`);
-				const normalizedList = normalizeTransferList(data.data);
-				if (reference.length == 0) {
-					setFetchedList(normalizedList);
-				} else {
-					setFetchedList(normalizedList.filter((i) => i.reference == reference));
-				}
-			};
+		setVisibleRows(PAGE_SIZE);
+	}, [typeFilter, directionFilter, chainFilter, start, end, address]);
 
-			fetcher();
-			return;
-		}
-
-		// guard for address validation
-		if ((sender.length > 0 && !isAddress(sender)) || (recipient.length > 0 && !isAddress(recipient))) return;
-
-		const fetcher = async () => {
-			const params: Record<string, string | number> = {};
-
-			if (recipient.length > 0) params.to = recipient;
-			if (sender.length > 0) params.from = sender;
-
-			if (reference.length > 0) params.reference = reference;
-			if (typeof end != "string") params.end = end.toISOString();
-			params.start = start.toISOString();
-
-			const data = await FRANKENCOIN_API_CLIENT.get<TransferReferenceQuery[]>(
-				`/transfer/reference/history/by/${sender.length > 0 ? "from" : "to"}/${sender.length > 0 ? sender : recipient}`,
-				{
-					params,
-				}
-			);
-
-			setFetchedList(normalizeTransferList(data.data));
-		};
-
-		fetcher();
-	}, [sender, recipient, reference, start, end]);
-
-	const sorted: TransferReferenceQuery[] = sortFunction({ list: fetchedList, headers, tab, reverse });
-
-	useEffect(() => {
-		const idList = list.map((l) => `${l.chainId}-${l.count}`).join("_");
-		const idSorted = sorted.map((l) => `${l.chainId}-${l.count}`).join("_");
-		if (idList != idSorted) setList(sorted);
-	}, [list, sorted]);
-
-	const handleTabOnChange = function (e: string) {
-		if (tab === e) {
-			setReverse(!reverse);
-		} else {
+	const handleTabOnChange = (nextTab: string) => {
+		if (tab === nextTab) setReverse((r) => !r);
+		else {
 			setReverse(false);
-			setTab(e);
+			setTab(nextTab);
 		}
 	};
 
-	const errorSender = () => {
-		if (sender == "" || isAddress(sender)) return "";
-		else return "Invalid sender address";
-	};
-
-	const errorRecipient = () => {
-		if (recipient == "" || isAddress(recipient)) return "";
-		else return "Invalid recipient address";
-	};
+	if (!address) {
+		return (
+			<AppCard>
+				<div className="px-2 py-2 text-sm text-text-secondary">Connect your wallet to see your transfer history.</div>
+			</AppCard>
+		);
+	}
 
 	return (
 		<div className="grid gap-4">
 			<AppCard>
-				<div className="grid md:grid-cols-2 gap-4">
-					<AddressInput
-						label="Sender"
-						placeholder="Enter sender address here"
-						value={sender}
-						onChange={setSender}
-						error={errorSender()}
-						limitLabel={address != undefined ? shortenAddress(address) : undefined}
-						own={address}
-						reset={""}
+				<div className="mb-3 text-sm text-text-secondary">Showing ZCHF transfers sent or received by {shortenAddress(address)}.</div>
+				<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+					<div>
+						<label className="mb-1 block text-sm text-text-secondary">Date range</label>
+						<div className="grid grid-cols-2 gap-2">
+							<DateInput label="From date" value={start} onChange={(d) => d && setStart(d)} />
+							<DateInput
+								label="To date"
+								value={end === "Today" ? new Date() : (end as Date)}
+								onChange={(d) => {
+									if (d) {
+										const dateWithZeroTime = new Date(d);
+										dateWithZeroTime.setUTCHours(0, 0, 0, 0);
+										setEnd(dateWithZeroTime);
+									}
+								}}
+								output={end === "Today" ? end : undefined}
+								reset={end === "Today" ? undefined : new Date()}
+								onReset={() => setEnd("Today")}
+							/>
+						</div>
+					</div>
+					<SelectFilter
+						label="Type"
+						value={typeFilter}
+						onChange={(value) => setTypeFilter(value as HistoryTypeFilter)}
+						options={[
+							{ value: "all", label: "All" },
+							{ value: "transfer", label: "Transfer" },
+							{ value: "bridge", label: "Bridge" },
+						]}
 					/>
-					<AddressInput
-						label="Recipient"
-						placeholder="Enter recipient address here"
-						value={recipient}
-						onChange={setRecipient}
-						error={errorRecipient()}
-						limitLabel={address != undefined ? shortenAddress(address) : undefined}
-						own={address}
-						reset={""}
+					<SelectFilter label="Chain" value={chainFilter} onChange={setChainFilter} options={chainFilterOptions} />
+					<SelectFilter
+						label="Direction"
+						value={directionFilter}
+						onChange={(value) => setDirectionFilter(value as DirectionFilter)}
+						options={[
+							{ value: "all", label: "All" },
+							{ value: "sent", label: "Sent" },
+							{ value: "received", label: "Received" },
+						]}
 					/>
-					<DateInput label="From" value={start} onChange={(d) => d && setStart(d)} />
-					<DateInput
-						label="To (inclusive)"
-						value={end === "Today" ? new Date() : (end as Date)}
-						onChange={(d) => {
-							if (d) {
-								const dateWithZeroTime = new Date(d);
-								dateWithZeroTime.setUTCHours(0, 0, 0, 0);
-								setEnd(dateWithZeroTime);
-							}
-						}}
-						output={end === "Today" ? end : undefined}
-						reset={end === "Today" ? undefined : new Date()}
-						onReset={() => setEnd("Today")}
-					/>
-					<AddressInput label="Reference" placeholder="Reference (if any)" value={reference} onChange={setReference} />
 				</div>
 			</AppCard>
 
 			<Table>
 				<TableHeader headers={headers} tab={tab} reverse={reverse} tabOnChange={handleTabOnChange} />
 				<TableBody>
-					{list.length == 0 ? (
-						<TableRowEmpty>{"No transfer references found..."}</TableRowEmpty>
+					{isLoading ? (
+						<TableRowEmpty>{"Loading your transfers..."}</TableRowEmpty>
+					) : visible.length === 0 ? (
+						<TableRowEmpty>{"No transfers found for this wallet and filters."}</TableRowEmpty>
 					) : (
-						list.map((i, idx) => (
+						visible.map((item) => (
 							<TransferListRow
 								headers={headers}
 								tab={tab}
-								key={`${i.chainId}-${i.count}` || `TransferListRow_${idx}`}
-								item={i}
+								key={`${item.chainId}-${item.count}-${item.txHash}`}
+								item={item}
+								connectedAddress={address}
 							/>
 						))
 					)}
 				</TableBody>
 			</Table>
+
+			{canLoadMore ? (
+				<div className="flex justify-center">
+					<AppButtonSecondary width="w-auto" onClick={() => setVisibleRows((prev) => prev + PAGE_SIZE)}>
+						Load more
+					</AppButtonSecondary>
+				</div>
+			) : null}
 		</div>
 	);
 }
 
-type SortFunctionParams = {
-	list: TransferReferenceQuery[];
-	headers: string[];
-	tab: string;
-	reverse: boolean;
-};
+type SelectFilterOption = { value: string; label: string };
 
-function sortFunction(params: SortFunctionParams): TransferReferenceQuery[] {
-	const { list, headers, tab, reverse } = params;
-	let sortingList = Array.isArray(list) ? [...list] : []; // make it writeable
-
-	if (tab === headers[0]) {
-		// Date
-		sortingList.sort((a, b) => b.created - a.created);
-	} else if (tab === headers[1]) {
-		// Spender
-		sortingList.sort((a, b) => a.from.localeCompare(b.from));
-	} else if (tab === headers[2]) {
-		// Recipient
-		sortingList.sort((a, b) => a.to.localeCompare(b.to));
-	} else if (tab === headers[3]) {
-		// Reference
-		sortingList.sort((a, b) => a.reference.localeCompare(b.reference));
-	} else if (tab === headers[4]) {
-		// Amount
-		sortingList.sort((a, b) => (b.amount > a.amount ? 1 : -1));
-	}
-	return reverse ? sortingList.reverse() : sortingList;
-}
-
-function normalizeTransferList(response: unknown): TransferReferenceQuery[] {
-	if (Array.isArray(response)) return response as TransferReferenceQuery[];
-	if (response && typeof response === "object" && "list" in response && Array.isArray((response as { list?: unknown }).list)) {
-		return (response as { list: TransferReferenceQuery[] }).list;
-	}
-	return [];
+function SelectFilter({
+	label,
+	value,
+	onChange,
+	options,
+}: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+	options: SelectFilterOption[];
+}) {
+	return (
+		<div>
+			<label className="mb-1 block text-sm text-text-secondary">{label}</label>
+			<select
+				value={value}
+				onChange={(event) => onChange(event.target.value)}
+				className="w-full rounded-lg border border-menu-separator bg-card-content-primary px-3 py-2 text-sm text-text-primary"
+			>
+				{options.map((option) => (
+					<option key={`${label}-${option.value}`} value={option.value}>
+						{option.label}
+					</option>
+				))}
+			</select>
+		</div>
+	);
 }

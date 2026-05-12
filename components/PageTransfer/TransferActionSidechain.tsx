@@ -20,7 +20,9 @@ interface Props {
 	reference: string;
 	amount: bigint;
 	disabled?: boolean;
+	buttonLabel?: string;
 	setLoaded?: Dispatch<SetStateAction<boolean>>;
+	onSubmitted?: (hash: Hash) => void;
 }
 
 export default function TransferActionSidechain({
@@ -31,7 +33,9 @@ export default function TransferActionSidechain({
 	addReference,
 	amount,
 	disabled,
+	buttonLabel = "Transfer ZCHF",
 	setLoaded,
+	onSubmitted,
 }: Props) {
 	const [isAction, setAction] = useState<boolean>(false);
 	const [isHidden, setHidden] = useState<boolean>(false);
@@ -149,6 +153,7 @@ export default function TransferActionSidechain({
 
 			track("zchf_transferred", { amount: formatUnits(amount, 18), chain: recipientChain.name, crossChain: !isSameChain });
 			if (setLoaded != undefined) setLoaded(true);
+			onSubmitted?.(writeHash);
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));
 		} finally {
@@ -159,7 +164,7 @@ export default function TransferActionSidechain({
 	return (
 		<GuardSupportedChain chain={chain}>
 			<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-				Transfer
+				{buttonLabel}
 			</AppButton>
 		</GuardSupportedChain>
 	);
