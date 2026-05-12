@@ -12,7 +12,7 @@ import { formatCurrency, getChain, normalizeAddress, shortenAddress, SOCIAL } fr
 import { ADDRESS, BridgedFrankencoinABI, ChainId, EquityABI, FrankencoinABI } from "@frankencoin/zchf";
 import { useSelector } from "react-redux";
 import { RootState } from "../redux/redux.store";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Address, formatUnits, zeroAddress } from "viem";
 import { useServiceStatus } from "../hooks/useServiceStatus";
 import { SavingsBalance } from "@frankencoin/api";
@@ -246,7 +246,7 @@ export default function MainPage() {
 		void router.push(href);
 	}, [chainId, pendingChainAction, router]);
 
-	const runChainAction = async (action: ChainAction) => {
+	const runChainAction = useCallback(async (action: ChainAction) => {
 		if (action.skipNetworkSwitch) {
 			await router.push(action.href);
 			return;
@@ -267,7 +267,7 @@ export default function MainPage() {
 			clearPendingChainTimeout();
 			setPendingChainAction(null);
 		}
-	};
+	}, [appKitNetwork, chainId, router]);
 
 	const chainRows = useMemo<ChainRow[]>(() => {
 		const savingsByChain = new Map<ChainId, number>();
@@ -369,14 +369,14 @@ export default function MainPage() {
 		if (hasBorrowing) {
 			return {
 				message: "Borrowing activity detected. Review your position.",
-				action: { label: "Open Portfolio", targetChainId: chain.id as ChainId, href: "/mypositions" },
+				action: { label: "Open Portfolio", targetChainId: currentChainId as ChainId, href: "/mypositions" },
 			};
 		}
 
 		return {
 			message: "Your Desk is ready. Use the overview and active allocations to continue.",
 		};
-	}, [activeSavingsEntries, currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, liveInterestByChain]);
+	}, [currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, liveInterestByChain]);
 
 	const cards = useMemo<CockpitCardProps[]>(() => {
 		const walletCopy =
@@ -488,6 +488,7 @@ export default function MainPage() {
 		myBorrowedZchf,
 		totalSavings,
 		totalWalletZchf,
+		runChainAction,
 	]);
 
 	return (

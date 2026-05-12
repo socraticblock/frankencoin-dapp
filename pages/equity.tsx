@@ -222,7 +222,7 @@ export default function Equity() {
 				<AppCard>
 					<h2 className="font-semibold text-text-primary">How direct redemption works</h2>
 					<p className="text-sm text-text-secondary">
-						Direct protocol redemption requires your address's average FPS holding duration to reach 90 days. This rule applies to redeeming FPS
+						Direct protocol redemption requires your address&apos;s average FPS holding duration to reach 90 days. This rule applies to redeeming FPS
 						for ZCHF through the protocol, not to transferring or wrapping FPS.
 					</p>
 					<p className="text-sm text-text-secondary">
@@ -245,7 +245,7 @@ export default function Equity() {
 					</div>
 					<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
 						<EducationItem title="What gives FPS value?">
-							FPS participates in Frankencoin's equity reserve. If the protocol earns fees or liquidation gains, protocol value can rise. If
+							FPS participates in Frankencoin&apos;s equity reserve. If the protocol earns fees or liquidation gains, protocol value can rise. If
 							losses occur, value can fall.
 						</EducationItem>
 						<EducationItem title="What is protocol price?">

@@ -74,7 +74,7 @@ export default function Governance() {
 
 			<AppTitle title="CCIP Bridges">
 				<div className="text-text-secondary">
-					Frankencoin is bridged between chains via Chainlink CCIP. Each source chain's token pool enforces its own incoming and
+					Frankencoin is bridged between chains via Chainlink CCIP. Each source chain&apos;s token pool enforces its own incoming and
 					outgoing rate limits per destination chain, so a transfer is throttled by the limits configured on both sides. When a
 					limit is not enabled, transfers flow without throttling.
 				</div>
