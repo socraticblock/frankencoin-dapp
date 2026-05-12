@@ -1,248 +1,251 @@
-import TableHeadSearchable, { FilterOption } from "../Table/TableHeadSearchable";
-import TableBody from "../Table/TableBody";
-import Table from "../Table";
-import TableRowEmpty from "../Table/TableRowEmpty";
-import { useSelector } from "react-redux";
-import { RootState } from "../../redux/redux.store";
+import AppButton from "@components/AppButton";
+import AppEmptyState from "@components/AppEmptyState";
+import TokenLogo from "@components/TokenLogo";
 import { ChallengesPositionsMapping, PositionQuery, PriceQueryObjectArray } from "@frankencoin/api";
+import { formatCurrency, normalizeAddress } from "@utils";
+import { useRouter } from "next/router";
 import { Address, formatUnits, zeroAddress } from "viem";
 import { useConnection } from "wagmi";
-import MypositionsRow from "./MypositionsRow";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
-import { generateExpirationCalendar, downloadCalendarFile, generateGoogleCalendarUrl } from "../../utils/calendarGenerator";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCalendarDays, faCalendarPlus } from "@fortawesome/free-solid-svg-icons";
-import { ALL_CATEGORIES, CollateralCategory, collateralMatchesCategories, normalizeAddress } from "@utils";
+import { useSelector } from "react-redux";
+import { RootState } from "../../redux/redux.store";
 
-const FILTER_OPTIONS: FilterOption[] = ALL_CATEGORIES.map((c) => ({ label: c, value: c }));
+type PositionViewModel = {
+	position: PositionQuery;
+	collateralAmount: number;
+	collateralValue?: number;
+	borrowed: number;
+	repayFromWallet: number;
+	available?: number;
+	liquidationPrice: number;
+	loanToValue?: number;
+	safetyBuffer?: number;
+	maturity: string;
+	status: "Healthy" | "Challenged" | "Matured" | "Not loaded";
+};
 
 export default function MypositionsTable() {
-	const headers: string[] = ["Collateral", "Liquidation Price", "Minted", "State"];
-	const subHeaders: string[] = ["Value", "Market Price", "Available", "Time Left"];
-	const [tab, setTab] = useState<string>(headers[0]);
-	const [reverse, setReverse] = useState<boolean>(false);
-	const [list, setList] = useState<PositionQuery[]>([]);
-	const [searchQuery, setSearchQuery] = useState<string>("");
-	const [activeCategories, setActiveCategories] = useState<string[]>([]);
+	const router = useRouter();
+	const overwrite = router.query.address as Address;
+	const { address } = useConnection();
+	const account = overwrite || address || zeroAddress;
+	const hasAccount = Boolean(overwrite || address);
+	const isPublicView = Boolean(overwrite);
 
 	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.positions.map);
+	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
 
-	const router = useRouter();
-	const overwrite = router.query.address as Address;
-
-	const { address } = useConnection();
-	const account = overwrite || address || zeroAddress;
-
-	const sortedByCollateral: { [key: Address]: PositionQuery[] } = {};
-	const closedPositions: { [key: Address]: PositionQuery[] } = {};
-	for (const p of positions) {
-		const k: Address = normalizeAddress(p.collateral);
-
-		if (normalizeAddress(p.owner) !== normalizeAddress(account)) continue;
-
-		if (p.closed || p.denied) {
-			if (BigInt(p.collateralBalance) < BigInt(p.minimumCollateral)) continue;
-			if (closedPositions[k] == undefined) closedPositions[k] = [];
-			closedPositions[k].push(p);
-			continue;
-		}
-
-		if (sortedByCollateral[k] == undefined) sortedByCollateral[k] = [];
-		sortedByCollateral[k].push(p);
-	}
-
-	const flatingPositions: PositionQuery[] = Object.values(sortedByCollateral).flat(1);
-	const matchingPositions: PositionQuery[] = flatingPositions.concat(Object.values(closedPositions).flat(1));
-
-	const sorted: PositionQuery[] = sortPositions({
-		positions: matchingPositions,
-		challenges,
-		prices,
-		headers,
-		tab,
-		reverse,
+	const matchingPositions = positions.filter((p) => {
+		if (normalizeAddress(p.owner) !== normalizeAddress(account)) return false;
+		if (p.closed || p.denied) return false;
+		return true;
 	});
 
-	const filteredList = useMemo(() => {
-		return sorted.filter((pos) => {
-			if (searchQuery) {
-				const q = searchQuery.toLowerCase();
-				if (!pos.collateralName.toLowerCase().includes(q) && !pos.collateralSymbol.toLowerCase().includes(q)) return false;
-			}
-			if (
-				activeCategories.length > 0 &&
-				!collateralMatchesCategories(normalizeAddress(pos.collateral), activeCategories as CollateralCategory[])
-			)
-				return false;
-			return true;
-		});
-	}, [sorted, searchQuery, activeCategories]);
+	const rows = matchingPositions.map((position) => buildPositionView(position, challenges, challengesLoaded, prices));
 
-	useEffect(() => {
-		const idList = list.map((l) => l.position).join("_");
-		const idFiltered = filteredList.map((l) => l.position).join("_");
-		if (idList != idFiltered) setList(filteredList);
-	}, [list, filteredList]);
+	if (!hasAccount) {
+		return (
+			<AppEmptyState
+				title="Connect your wallet to view your portfolio."
+				description="You will see borrowing positions, repayment information, maturity dates, and challenge status here."
+				actionLabel="Connect wallet"
+				actionHref="#"
+			/>
+		);
+	}
 
-	const handleTabOnChange = function (e: string) {
-		if (tab === e) {
-			setReverse(!reverse);
-		} else {
-			if (e === headers[1]) setReverse(true);
-			else setReverse(false);
-
-			setTab(e);
-		}
-	};
-
-	const handleDownloadCalendar = () => {
-		if (list.length === 0) return;
-		downloadCalendarFile(generateExpirationCalendar(list, account));
-	};
-
-	const handleGoogleCalendar = () => {
-		const activePositions = list.filter((p) => !p.closed && !p.denied);
-		if (activePositions.length === 0) return;
-		// Pick the position with the soonest expiration
-		const soonest = activePositions.slice().sort((a, b) => a.expiration - b.expiration)[0];
-		window.open(generateGoogleCalendarUrl(soonest), "_blank");
-	};
+	if (rows.length === 0) {
+		return (
+			<AppEmptyState
+				title={isPublicView ? "No borrowing positions found for this address." : "No borrowing positions yet"}
+				description={
+					isPublicView
+						? "Make sure this is the borrower wallet address."
+						: "Open a borrowing position by choosing approved collateral and minting ZCHF."
+				}
+				actionLabel={isPublicView ? undefined : "Borrow ZCHF"}
+				actionHref={isPublicView ? undefined : "/mint"}
+			/>
+		);
+	}
 
 	return (
-		<>
-			<Table>
-				<TableHeadSearchable
-					headers={headers}
-					subHeaders={subHeaders}
-					tab={tab}
-					reverse={reverse}
-					tabOnChange={handleTabOnChange}
-					actionCol
-					searchPlaceholder="Search Positions"
-					searchValue={searchQuery}
-					onSearchChange={setSearchQuery}
-					hideMyWallet
-					inMyWallet={false}
-					onInMyWalletChange={() => {}}
-					filterOptions={FILTER_OPTIONS}
-					activeFilters={activeCategories}
-					onFiltersChange={setActiveCategories}
-				/>
-				<TableBody>
-					{list.length == 0 ? (
-						<TableRowEmpty>{"You do not have any positions yet."}</TableRowEmpty>
-					) : (
-						list.map((pos) => (
-							<MypositionsRow headers={headers} subHeaders={subHeaders} tab={tab} position={pos} key={pos.position} />
-						))
-					)}
-				</TableBody>
-			</Table>
-			{list.length > 0 && (
-				<div className="mb-4 flex justify-end gap-2">
-					<button
-						onClick={handleGoogleCalendar}
-						className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors"
-						title="Add expiration reminder to Google Calendar"
-					>
-						<FontAwesomeIcon icon={faCalendarPlus} className="mr-2" />
-						Add to Google Calendar
-					</button>
-					<button
-						onClick={handleDownloadCalendar}
-						className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors"
-						title="Download expiration alerts calendar"
-					>
-						<FontAwesomeIcon icon={faCalendarDays} className="mr-2" />
-						Download Calendar
-					</button>
+		<div className="space-y-4">
+			<div className="hidden overflow-hidden rounded-xl border border-[#e0d4bd] bg-card-content-secondary shadow-sm dark:border-menu-separator lg:block">
+				<div className="grid grid-cols-[1.15fr_1.05fr_1.1fr_0.75fr_0.7fr_0.55fr] gap-4 border-b border-[#eadfcd] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-secondary dark:border-menu-separator">
+					<div>Collateral</div>
+					<div>Borrowed</div>
+					<div>Risk</div>
+					<div>Maturity</div>
+					<div>Status</div>
+					<div className="text-right">Actions</div>
 				</div>
-			)}
-		</>
+				{rows.map((row) => (
+					<PositionDesktopRow
+						key={row.position.position}
+						row={row}
+						onManage={() => router.push(`/mypositions/${row.position.position}`)}
+					/>
+				))}
+			</div>
+
+			<div className="space-y-3 lg:hidden">
+				{rows.map((row) => (
+					<PositionMobileCard
+						key={row.position.position}
+						row={row}
+						onManage={() => router.push(`/mypositions/${row.position.position}`)}
+					/>
+				))}
+			</div>
+		</div>
 	);
 }
 
-type SortPositions = {
-	positions: PositionQuery[];
-	challenges: ChallengesPositionsMapping;
-	prices: PriceQueryObjectArray;
-	headers: string[];
-	tab: string;
-	reverse: boolean;
-};
-
-enum PositionState {
-	Closed,
-	Open,
-	Cooldown,
-	New,
-	Expiring,
-	Challenged,
-	Expired,
+function PositionDesktopRow({ row, onManage }: { row: PositionViewModel; onManage: () => void }) {
+	return (
+		<div className="grid grid-cols-[1.15fr_1.05fr_1.1fr_0.75fr_0.7fr_0.55fr] gap-4 border-b border-[#eadfcd] px-4 py-4 text-sm last:border-b-0 dark:border-menu-separator">
+			<CollateralCell row={row} />
+			<BorrowedCell row={row} />
+			<RiskCell row={row} />
+			<div className="font-medium text-text-primary">{row.maturity}</div>
+			<div>
+				<StatusPill status={row.status} />
+			</div>
+			<div className="flex justify-end">
+				<AppButton size="small" width="w-auto" className="min-h-[36px] px-4" onClick={onManage}>
+					Manage
+				</AppButton>
+			</div>
+		</div>
+	);
 }
 
-function sortPositions(params: SortPositions): PositionQuery[] {
-	const { positions, challenges, prices, headers, tab, reverse } = params;
-	let sortingList = [...positions]; // make it writeable
+function PositionMobileCard({ row, onManage }: { row: PositionViewModel; onManage: () => void }) {
+	return (
+		<article className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary p-4 shadow-sm dark:border-menu-separator">
+			<div className="flex items-start justify-between gap-3">
+				<CollateralCell row={row} />
+				<StatusPill status={row.status} />
+			</div>
+			<div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+				<BorrowedCell row={row} />
+				<RiskCell row={row} />
+				<div>
+					<div className="text-xs text-text-secondary">Maturity</div>
+					<div className="font-semibold text-text-primary">{row.maturity}</div>
+				</div>
+			</div>
+			<AppButton size="small" width="w-full" className="mt-4 min-h-[42px]" onClick={onManage}>
+				Manage
+			</AppButton>
+		</article>
+	);
+}
 
-	if (tab === headers[0]) {
-		// sort for Collateral Value
-		sortingList.sort((a, b) => {
-			const calc = function (p: PositionQuery) {
-				const size: number = parseFloat(formatUnits(BigInt(p.collateralBalance), p.collateralDecimals));
-				const price: number = prices[normalizeAddress(p.collateral)]?.price?.chf || 1;
-				return size * price;
-			};
-			return calc(b) - calc(a);
-		});
-	} else if (tab === headers[1]) {
-		// sort for coll.
-		sortingList.sort((a, b) => {
-			const calc = function (p: PositionQuery) {
-				const liqPrice: number = parseFloat(formatUnits(BigInt(p.price), 36 - p.collateralDecimals));
-				const price: number = prices[normalizeAddress(p.collateral)]?.price?.chf || 1;
-				return price / liqPrice;
-			};
-			return calc(b) - calc(a);
-		});
-	} else if (tab === headers[2]) {
-		// sort for minted
-		sortingList.sort((a, b) => {
-			return parseInt(b.minted) - parseInt(a.minted);
-		});
-	} else if (tab === headers[3]) {
-		// sort first for time left
-		sortingList.sort((a, b) => b.expiration - a.expiration);
+function CollateralCell({ row }: { row: PositionViewModel }) {
+	return (
+		<div className="flex min-w-0 items-start gap-3">
+			<TokenLogo currency={row.position.collateralSymbol} size={7} />
+			<div className="min-w-0">
+				<div className="font-semibold text-text-primary">{row.position.collateralName}</div>
+				<div className="text-sm text-text-secondary">
+					{formatCurrency(row.collateralAmount, 2, 2)} {row.position.collateralSymbol} deposited
+				</div>
+				{row.collateralValue !== undefined ? (
+					<div className="text-xs text-text-secondary">Value: {formatCurrency(row.collateralValue, 2, 2)} ZCHF</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
 
-		// sort for state
-		sortingList.sort((a, b) => {
-			const calc = function (p: PositionQuery): number {
-				const pid: Address = normalizeAddress(p.position);
-				const cPos = challenges[pid] ?? [];
-				const cPosActive = cPos.filter((c) => c.status == "Active") ?? [];
-				const maturity: number = (p.expiration * 1000 - Date.now()) / 1000 / 60 / 60 / 24;
+function BorrowedCell({ row }: { row: PositionViewModel }) {
+	return (
+		<div className="space-y-1">
+			<MiniMetric label="Total position size" value={`${formatCurrency(row.borrowed, 2, 2)} ZCHF`} />
+			<MiniMetric label="Repay from wallet" value={`${formatCurrency(row.repayFromWallet, 2, 2)} ZCHF`} />
+			{row.available !== undefined ? (
+				<MiniMetric label="Available" value={`${formatCurrency(row.available, 2, 2)} ZCHF`} muted />
+			) : null}
+		</div>
+	);
+}
 
-				if (p.closed || p.denied) {
-					return PositionState.Closed;
-				} else if (cPosActive.length > 0) {
-					return PositionState.Challenged;
-				} else if (p.start * 1000 > Date.now()) {
-					return PositionState.New;
-				} else if (p.cooldown * 1000 > Date.now()) {
-					return PositionState.Cooldown;
-				} else if (maturity < 7) {
-					if (maturity > 0) return PositionState.Expiring;
-					else return PositionState.Expired;
-				} else {
-					return PositionState.Open;
-				}
-			};
-			return calc(b) - calc(a);
-		});
-	}
+function RiskCell({ row }: { row: PositionViewModel }) {
+	return (
+		<div className="space-y-1">
+			{row.loanToValue !== undefined ? (
+				<MiniMetric label="Loan-to-Value" value={`${formatCurrency(row.loanToValue, 2, 2)}%`} />
+			) : null}
+			<MiniMetric label="Liquidation price" value={`${formatCurrency(row.liquidationPrice, 2, 2)} ZCHF`} />
+			{row.safetyBuffer !== undefined ? (
+				<MiniMetric label="Safety buffer" value={`${formatCurrency(row.safetyBuffer, 2, 2)}%`} />
+			) : null}
+		</div>
+	);
+}
 
-	return reverse ? sortingList.reverse() : sortingList;
+function MiniMetric({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+	return (
+		<div>
+			<div className="text-xs text-text-secondary">{label}</div>
+			<div className={`font-semibold ${muted ? "text-text-secondary" : "text-text-primary"}`}>{value}</div>
+		</div>
+	);
+}
+
+function StatusPill({ status }: { status: PositionViewModel["status"] }) {
+	const className =
+		status === "Challenged"
+			? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+			: status === "Matured"
+			? "border-[#d7c28a] bg-[#f7ecd2] text-[#80601d] dark:border-[#8a7448] dark:bg-[#242b38] dark:text-[#e5c978]"
+			: status === "Not loaded"
+			? "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-300"
+			: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300";
+	return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>{status}</span>;
+}
+
+function buildPositionView(
+	position: PositionQuery,
+	challenges: ChallengesPositionsMapping,
+	challengesLoaded: boolean,
+	prices: PriceQueryObjectArray
+): PositionViewModel {
+	const collTokenPrice = prices[normalizeAddress(position.collateral)]?.price?.usd;
+	const zchfPrice = prices[normalizeAddress(position.zchf)]?.price?.usd;
+	const collateralAmount = parseFloat(formatUnits(BigInt(position.collateralBalance), position.collateralDecimals));
+	const borrowed = parseFloat(formatUnits(BigInt(position.minted), position.zchfDecimals));
+	const reserve = (BigInt(position.minted) * BigInt(position.reserveContribution)) / 1_000_000n;
+	const repayFromWallet = parseFloat(formatUnits(BigInt(position.minted) - reserve, position.zchfDecimals));
+	const liquidationPrice = parseFloat(formatUnits(BigInt(position.price), 36 - position.collateralDecimals));
+	const available =
+		position.version === 2
+			? parseFloat(formatUnits(BigInt(position.availableForMinting), 18))
+			: parseFloat(formatUnits(BigInt(position.availableForClones), 18));
+	const collateralValue = collTokenPrice && zchfPrice ? (collateralAmount * collTokenPrice) / zchfPrice : undefined;
+	const loanToValue = collateralValue && collateralValue > 0 ? (borrowed / collateralValue) * 100 : undefined;
+	const safetyBuffer = loanToValue !== undefined ? Math.max(0, 100 - loanToValue) : undefined;
+	const activeChallenges = (challenges[normalizeAddress(position.position)] ?? []).filter((challenge) => challenge.status === "Active");
+	const isMatured = position.expiration * 1000 < Date.now();
+
+	return {
+		position,
+		collateralAmount,
+		collateralValue,
+		borrowed,
+		repayFromWallet,
+		available,
+		liquidationPrice,
+		loanToValue,
+		safetyBuffer,
+		maturity: formatMaturity(position.expiration),
+		status: activeChallenges.length > 0 ? "Challenged" : !challengesLoaded ? "Not loaded" : isMatured ? "Matured" : "Healthy",
+	};
+}
+
+function formatMaturity(timestamp: number) {
+	return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(timestamp * 1000));
 }
