@@ -15,6 +15,7 @@ import { RootState } from "../redux/redux.store";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Address, formatUnits, zeroAddress } from "viem";
 import { useServiceStatus } from "../hooks/useServiceStatus";
+import { useBorrowingOverview } from "../hooks/useBorrowingOverview";
 import { SavingsBalance } from "@frankencoin/api";
 import { arbitrum, avalanche, base, gnosis, mainnet, optimism, polygon, sonic } from "viem/chains";
 import { useRouter } from "next/router";
@@ -51,6 +52,7 @@ export default function MainPage() {
 	const chainId = useChainId();
 	const chain = getChain(chainId as ChainId);
 	const { openPositions } = useSelector((state: RootState) => state.positions);
+	const borrowingOverview = useBorrowingOverview();
 	const { savingsLoaded, savingsBalance } = useSelector((state: RootState) => state.savings);
 	const serviceStatus = useServiceStatus();
 
@@ -503,6 +505,27 @@ export default function MainPage() {
 					message="ZCHF is Frankencoin's Swiss-franc stablecoin. Use this desk to get ZCHF, earn protocol interest, borrow against collateral, invest in FPS, and manage your account."
 				/>
 			</AppPageHeader>
+
+			{isConnected && address && !borrowingOverview.isLoading && borrowingOverview.hasActiveChallenge ? (
+				<section className="rounded-2xl border border-amber-200 bg-[#fffaf0] p-5 text-slate-800 shadow-sm dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
+					<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+						<div>
+							<h2 className="text-lg font-semibold">Position needs attention</h2>
+							<p className="mt-1 text-sm leading-6">
+								One or more borrowing positions are currently challenged. Review the position before the challenge period ends.
+							</p>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							<AppButton to="/mypositions" width="w-auto" className="min-h-[42px] px-4">
+								Open Portfolio
+							</AppButton>
+							<AppButton to="/mypositions" width="w-auto" className="min-h-[42px] px-4">
+								Borrowing positions
+							</AppButton>
+						</div>
+					</div>
+				</section>
+			) : null}
 
 			<section className="relative overflow-hidden rounded-2xl border border-[#dfd2bb] bg-[#fffaf0] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 				<div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:radial-gradient(#0b1f3a_0.7px,transparent_0.7px)] [background-size:6px_6px] dark:opacity-[0.04]" />
