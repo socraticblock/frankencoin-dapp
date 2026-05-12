@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { formatUnits, maxUint256, erc20Abi, Address, parseEther, parseUnits } from "viem";
+import { formatUnits, maxUint256, erc20Abi, Address, parseEther, parseUnits, isAddress } from "viem";
 import Head from "next/head";
 import TokenInput from "@components/Input/TokenInput";
 import {
@@ -21,7 +21,8 @@ import { toast } from "react-toastify";
 import { TxToast, renderErrorTxToast, renderErrorTxToastDecode } from "@components/TxToast";
 import { WAGMI_CONFIG } from "../../../app.config";
 import { useSelector } from "react-redux";
-import { RootState } from "../../../redux/redux.store";
+import { RootState, store } from "../../../redux/redux.store";
+import { fetchPositionsList } from "../../../redux/slices/positions.slice";
 import { PositionQuery } from "@frankencoin/api";
 import { ADDRESS, PositionV1ABI, PositionV2ABI } from "@frankencoin/zchf";
 import AppTitle from "@components/AppTitle";
@@ -50,31 +51,40 @@ export default function PositionAdjust() {
 	const router = useRouter();
 	const chainId = mainnet.id;
 
-	const addressQuery: Address = router.query.address as Address;
-
+	const addressQuery = typeof router.query.address === "string" ? router.query.address : undefined;
+	const normalizedQuery = safeNormalizeAddress(addressQuery);
 	const positions = useSelector((state: RootState) => state.positions.list.list);
-	const position = positions.find((p) => p.position == addressQuery) as PositionQuery;
+	const positionsLoaded = useSelector((state: RootState) => state.positions.loaded);
+	const matchedPosition = normalizedQuery
+		? (positions.find((p) => safeNormalizeAddress(p.position) === normalizedQuery) as PositionQuery | undefined)
+		: undefined;
 
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
 
-	const [amount, setAmount] = useState<bigint>(BigInt(position?.minted ?? 0n));
-	const [collateralAmount, setCollateralAmount] = useState<bigint>(BigInt(position?.collateralBalance ?? 0n));
-	const [liqPrice, setLiqPrice] = useState<bigint>(BigInt(position?.price ?? 0n));
+	const [amount, setAmount] = useState<bigint>(BigInt(matchedPosition?.minted ?? 0n));
+	const [collateralAmount, setCollateralAmount] = useState<bigint>(BigInt(matchedPosition?.collateralBalance ?? 0n));
+	const [liqPrice, setLiqPrice] = useState<bigint>(BigInt(matchedPosition?.price ?? 0n));
 
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
-		if (position != undefined && amount == 0n && collateralAmount == 0n && liqPrice == 0n) {
-			setAmount(BigInt(position.minted));
-			setCollateralAmount(BigInt(position.collateralBalance));
-			setLiqPrice(BigInt(position.price));
+		if (!positionsLoaded) {
+			store.dispatch(fetchPositionsList());
 		}
-	}, [position, amount, collateralAmount, liqPrice]);
+	}, [positionsLoaded]);
+
+	useEffect(() => {
+		if (matchedPosition != undefined && amount == 0n && collateralAmount == 0n && liqPrice == 0n) {
+			setAmount(BigInt(matchedPosition.minted));
+			setCollateralAmount(BigInt(matchedPosition.collateralBalance));
+			setLiqPrice(BigInt(matchedPosition.price));
+		}
+	}, [matchedPosition, amount, collateralAmount, liqPrice]);
 
 	useEffect(() => {
 		const acc: Address | undefined = account.address;
 		const fc: Address = ADDRESS[mainnet.id].frankencoin;
-		if (!position || !position.collateral) return;
+		if (!matchedPosition || !matchedPosition.collateral) return;
 
 		const fetchAsync = async function () {
 			if (acc !== undefined) {
@@ -88,7 +98,7 @@ export default function PositionAdjust() {
 				setUserFrancBalance(_balanceFranc);
 
 				const _balanceColl = await readContract(WAGMI_CONFIG, {
-					address: position.collateral,
+					address: matchedPosition.collateral,
 					chainId,
 					abi: erc20Abi,
 					functionName: "balanceOf",
@@ -97,29 +107,34 @@ export default function PositionAdjust() {
 				setUserCollBalance(_balanceColl);
 
 				const _allowanceColl = await readContract(WAGMI_CONFIG, {
-					address: position.collateral,
+					address: matchedPosition.collateral,
 					chainId,
 					abi: erc20Abi,
 					functionName: "allowance",
-					args: [acc, position.position],
+					args: [acc, matchedPosition.position],
 				});
 				setUserCollAllowance(_allowanceColl);
 			}
 
 			const _balanceChallenge = await readContract(WAGMI_CONFIG, {
-				address: position.position,
+				address: matchedPosition.position,
 				chainId,
-				abi: position.version === 1 ? PositionV1ABI : PositionV2ABI,
+				abi: matchedPosition.version === 1 ? PositionV1ABI : PositionV2ABI,
 				functionName: "challengedAmount",
 			});
 			setChallengeSize(_balanceChallenge);
 		};
 
 		fetchAsync();
-	}, [data, account.address, position, chainId]);
+	}, [data, account.address, matchedPosition, chainId]);
 
 	// ---------------------------------------------------------------------------
-	if (!position) return <MyPositionsNotFound query={addressQuery} />;
+	if (!router.isReady) return <AppCard>Loading position...</AppCard>;
+	if (!normalizedQuery) return <AppCard>Invalid position address.</AppCard>;
+	if (!positionsLoaded) return <AppCard>Loading position...</AppCard>;
+	if (!matchedPosition) return <MyPositionsNotFound query={addressQuery ?? normalizedQuery} />;
+
+	const position = matchedPosition;
 
 	const priceQuery = prices[normalizeAddress(position.collateral)];
 	if (!priceQuery) return <AppCard>Market Price of position not found</AppCard>;
@@ -640,4 +655,14 @@ export default function PositionAdjust() {
 			)}
 		</>
 	);
+}
+
+function safeNormalizeAddress(address?: string): Address | undefined {
+	if (!address || !isAddress(address)) return undefined;
+
+	try {
+		return normalizeAddress(address);
+	} catch {
+		return undefined;
+	}
 }
