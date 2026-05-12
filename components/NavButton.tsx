@@ -9,7 +9,7 @@ interface Props {
 
 export default function NavButton({ to, name, external }: Props) {
 	const router = useRouter();
-	const active = router.pathname.includes(to);
+	const active = to === "/" ? router.pathname === "/" : router.pathname.includes(to);
 	const umamiEvent = "nav_" + name.toLowerCase().replace(/\s+/g, "_");
 	return (
 		<Link

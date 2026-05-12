@@ -8,6 +8,7 @@ import ThemeToggle from "./ThemeToggle";
 import useThemeMode from "../hooks/useThemeMode";
 
 const MAIN_ITEMS = [
+	{ to: "/", name: "Home" },
 	{ to: "/mint", name: "Borrow" },
 	{ to: "/savings", name: "Earn" },
 	{ to: "/equity", name: "Invest" },
@@ -84,15 +85,43 @@ export function NavItems({ items }: { items: typeof MAIN_ITEMS }) {
 
 export default function Navbar() {
 	const [isNavBarOpen, setIsNavBarOpen] = useState(false);
+	const [isHidden, setIsHidden] = useState(false);
+	const lastScrollY = useRef(0);
 	const { theme, toggleTheme } = useThemeMode();
 
 	let mainItems = MAIN_ITEMS;
 
 	let allItems = [...mainItems, ...MORE_ITEMS];
 
+	useEffect(() => {
+		const handleScroll = () => {
+			const currentScrollY = window.scrollY;
+			const scrollingDown = currentScrollY > lastScrollY.current;
+			const scrollingUp = currentScrollY < lastScrollY.current;
+
+			if (currentScrollY < 12 || isNavBarOpen) {
+				setIsHidden(false);
+			} else if (scrollingDown && currentScrollY > 80) {
+				setIsHidden(true);
+			} else if (scrollingUp) {
+				setIsHidden(false);
+			}
+
+			lastScrollY.current = currentScrollY;
+		};
+
+		lastScrollY.current = window.scrollY;
+		window.addEventListener("scroll", handleScroll, { passive: true });
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, [isNavBarOpen]);
+
 	return (
 		<>
-			<div className="fixed top-0 left-0 right-0 z-10 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80">
+			<div
+				className={`fixed top-0 left-0 right-0 z-10 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${
+					isHidden ? "-translate-y-full" : "translate-y-0"
+				}`}
+			>
 				<header className="grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
 					{/* Left: logo */}
 					<div className="flex items-center md:pl-4">
