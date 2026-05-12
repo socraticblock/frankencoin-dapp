@@ -75,8 +75,8 @@ export function usePortfolioOverview(): PortfolioOverview {
 	let totalReserves = 0n;
 
 	for (const p of matchingPositions) {
-		const minted = BigInt(p.minted);
-		const reserve = BigInt(p.reserveContribution);
+		const minted = safeBigInt(p.minted);
+		const reserve = safeBigInt(p.reserveContribution);
 		totalMinted += minted;
 		totalReserves += (minted * reserve) / 1_000_000n;
 	}
@@ -104,6 +104,17 @@ function countActiveChallenges(positionIds: Address[], challenges: ChallengesPos
 		const active = (challenges[positionId] ?? []).filter((challenge) => challenge.status === "Active");
 		return count + active.length;
 	}, 0);
+}
+
+function safeBigInt(value: unknown, fallback = 0n) {
+	try {
+		if (typeof value === "bigint") return value;
+		if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+		if (typeof value === "string" && value.trim() !== "") return BigInt(value);
+		return fallback;
+	} catch {
+		return fallback;
+	}
 }
 
 function OverviewCard({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "warning" }) {

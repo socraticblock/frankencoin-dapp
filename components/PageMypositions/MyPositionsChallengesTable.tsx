@@ -106,8 +106,12 @@ function sortChallenges(params: SortChallenges): ChallengesQueryItem[] {
 		challenges.sort((a, b) => {
 			const calc = function (c: ChallengesQueryItem) {
 				const pos: PositionQuery = positions[normalizeAddress(c.position)];
-				const size: number = parseFloat(formatUnits(c.size, pos.collateralDecimals));
-				return size;
+				if (!pos) return 0;
+				try {
+					return parseFloat(formatUnits(safeBigInt(c.size), safeDecimals(pos.collateralDecimals)));
+				} catch {
+					return 0;
+				}
 			};
 			return calc(b) - calc(a);
 		});
@@ -122,4 +126,20 @@ function sortChallenges(params: SortChallenges): ChallengesQueryItem[] {
 	}
 
 	return reverse ? challenges.reverse() : challenges;
+}
+
+function safeBigInt(value: unknown, fallback = 0n) {
+	try {
+		if (typeof value === "bigint") return value;
+		if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+		if (typeof value === "string" && value.trim() !== "") return BigInt(value);
+		return fallback;
+	} catch {
+		return fallback;
+	}
+}
+
+function safeDecimals(value: unknown, fallback = 18) {
+	const parsed = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	return Math.min(36, Math.max(0, Math.trunc(parsed)));
 }

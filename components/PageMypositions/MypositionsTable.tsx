@@ -11,12 +11,15 @@ import { RootState } from "../../redux/redux.store";
 
 type PositionViewModel = {
 	position: PositionQuery;
+	positionAddress: Address;
+	collateralName: string;
+	collateralSymbol: string;
 	collateralAmount: number;
 	collateralValue?: number;
 	borrowed: number;
 	repayFromWallet: number;
 	available?: number;
-	liquidationPrice: number;
+	liquidationPrice?: number;
 	loanToValue?: number;
 	safetyBuffer?: number;
 	maturity: string;
@@ -83,9 +86,9 @@ export default function MypositionsTable() {
 				</div>
 				{rows.map((row) => (
 					<PositionDesktopRow
-						key={row.position.position}
+						key={row.positionAddress}
 						row={row}
-						onManage={() => router.push(`/mypositions/${row.position.position}`)}
+						onManage={() => router.push(`/mypositions/${row.positionAddress}`)}
 					/>
 				))}
 			</div>
@@ -93,9 +96,9 @@ export default function MypositionsTable() {
 			<div className="space-y-3 lg:hidden">
 				{rows.map((row) => (
 					<PositionMobileCard
-						key={row.position.position}
+						key={row.positionAddress}
 						row={row}
-						onManage={() => router.push(`/mypositions/${row.position.position}`)}
+						onManage={() => router.push(`/mypositions/${row.positionAddress}`)}
 					/>
 				))}
 			</div>
@@ -147,11 +150,11 @@ function PositionMobileCard({ row, onManage }: { row: PositionViewModel; onManag
 function CollateralCell({ row }: { row: PositionViewModel }) {
 	return (
 		<div className="flex min-w-0 items-start gap-3">
-			<TokenLogo currency={row.position.collateralSymbol} size={7} />
+			<TokenLogo currency={row.collateralSymbol} size={7} />
 			<div className="min-w-0">
-				<div className="font-semibold text-text-primary">{row.position.collateralName}</div>
+				<div className="font-semibold text-text-primary">{row.collateralName}</div>
 				<div className="text-sm text-text-secondary">
-					{formatCurrency(row.collateralAmount, 2, 2)} {row.position.collateralSymbol} deposited
+					{formatCurrency(row.collateralAmount, 2, 2)} {row.collateralSymbol} deposited
 				</div>
 				{row.collateralValue !== undefined ? (
 					<div className="text-xs text-text-secondary">Value: {formatCurrency(row.collateralValue, 2, 2)} ZCHF</div>
@@ -179,7 +182,11 @@ function RiskCell({ row }: { row: PositionViewModel }) {
 			{row.loanToValue !== undefined ? (
 				<MiniMetric label="Estimated Loan-to-Value" value={`${formatCurrency(row.loanToValue, 2, 2)}%`} />
 			) : null}
-			<MiniMetric label="Liquidation price" value={`${formatCurrency(row.liquidationPrice, 2, 2)} ZCHF`} />
+			<MiniMetric
+				label="Liquidation price"
+				value={row.liquidationPrice !== undefined ? `${formatCurrency(row.liquidationPrice, 2, 2)} ZCHF` : "Unavailable"}
+				muted={row.liquidationPrice === undefined}
+			/>
 			{row.safetyBuffer !== undefined ? (
 				<MiniMetric label="Estimated safety buffer" value={`${formatCurrency(row.safetyBuffer, 2, 2)}%`} />
 			) : null}
@@ -214,25 +221,37 @@ function buildPositionView(
 	challengesLoaded: boolean,
 	prices: PriceQueryObjectArray
 ): PositionViewModel {
-	const collTokenPrice = prices[normalizeAddress(position.collateral)]?.price?.usd;
-	const zchfPrice = prices[normalizeAddress(position.zchf)]?.price?.usd;
-	const collateralAmount = parseFloat(formatUnits(BigInt(position.collateralBalance), position.collateralDecimals));
-	const borrowed = parseFloat(formatUnits(BigInt(position.minted), position.zchfDecimals));
-	const reserve = (BigInt(position.minted) * BigInt(position.reserveContribution)) / 1_000_000n;
-	const repayFromWallet = parseFloat(formatUnits(BigInt(position.minted) - reserve, position.zchfDecimals));
-	const liquidationPrice = parseFloat(formatUnits(BigInt(position.price), 36 - position.collateralDecimals));
-	const available =
-		position.version === 2
-			? parseFloat(formatUnits(BigInt(position.availableForMinting), 18))
-			: parseFloat(formatUnits(BigInt(position.availableForClones), 18));
+	const collateralAddress = safeNormalizeAddress(position.collateral);
+	const zchfAddress = safeNormalizeAddress(position.zchf);
+	const positionAddress = safeNormalizeAddress(position.position);
+	const collateralDecimals = safeDecimals(position.collateralDecimals);
+	const zchfDecimals = safeDecimals(position.zchfDecimals);
+	const collTokenPrice = collateralAddress ? prices[collateralAddress]?.price?.usd : undefined;
+	const zchfPrice = zchfAddress ? prices[zchfAddress]?.price?.usd : undefined;
+	const minted = safeBigInt(position.minted);
+	const collateralAmount = safeFormatUnits(position.collateralBalance, collateralDecimals, 0);
+	const borrowed = safeFormatUnits(minted, zchfDecimals, 0);
+	const reserve = (minted * safeBigInt(position.reserveContribution)) / 1_000_000n;
+	const repayFromWallet = safeFormatUnits(minted - reserve, zchfDecimals, 0);
+	const rawLiquidationPrice = safeFormatUnits(position.price, 36 - collateralDecimals, Number.NaN);
+	const liquidationPrice = Number.isFinite(rawLiquidationPrice) ? rawLiquidationPrice : undefined;
+	const available = safeFormatUnits(
+		position.version === 2 ? (position as { availableForMinting?: unknown }).availableForMinting : position.availableForClones,
+		18,
+		0
+	);
 	const collateralValue = collTokenPrice && zchfPrice ? (collateralAmount * collTokenPrice) / zchfPrice : undefined;
 	const loanToValue = collateralValue && collateralValue > 0 ? (borrowed / collateralValue) * 100 : undefined;
 	const safetyBuffer = loanToValue !== undefined ? Math.max(0, 100 - loanToValue) : undefined;
-	const activeChallenges = (challenges[normalizeAddress(position.position)] ?? []).filter((challenge) => challenge.status === "Active");
-	const isMatured = position.expiration * 1000 < Date.now();
+	const activeChallenges = positionAddress ? (challenges[positionAddress] ?? []).filter((challenge) => challenge.status === "Active") : [];
+	const expiration = safeNumber(position.expiration);
+	const isMatured = expiration !== undefined && expiration * 1000 < Date.now();
 
 	return {
 		position,
+		positionAddress: positionAddress ?? zeroAddress,
+		collateralName: safeText(position.collateralName, "Collateral"),
+		collateralSymbol: safeText(position.collateralSymbol, "TOKEN"),
 		collateralAmount,
 		collateralValue,
 		borrowed,
@@ -241,9 +260,51 @@ function buildPositionView(
 		liquidationPrice,
 		loanToValue,
 		safetyBuffer,
-		maturity: formatMaturity(position.expiration),
+		maturity: expiration !== undefined ? formatMaturity(expiration) : "Unavailable",
 		status: activeChallenges.length > 0 ? "Challenged" : !challengesLoaded ? "Not loaded" : isMatured ? "Matured" : "Healthy",
 	};
+}
+
+function safeBigInt(value: unknown, fallback = 0n) {
+	try {
+		if (typeof value === "bigint") return value;
+		if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+		if (typeof value === "string" && value.trim() !== "") return BigInt(value);
+		return fallback;
+	} catch {
+		return fallback;
+	}
+}
+
+function safeNumber(value: unknown, fallback?: number) {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim() !== "") {
+		const parsed = Number(value);
+		if (Number.isFinite(parsed)) return parsed;
+	}
+	return fallback;
+}
+
+function safeDecimals(value: unknown, fallback = 18) {
+	const parsed = safeNumber(value, fallback) ?? fallback;
+	return Math.min(36, Math.max(0, Math.trunc(parsed)));
+}
+
+function safeFormatUnits(value: unknown, decimals: unknown, fallback: number) {
+	try {
+		return parseFloat(formatUnits(safeBigInt(value), safeDecimals(decimals)));
+	} catch {
+		return fallback;
+	}
+}
+
+function safeNormalizeAddress(value: unknown): Address | undefined {
+	if (typeof value !== "string" || value.trim() === "") return undefined;
+	return normalizeAddress(value);
+}
+
+function safeText(value: unknown, fallback: string) {
+	return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
 
 function formatMaturity(timestamp: number) {

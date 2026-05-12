@@ -21,7 +21,7 @@ export default function MyPositionsChallengesRow({ headers, tab, challenge }: Pr
 	const bids = useSelector((state: RootState) => state.bids.challenges.map[challenge.id] || []);
 
 	const position = positions.map[normalizeAddress(challenge.position)];
-	const url = useContractUrl(position.collateral || zeroAddress);
+	const url = useContractUrl(position?.collateral || zeroAddress);
 	if (!position) return null;
 
 	const collTokenPrice = prices[normalizeAddress(position.collateral)]?.price?.usd;
