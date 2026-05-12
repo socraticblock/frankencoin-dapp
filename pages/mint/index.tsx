@@ -42,7 +42,8 @@ const BORROW_STEPS = [
 ];
 
 export default function Borrow() {
-	const { address } = useConnection();
+	const { address, isConnected } = useConnection();
+	const hasWallet = Boolean(isConnected && address);
 	const overview = useBorrowingOverview();
 	const positions = useSelector((state: RootState) => state.positions.openPositions);
 	const challengesMap = useSelector((state: RootState) => state.challenges.positions.map);
@@ -90,38 +91,47 @@ export default function Borrow() {
 			<section className="mt-6">
 				<AppCard>
 					<h2 className="text-lg font-semibold text-text-primary">Your borrowing overview</h2>
-					<div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-						<AppBox>
-							<DisplayLabel label="Total owed" />
-							{overview.activePositionCount === 0 ? (
-								<DisplayOutputAlignedRight className="mt-1" output="0.00 ZCHF" />
-							) : (
-								<DisplayAmount
-									className="mt-1"
-									amount={overview.totalOwed}
-									currency="ZCHF"
-									address={ADDRESS[mainnet.id].frankencoin}
-									hideLogo
-								/>
-							)}
-						</AppBox>
-						<AppBox>
-							<DisplayLabel label="Active positions" />
-							<DisplayOutputAlignedRight
-								className="mt-1"
-								output={overview.activePositionCount === 0 ? "None" : String(overview.activePositionCount)}
-							/>
-						</AppBox>
-						<AppBox>
-							<DisplayLabel label="Challenge status" />
-							<DisplayOutputAlignedRight className="mt-1" output={challengeStatus} />
-						</AppBox>
-					</div>
-					<div className="mt-4 flex justify-center md:justify-start">
-						<Link href="/mypositions">
-							<AppButtonSecondary>Manage borrowing positions</AppButtonSecondary>
-						</Link>
-					</div>
+					{!hasWallet ? (
+						<div className="mt-3 rounded-xl border border-dashed border-menu-separator p-4 text-sm text-text-secondary">
+							<p className="font-medium text-text-primary">Connect wallet to view borrowing overview</p>
+							<p className="mt-2">Connect your wallet to see your borrowed ZCHF, active positions, and challenge status.</p>
+						</div>
+					) : (
+						<>
+							<div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+								<AppBox>
+									<DisplayLabel label="Total owed" />
+									{overview.activePositionCount === 0 ? (
+										<DisplayOutputAlignedRight className="mt-1" output="0.00 ZCHF" />
+									) : (
+										<DisplayAmount
+											className="mt-1"
+											amount={overview.totalOwed}
+											currency="ZCHF"
+											address={ADDRESS[mainnet.id].frankencoin}
+											hideLogo
+										/>
+									)}
+								</AppBox>
+								<AppBox>
+									<DisplayLabel label="Active positions" />
+									<DisplayOutputAlignedRight
+										className="mt-1"
+										output={overview.activePositionCount === 0 ? "None" : String(overview.activePositionCount)}
+									/>
+								</AppBox>
+								<AppBox>
+									<DisplayLabel label="Challenge status" />
+									<DisplayOutputAlignedRight className="mt-1" output={challengeStatus} />
+								</AppBox>
+							</div>
+							<div className="mt-4 flex justify-center md:justify-start">
+								<Link href="/mypositions">
+									<AppButtonSecondary>Manage borrowing positions</AppButtonSecondary>
+								</Link>
+							</div>
+						</>
+					)}
 				</AppCard>
 			</section>
 

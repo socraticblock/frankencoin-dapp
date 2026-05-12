@@ -8,7 +8,7 @@ import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
 import AppButtonSecondary from "@components/AppButtonSecondary";
 import { useAppKitNetwork } from "@reown/appkit/react";
-import { useChainId } from "wagmi";
+import { useChainId, useConnection } from "wagmi";
 import AppCard from "@components/AppCard";
 import AppBox from "@components/AppBox";
 import DisplayLabel from "@components/DisplayLabel";
@@ -58,6 +58,8 @@ function EducationItem({ title, children }: { title: string; children: React.Rea
 
 export default function Equity() {
 	const chainId = useChainId();
+	const { address, isConnected } = useConnection();
+	const hasWallet = Boolean(isConnected && address);
 	const appKitNetwork = useAppKitNetwork();
 	const poolStats = usePoolStats();
 	const redemptionLeft = getRemainingRedemptionDuration(poolStats.equityHoldingDuration, poolStats.equityCanRedeem);
@@ -102,79 +104,91 @@ export default function Equity() {
 						</p>
 					</div>
 
-					<div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-0">
-						<div className="md:pr-6">
-							<p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">Position</p>
-							<div>
-								<SummaryRow label="FPS balance">
-									<DisplayAmount
-										className="pt-0"
-										amount={poolStats.equityBalance}
-										currency="FPS"
-										address={ADDRESS[mainnet.id].equity}
-										hideLogo
-									/>
-								</SummaryRow>
-								<SummaryRow label="Value at protocol price">
-									<DisplayAmount
-										className="pt-0"
-										amount={positionValue}
-										currency="ZCHF"
-										address={ADDRESS[mainnet.id].frankencoin}
-										hideLogo
-									/>
-								</SummaryRow>
-								<SummaryRow label="Transfer / wrap / sell">
-									<span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-sm font-medium text-emerald-800 dark:text-emerald-200">
-										Available anytime
-									</span>
-								</SummaryRow>
-							</div>
-						</div>
-
-						<div className="border-t border-menu-separator pt-6 md:border-l md:border-t-0 md:pl-6 md:pt-0">
-							<p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">Direct redemption</p>
-							<p className="mb-3 text-xs leading-relaxed text-text-secondary">
-								Direct protocol redemption requires 90 days of average holding duration. Transfer, wrap, or sell remains available separately.
+					{!hasWallet ? (
+						<div className="rounded-xl border border-dashed border-menu-separator p-4 text-sm text-text-secondary">
+							<p className="font-medium text-text-primary">Connect wallet to view your FPS position.</p>
+							<p className="mt-2">
+								After connecting, you will see your FPS balance, value at protocol price, average holding duration, and direct
+								redemption readiness.
 							</p>
-							<div>
-								<SummaryRow label="Average holding duration">
-									<DisplayOutputAlignedRight className="pt-0" output={holdingDaysLabel} />
-								</SummaryRow>
-								<SummaryRow label="Direct redemption">
-									<span
-										className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${
-											poolStats.equityCanRedeem
-												? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-												: "bg-amber-500/15 text-amber-900 dark:text-amber-100"
-										}`}
-									>
-										{redemptionStatus}
-									</span>
-								</SummaryRow>
-							</div>
-							<div className="mt-4">
-								<div className="h-1.5 overflow-hidden rounded-full bg-card-content-primary">
-									<div
-										className={`h-full rounded-full ${poolStats.equityCanRedeem ? "bg-emerald-600/40" : "bg-amber-600/70"}`}
-										style={{ width: `${poolStats.equityCanRedeem ? 100 : progressPercent}%` }}
-									/>
-								</div>
-								{poolStats.equityCanRedeem ? null : (
-									<div className="mt-1.5 flex justify-between text-xs text-text-secondary">
-										<span>{holdingProgress}</span>
-										<span>90 days</span>
-									</div>
-								)}
-							</div>
 						</div>
-					</div>
+					) : (
+						<>
+							<div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-0">
+								<div className="md:pr-6">
+									<p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">Position</p>
+									<div>
+										<SummaryRow label="FPS balance">
+											<DisplayAmount
+												className="pt-0"
+												amount={poolStats.equityBalance}
+												currency="FPS"
+												address={ADDRESS[mainnet.id].equity}
+												hideLogo
+											/>
+										</SummaryRow>
+										<SummaryRow label="Value at protocol price">
+											<DisplayAmount
+												className="pt-0"
+												amount={positionValue}
+												currency="ZCHF"
+												address={ADDRESS[mainnet.id].frankencoin}
+												hideLogo
+											/>
+										</SummaryRow>
+										<SummaryRow label="Transfer / wrap / sell">
+											<span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-sm font-medium text-emerald-800 dark:text-emerald-200">
+												Available anytime
+											</span>
+										</SummaryRow>
+									</div>
+								</div>
 
-					<div className="mt-4 border-t border-menu-separator bg-card-content-primary/80 px-3 py-2.5 dark:bg-card-content-primary/40">
-						<p className="text-xs leading-relaxed text-text-secondary">
-							Value at protocol price is calculated by the Frankencoin equity contract. It may differ from prices on external markets.
-						</p>
-					</div>
+								<div className="border-t border-menu-separator pt-6 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+									<p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">Direct redemption</p>
+									<p className="mb-3 text-xs leading-relaxed text-text-secondary">
+										Direct protocol redemption requires 90 days of average holding duration. Transfer, wrap, or sell remains available separately.
+									</p>
+									<div>
+										<SummaryRow label="Average holding duration">
+											<DisplayOutputAlignedRight className="pt-0" output={holdingDaysLabel} />
+										</SummaryRow>
+										<SummaryRow label="Direct redemption">
+											<span
+												className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${
+													poolStats.equityCanRedeem
+														? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+														: "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+												}`}
+											>
+												{redemptionStatus}
+											</span>
+										</SummaryRow>
+									</div>
+									<div className="mt-4">
+										<div className="h-1.5 overflow-hidden rounded-full bg-card-content-primary">
+											<div
+												className={`h-full rounded-full ${poolStats.equityCanRedeem ? "bg-emerald-600/40" : "bg-amber-600/70"}`}
+												style={{ width: `${poolStats.equityCanRedeem ? 100 : progressPercent}%` }}
+											/>
+										</div>
+										{poolStats.equityCanRedeem ? null : (
+											<div className="mt-1.5 flex justify-between text-xs text-text-secondary">
+												<span>{holdingProgress}</span>
+												<span>90 days</span>
+											</div>
+										)}
+									</div>
+								</div>
+							</div>
+
+							<div className="mt-4 border-t border-menu-separator bg-card-content-primary/80 px-3 py-2.5 dark:bg-card-content-primary/40">
+								<p className="text-xs leading-relaxed text-text-secondary">
+									Value at protocol price is calculated by the Frankencoin equity contract. It may differ from prices on external markets.
+								</p>
+							</div>
+						</>
+					)}
 				</AppCard>
 			</section>
 

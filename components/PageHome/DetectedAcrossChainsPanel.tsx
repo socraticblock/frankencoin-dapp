@@ -47,6 +47,7 @@ type SavingsSort = "interest" | "balance";
 export default function DetectedAcrossChainsPanel({
 	rows,
 	currentChainId,
+	isConnected,
 	dataUnavailable,
 	borrowedZchf,
 	walletZchfComplete,
@@ -146,32 +147,34 @@ export default function DetectedAcrossChainsPanel({
 				{useLedgerLayout ? (
 					<div className="mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 						<div className="self-start">
-							<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
+							<SavingsGroup isConnected={isConnected} savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
 						</div>
 						<div className="space-y-4">
 							<WalletGroup
+								isConnected={isConnected}
 								walletRows={walletRows}
 								walletReadsLoading={walletReadsLoading}
 								walletReadFailures={walletReadFailures.length}
 								walletZchfComplete={walletZchfComplete}
 								onAction={onAction}
 							/>
-							<InvestmentsGroup fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
-							<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
+							<InvestmentsGroup isConnected={isConnected} fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
+							<BorrowingGroup isConnected={isConnected} hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
 						</div>
 					</div>
 				) : (
 					<div className="mt-5 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-						<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
+						<SavingsGroup isConnected={isConnected} savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
 						<WalletGroup
+							isConnected={isConnected}
 							walletRows={walletRows}
 							walletReadsLoading={walletReadsLoading}
 							walletReadFailures={walletReadFailures.length}
 							walletZchfComplete={walletZchfComplete}
 							onAction={onAction}
 						/>
-						<InvestmentsGroup fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
-						<BorrowingGroup hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
+						<InvestmentsGroup isConnected={isConnected} fpsRow={fpsRow} currentChainId={currentChainId} onAction={onAction} />
+						<BorrowingGroup isConnected={isConnected} hasBorrowing={hasBorrowing} borrowedZchf={borrowedZchf} currentChainId={currentChainId} onAction={onAction} />
 					</div>
 				)}
 			</section>
@@ -180,12 +183,14 @@ export default function DetectedAcrossChainsPanel({
 }
 
 function SavingsGroup({
+	isConnected,
 	savingsRows,
 	totalSavings,
 	interestSummary,
 	dataUnavailable,
 	onAction,
 }: {
+	isConnected: boolean;
 	savingsRows: ChainRow[];
 	totalSavings: number;
 	interestSummary: { label: string; value: string; positive: boolean };
@@ -215,19 +220,23 @@ function SavingsGroup({
 					))}
 				</div>
 			) : (
-				<EmptyAllocation copy={dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."} />
+				<EmptyAllocation
+					copy={!isConnected ? "Connect wallet to view savings." : dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."}
+				/>
 			)}
 		</AllocationGroup>
 	);
 }
 
 function WalletGroup({
+	isConnected,
 	walletRows,
 	walletReadsLoading,
 	walletReadFailures,
 	walletZchfComplete,
 	onAction,
 }: {
+	isConnected: boolean;
 	walletRows: ChainRow[];
 	walletReadsLoading: boolean;
 	walletReadFailures: number;
@@ -247,6 +256,8 @@ function WalletGroup({
 					copy={
 						walletReadsLoading
 							? "Wallet ZCHF is loading."
+							: !isConnected
+							? "Connect wallet to check ZCHF balances."
 							: walletReadFailures > 0
 							? "Some wallet balances could not be loaded."
 							: "No wallet ZCHF found across supported chains."
@@ -260,10 +271,12 @@ function WalletGroup({
 }
 
 function InvestmentsGroup({
+	isConnected,
 	fpsRow,
 	currentChainId,
 	onAction,
 }: {
+	isConnected: boolean;
 	fpsRow?: ChainRow;
 	currentChainId: ChainId;
 	onAction: (action: ChainAction) => void;
@@ -279,18 +292,20 @@ function InvestmentsGroup({
 					onAction={onAction}
 				/>
 			) : (
-				<EmptyAllocation copy="No FPS investment." />
+				<EmptyAllocation copy={isConnected ? "No FPS investment." : "Connect wallet to view FPS holdings."} />
 			)}
 		</AllocationGroup>
 	);
 }
 
 function BorrowingGroup({
+	isConnected,
 	hasBorrowing,
 	borrowedZchf,
 	currentChainId,
 	onAction,
 }: {
+	isConnected: boolean;
 	hasBorrowing: boolean;
 	borrowedZchf?: number | null;
 	currentChainId: ChainId;
@@ -306,7 +321,9 @@ function BorrowingGroup({
 					onAction={onAction}
 				/>
 			) : (
-				<EmptyAllocation copy={borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing."} />
+				<EmptyAllocation
+					copy={!isConnected ? "Connect wallet to view borrowing positions." : borrowedZchf === null ? "Borrowing data is loading." : "No active borrowing."}
+				/>
 			)}
 		</AllocationGroup>
 	);

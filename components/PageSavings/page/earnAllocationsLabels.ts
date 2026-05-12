@@ -14,6 +14,7 @@ export function pickerStateLabel(row: EarnChainRow): string {
 	const wallet = row.walletZchf ?? 0;
 	if (saving || interest) return "Already earning";
 	if (wallet > 0) return "Ready to start";
+	if (row.walletStatus === "unsupported") return "Connect wallet";
 	if (row.walletStatus === "loading") return "Loading…";
 	if (row.walletStatus === "error") return "Wallet balance unavailable";
 	return "No ZCHF in wallet";

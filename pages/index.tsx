@@ -118,7 +118,10 @@ export default function MainPage() {
 			const zchfAddress = getZchfAddress(chainKey);
 			if (!zchfAddress) return { chainId: chainKey, status: "unsupported", balance: null };
 			const result = walletZchfResults?.[resultIndex++] as { status?: string; result?: unknown; error?: unknown } | undefined;
-			if (!isConnected || !address || walletZchfLoading || !walletZchfResults) {
+			if (!isConnected || !address) {
+				return { chainId: chainKey, status: "unsupported", balance: null };
+			}
+			if (walletZchfLoading || !walletZchfResults) {
 				return { chainId: chainKey, status: "loading", balance: null };
 			}
 			if (walletZchfReadError || !result || result.status !== "success" || typeof result.result !== "bigint") {
@@ -341,6 +344,12 @@ export default function MainPage() {
 	}, [activeSavingsEntries, currentChainId, fpsHoldings]);
 
 	const suggestion = useMemo(() => {
+		if (!isConnected || !address) {
+			return {
+				message: "Connect your wallet to load your personal ZCHF Desk.",
+			};
+		}
+
 		if (!interestAggregate.loading && (interestAggregate.total ?? 0) > 0) {
 			const target =
 				[...liveInterestByChain.entries()]
@@ -378,22 +387,29 @@ export default function MainPage() {
 		return {
 			message: "Your Desk is ready. Use the overview and active allocations to continue.",
 		};
-	}, [currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, liveInterestByChain]);
+	}, [address, currentChainId, earnTargetChainId, fpsHoldings, hasBorrowing, interestAggregate, isConnected, liveInterestByChain]);
 
 	const cards = useMemo<CockpitCardProps[]>(() => {
+		const hasWallet = Boolean(isConnected && address);
 		const walletCopy =
-			totalWalletZchf !== null
+			!hasWallet
+				? "Connect wallet to check ZCHF balances."
+				: totalWalletZchf !== null
 				? `You have ${formatCurrency(totalWalletZchf, 2, 2)} ZCHF in your wallet.`
 				: hasWalletZchfErrors
 				? "Loaded wallet ZCHF is partial because some balances could not be loaded."
 				: "Wallet ZCHF is loading.";
 		const earningCopy =
-			totalSavings === null
+			!hasWallet
+				? "Connect wallet to view savings."
+				: totalSavings === null
 				? "Earning data is loading."
 				: totalSavings > 0
 				? `You have ${formatCurrency(totalSavings, 2, 2)} ZCHF earning.`
 				: "You are not earning on any ZCHF yet.";
-		const interestCopy = interestAggregate.loading
+		const interestCopy = !hasWallet
+			? undefined
+			: interestAggregate.loading
 			? "Interest data is loading."
 			: interestAggregate.errorNote
 				? interestAggregate.errorNote
@@ -401,13 +417,17 @@ export default function MainPage() {
 					? `${formatCurrency(interestAggregate.total, 2, 2)} ZCHF interest available.`
 					: undefined;
 		const fpsCopy =
-			fpsHoldings === null
+			!hasWallet
+				? "Connect wallet to view FPS holdings."
+				: fpsHoldings === null
 				? "FPS holdings are loading."
 				: fpsHoldings > 0
 				? `You have ${formatCurrency(fpsHoldings, 2, 2)} FPS invested.`
 				: "You have not invested in FPS yet.";
 		const borrowingCopy =
-			myBorrowedZchf === null
+			!hasWallet
+				? "Connect wallet to view borrowing positions."
+				: myBorrowedZchf === null
 				? "Borrowing data is loading."
 				: myBorrowedZchf > 0
 				? `You have borrowed ${formatCurrency(myBorrowedZchf, 2, 2)} ZCHF.`
@@ -452,7 +472,7 @@ export default function MainPage() {
 				title: "FPS",
 				copy: fpsCopy,
 				amount: fpsHoldings === null ? undefined : `${formatCurrency(fpsHoldings, 2, 2)} FPS`,
-				secondaryCopy: "FPS is managed on Ethereum mainnet.",
+				secondaryCopy: hasWallet ? "FPS is managed on Ethereum mainnet." : undefined,
 				help: "FPS is managed on Ethereum mainnet.",
 				iconLabel: "FPS",
 				action: {
@@ -481,12 +501,14 @@ export default function MainPage() {
 			},
 		];
 	}, [
+		address,
 		currentChainId,
 		earnTargetChainId,
 		fpsHoldings,
 		hasBorrowing,
 		hasWalletZchfErrors,
 		interestAggregate,
+		isConnected,
 		myBorrowedZchf,
 		totalSavings,
 		totalWalletZchf,

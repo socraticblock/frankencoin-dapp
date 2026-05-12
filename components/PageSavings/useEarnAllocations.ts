@@ -124,7 +124,10 @@ export function useEarnAllocations(accountOverride?: Address) {
 			const zchfAddress = getZchfAddress(chainKey);
 			if (!zchfAddress) return { chainId: chainKey, status: "unsupported" as const, balance: null as number | null };
 			const result = walletZchfResults?.[resultIndex++] as { status?: string; result?: unknown; error?: unknown } | undefined;
-			if (!isConnected || !account || account === zeroAddress || walletZchfLoading || !walletZchfResults) {
+			if (!isConnected || !account || account === zeroAddress) {
+				return { chainId: chainKey, status: "unsupported" as const, balance: null };
+			}
+			if (walletZchfLoading || !walletZchfResults) {
 				return { chainId: chainKey, status: "loading" as const, balance: null };
 			}
 			if (walletZchfReadError || !result || result.status !== "success" || typeof result.result !== "bigint") {
@@ -165,7 +168,7 @@ export function useEarnAllocations(accountOverride?: Address) {
 				walletStatus: walletEntry.status,
 				interestZchf:
 					live?.status === "ready" && live.interestZchf !== null ? live.interestZchf : live?.status === "ready" ? 0 : null,
-				interestStatus: live?.status ?? "loading",
+				interestStatus: !isConnected || account === zeroAddress ? "no_module" : live?.status ?? "loading",
 			};
 		});
 	}, [account, isConnected, liveInterestByChain, savingsEntries, savingsLoaded, supportedChains, walletZchfByChain]);
