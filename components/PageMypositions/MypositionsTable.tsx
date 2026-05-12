@@ -45,7 +45,9 @@ export default function MypositionsTable() {
 		return true;
 	});
 
-	const rows = matchingPositions.map((position) => buildPositionView(position, challenges, challengesLoaded, prices));
+	const rows = matchingPositions
+		.map((position) => buildPositionView(position, challenges, challengesLoaded, prices))
+		.filter((row): row is PositionViewModel => row !== null);
 
 	if (!hasAccount) {
 		return (
@@ -220,10 +222,12 @@ function buildPositionView(
 	challenges: ChallengesPositionsMapping,
 	challengesLoaded: boolean,
 	prices: PriceQueryObjectArray
-): PositionViewModel {
+): PositionViewModel | null {
 	const collateralAddress = safeNormalizeAddress(position.collateral);
 	const zchfAddress = safeNormalizeAddress(position.zchf);
 	const positionAddress = safeNormalizeAddress(position.position);
+	if (!positionAddress) return null;
+
 	const collateralDecimals = safeDecimals(position.collateralDecimals);
 	const zchfDecimals = safeDecimals(position.zchfDecimals);
 	const collTokenPrice = collateralAddress ? prices[collateralAddress]?.price?.usd : undefined;
@@ -249,7 +253,7 @@ function buildPositionView(
 
 	return {
 		position,
-		positionAddress: positionAddress ?? zeroAddress,
+		positionAddress,
 		collateralName: safeText(position.collateralName, "Collateral"),
 		collateralSymbol: safeText(position.collateralSymbol, "TOKEN"),
 		collateralAmount,
@@ -299,8 +303,12 @@ function safeFormatUnits(value: unknown, decimals: unknown, fallback: number) {
 }
 
 function safeNormalizeAddress(value: unknown): Address | undefined {
-	if (typeof value !== "string" || value.trim() === "") return undefined;
-	return normalizeAddress(value);
+	try {
+		if (typeof value !== "string" || value.trim() === "") return undefined;
+		return normalizeAddress(value);
+	} catch {
+		return undefined;
+	}
 }
 
 function safeText(value: unknown, fallback: string) {
