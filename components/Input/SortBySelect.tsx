@@ -1,5 +1,6 @@
 import { faArrowDownWideShort, faArrowUpShortWide } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useId } from "react";
 import Select, { components } from "react-select";
 
 type OptionEntry = {
@@ -16,6 +17,7 @@ interface SortBySelectProps {
 }
 
 export default function SortBySelect({ headers, tab, reverse = false, tabOnChange }: SortBySelectProps) {
+	const selectId = useId();
 	const options = headers.map((o): OptionEntry => {
 		return { value: o, label: o, reverse };
 	});
@@ -31,6 +33,7 @@ export default function SortBySelect({ headers, tab, reverse = false, tabOnChang
 		<div className="flex items-center rounded-lg px-4">
 			<Select
 				className="-mr-3 w-[12rem]"
+				instanceId={selectId}
 				options={options}
 				defaultValue={active}
 				value={active}

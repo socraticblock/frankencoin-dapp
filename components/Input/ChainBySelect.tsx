@@ -1,5 +1,6 @@
 import ChainLogo from "@components/ChainLogo";
 import TokenLogo from "@components/TokenLogo";
+import { useId } from "react";
 import Select, { components } from "react-select";
 
 type OptionEntry = {
@@ -31,6 +32,7 @@ export default function ChainBySelect({
 	tokenLogo,
 	isClearable = false,
 }: ChainBySelectProps) {
+	const selectId = useId();
 	const options = chains.map((o): OptionEntry => {
 		return { value: o, label: o, reverse };
 	});
@@ -45,6 +47,7 @@ export default function ChainBySelect({
 		<div className="flex items-center rounded-lg px-2 max-md:py-2">
 			<Select
 				className="-mr-3 md:w-[12rem] max-md:w-full"
+				instanceId={selectId}
 				options={options}
 				defaultValue={active}
 				value={active}

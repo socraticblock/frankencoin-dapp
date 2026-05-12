@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { formatUnits } from "viem";
 import Select from "react-select";
 import { components } from "react-select";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { formatCurrency } from "@utils";
 
 const TokenLogo = dynamic(() => import("../TokenLogo"), { ssr: false });
@@ -64,6 +64,7 @@ export default function TokenInputSelect({
 	error,
 }: Props) {
 	const inputRef = useRef<HTMLInputElement>(null);
+	const selectId = useId();
 
 	const handleClick = () => {
 		if (inputRef.current && !disabled) {
@@ -113,6 +114,7 @@ export default function TokenInputSelect({
 					<div className="px-3 items-center" onClick={(e) => e.stopPropagation()}>
 						<Select
 							className="-mr-3"
+							instanceId={selectId}
 							options={options}
 							defaultValue={options[symbolIdx]}
 							value={options[symbolIdx]}
