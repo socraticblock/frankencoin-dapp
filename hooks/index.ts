@@ -23,3 +23,4 @@ export * from "./useBorrowingOverview";
 export * from "./useZchfChainBalances";
 export * from "./useTransferCcipFee";
 export * from "./useWalletTransferHistory";
+export * from "./useAddressQueryParam";

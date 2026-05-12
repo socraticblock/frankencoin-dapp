@@ -4,8 +4,7 @@ import TokenLogo from "@components/TokenLogo";
 import { ChallengesPositionsMapping, PositionQuery, PriceQueryObjectArray } from "@frankencoin/api";
 import { formatCurrency, normalizeAddress } from "@utils";
 import { useRouter } from "next/router";
-import { Address, formatUnits, zeroAddress } from "viem";
-import { useConnection } from "wagmi";
+import { Address, formatUnits } from "viem";
 import { useSelector } from "react-redux";
 import { RootState } from "../../redux/redux.store";
 
@@ -26,21 +25,23 @@ type PositionViewModel = {
 	status: "Healthy" | "Challenged" | "Matured" | "Not loaded";
 };
 
-export default function MypositionsTable() {
+type Props = {
+	account: Address;
+	hasAccount: boolean;
+	isPublicView: boolean;
+};
+
+export default function MypositionsTable({ account, hasAccount, isPublicView }: Props) {
 	const router = useRouter();
-	const overwrite = router.query.address as Address;
-	const { address } = useConnection();
-	const account = overwrite || address || zeroAddress;
-	const hasAccount = Boolean(overwrite || address);
-	const isPublicView = Boolean(overwrite);
 
 	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.positions.map);
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
+	const accountId = normalizeAddress(account);
 
 	const matchingPositions = positions.filter((p) => {
-		if (normalizeAddress(p.owner) !== normalizeAddress(account)) return false;
+		if (normalizeAddress(p.owner) !== accountId) return false;
 		if (p.closed || p.denied) return false;
 		return true;
 	});

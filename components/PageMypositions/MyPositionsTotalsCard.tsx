@@ -1,10 +1,8 @@
 import AppCard from "@components/AppCard";
 import { formatCurrency, normalizeAddress } from "@utils";
 import { ChallengesPositionsMapping } from "@frankencoin/api";
-import { Address, formatUnits, isAddress, zeroAddress } from "viem";
-import { useRouter } from "next/router";
+import { Address, formatUnits, zeroAddress } from "viem";
 import { useSelector } from "react-redux";
-import { useConnection } from "wagmi";
 import { RootState } from "../../redux/redux.store";
 
 export type PortfolioOverview = {
@@ -16,9 +14,7 @@ export type PortfolioOverview = {
 	challengeStatus: "Healthy" | "Challenged" | "No active challenges" | "Not loaded";
 };
 
-export default function MyPositionsTotalsCard() {
-	const overview = usePortfolioOverview();
-
+export default function MyPositionsTotalsCard({ overview }: { overview: PortfolioOverview }) {
 	return (
 		<div className="space-y-3">
 			<div>
@@ -60,15 +56,10 @@ export default function MyPositionsTotalsCard() {
 	);
 }
 
-export function usePortfolioOverview(): PortfolioOverview {
+export function usePortfolioOverview(account: Address = zeroAddress): PortfolioOverview {
 	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.positions.map);
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
-	const router = useRouter();
-	const rawAddress = router.query.address;
-	const overwrite: Address | undefined = typeof rawAddress === "string" && isAddress(rawAddress) ? rawAddress : undefined;
-	const { address } = useConnection();
-	const account = overwrite || address || zeroAddress;
 
 	const matchingPositions = positions.filter((p) => normalizeAddress(p.owner) === normalizeAddress(account) && !p.closed && !p.denied);
 	let totalMinted = 0n;

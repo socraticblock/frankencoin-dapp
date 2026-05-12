@@ -5,25 +5,21 @@ import TableHeader from "@components/Table/TableHead";
 import TableBody from "@components/Table/TableBody";
 import TableRowEmpty from "@components/Table/TableRowEmpty";
 import MyPositionsChallengesRow from "./MyPositionsChallengesRow";
-import { useConnection } from "wagmi";
-import { Address, formatUnits, zeroAddress } from "viem";
+import { Address, formatUnits } from "viem";
 import { normalizeAddress } from "../../utils/format";
 import {
-	ChallengesId,
-	ChallengesPricesMapping,
 	ChallengesQueryItem,
 	PositionQuery,
 	PositionsQueryObjectArray,
-	PriceQueryObjectArray,
 } from "@frankencoin/api";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
 
 type Props = {
+	account: Address;
 	challengesOverride?: ChallengesQueryItem[];
 };
 
-export default function MyPositionsChallengesTable({ challengesOverride }: Props) {
+export default function MyPositionsChallengesTable({ account, challengesOverride }: Props) {
 	const headers: string[] = ["Size", "Averted", "Proceeds", "Succeeded", "Rewards"];
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
@@ -31,18 +27,11 @@ export default function MyPositionsChallengesTable({ challengesOverride }: Props
 
 	const challenges = useSelector((state: RootState) => state.challenges.list.list);
 	const positions = useSelector((state: RootState) => state.positions.mapping.map);
-	const prices = useSelector((state: RootState) => state.prices.coingecko);
-	const auction = useSelector((state: RootState) => state.challenges.challengesPrices.map);
-
-	const router = useRouter();
-	const overwrite = router.query.address as Address;
-
-	const { address } = useConnection();
-	const account = overwrite || address || zeroAddress;
+	const accountId = normalizeAddress(account);
 
 	const ownedPositionIds = new Set(
 		Object.values(positions)
-			.filter((p) => normalizeAddress(p.owner) === normalizeAddress(account) && !p.closed && !p.denied)
+			.filter((p) => normalizeAddress(p.owner) === accountId && !p.closed && !p.denied)
 			.map((p) => normalizeAddress(p.position))
 	);
 	const matchingChallenges =
@@ -52,8 +41,6 @@ export default function MyPositionsChallengesTable({ challengesOverride }: Props
 	const sorted: ChallengesQueryItem[] = sortChallenges({
 		challenges: matchingChallenges,
 		positions,
-		prices,
-		auction,
 		headers,
 		tab,
 		reverse,
@@ -91,19 +78,18 @@ export default function MyPositionsChallengesTable({ challengesOverride }: Props
 type SortChallenges = {
 	challenges: ChallengesQueryItem[];
 	positions: PositionsQueryObjectArray;
-	prices: PriceQueryObjectArray;
-	auction: ChallengesPricesMapping;
 	headers: string[];
 	tab: string;
 	reverse: boolean;
 };
 
 function sortChallenges(params: SortChallenges): ChallengesQueryItem[] {
-	const { challenges, positions, prices, auction, headers, tab, reverse } = params;
+	const { challenges, positions, headers, tab, reverse } = params;
+	const sortedChallenges = [...challenges];
 
 	if (tab === headers[0]) {
 		// challenge size
-		challenges.sort((a, b) => {
+		sortedChallenges.sort((a, b) => {
 			const calc = function (c: ChallengesQueryItem) {
 				const pos: PositionQuery = positions[normalizeAddress(c.position)];
 				if (!pos) return 0;
@@ -125,7 +111,7 @@ function sortChallenges(params: SortChallenges): ChallengesQueryItem[] {
 		// FIXME: unchanged sorting, add feature if needed
 	}
 
-	return reverse ? challenges.reverse() : challenges;
+	return reverse ? sortedChallenges.reverse() : sortedChallenges;
 }
 
 function safeBigInt(value: unknown, fallback = 0n) {

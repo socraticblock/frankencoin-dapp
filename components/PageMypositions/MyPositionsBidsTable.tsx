@@ -4,15 +4,13 @@ import Table from "@components/Table";
 import TableHeader from "@components/Table/TableHead";
 import TableBody from "@components/Table/TableBody";
 import TableRowEmpty from "@components/Table/TableRowEmpty";
-import { useConnection } from "wagmi";
-import { Address, formatUnits, isAddress, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress } from "viem";
 import { normalizeAddress } from "../../utils/format";
 import { BidsQueryItem, ChallengesId, ChallengesQueryItemMapping, PositionQuery, PositionsQueryObjectArray } from "@frankencoin/api";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
 import MyPositionsBidsRow from "./MyPositionsBidsRow";
 
-export default function MyPositionsBidsTable() {
+export default function MyPositionsBidsTable({ account }: { account: Address }) {
 	const headers: string[] = ["Filled Size", "Price", "Bid Amount", "State"];
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
@@ -21,12 +19,6 @@ export default function MyPositionsBidsTable() {
 	const bids = useSelector((state: RootState) => state.bids.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.mapping.map);
 	const positions = useSelector((state: RootState) => state.positions.mapping.map);
-
-	const router = useRouter();
-	const overwrite = router.query.address as Address;
-
-	const { address } = useConnection();
-	const account = overwrite || address || zeroAddress;
 
 	const normalizedAccount = safeNormalizeAddress(account);
 	const matchingBids = normalizedAccount ? bids.filter((b) => safeNormalizeAddress(b.bidder) === normalizedAccount) : [];

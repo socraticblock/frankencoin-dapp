@@ -9,13 +9,12 @@ import MyPositionsTotalsCard, { usePortfolioOverview } from "@components/PageMyp
 import MypositionsTable from "@components/PageMypositions/MypositionsTable";
 import ReportsPositionsYearlyTable from "@components/PageReports/ReportsPositionsYearlyTable";
 import WalletConnect from "@components/WalletConnect";
-import { useContractUrl } from "@hooks";
+import { useAddressQueryParam, useContractUrl } from "@hooks";
 import { ApiOwnerDebt, ApiOwnerValueLocked } from "@frankencoin/api";
 import { normalizeAddress, shortenAddress } from "@utils";
-import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { Address, isAddress, zeroAddress } from "viem";
+import { Address, zeroAddress } from "viem";
 import { useConnection } from "wagmi";
 import { FRANKENCOIN_API_CLIENT } from "../../app.config";
 import { RootState, store } from "../../redux/redux.store";
@@ -26,30 +25,29 @@ import { OwnerPositionDebt, OwnerPositionFees, OwnerPositionValueLocked } from "
 
 export default function Positions() {
 	const { address } = useConnection();
-	const router = useRouter();
-	const paramAddr = router.query.address as string | undefined;
-	const hasAddressParam = typeof paramAddr === "string" && paramAddr.length > 0;
-	const invalidAddress = Boolean(hasAddressParam && !isAddress(paramAddr));
-	const overwrite: Address | undefined = hasAddressParam && isAddress(paramAddr) ? (paramAddr as Address) : undefined;
-	const viewedAddress = overwrite ?? address ?? zeroAddress;
-	const hasViewedWallet = Boolean(address || overwrite);
+	const { address: overwrite, invalidAddressParam } = useAddressQueryParam();
+	const walletAddress = overwrite ?? address;
+	const viewedAddress = walletAddress ?? zeroAddress;
+	const hasViewedWallet = walletAddress != undefined;
+	const isPublicView = overwrite != undefined;
+	const viewedAddressId = normalizeAddress(viewedAddress);
 
 	const [isLoading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [ownerPositionFees, setOwnerPositionFees] = useState<OwnerPositionFees[]>([]);
 	const [ownerPositionDebt, setOwnerPositionDebt] = useState<OwnerPositionDebt[]>([]);
 	const [ownerPositionValueLocked, setOwnerPositionValueLocked] = useState<OwnerPositionValueLocked[]>([]);
-	const overview = usePortfolioOverview();
+	const overview = usePortfolioOverview(viewedAddress);
 	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.list.list);
 	const bids = useSelector((state: RootState) => state.bids.list.list);
 	const ownedPositionIds = new Set(
 		positions
-			.filter((p) => normalizeAddress(p.owner) === normalizeAddress(viewedAddress) && !p.closed && !p.denied)
+			.filter((p) => normalizeAddress(p.owner) === viewedAddressId && !p.closed && !p.denied)
 			.map((p) => normalizeAddress(p.position))
 	);
 	const matchingChallenges = challenges.filter((c) => c.status === "Active" && ownedPositionIds.has(normalizeAddress(c.position)));
-	const matchingBids = bids.filter((b) => normalizeAddress(b.bidder) === normalizeAddress(viewedAddress));
+	const matchingBids = bids.filter((b) => normalizeAddress(b.bidder) === viewedAddressId);
 	const hasYearlyData = ownerPositionFees.length > 0 || ownerPositionDebt.length > 0 || ownerPositionValueLocked.length > 0;
 	const hasAdvancedActivity = matchingChallenges.length > 0 || matchingBids.length > 0;
 
@@ -102,7 +100,7 @@ export default function Positions() {
 				<p className="text-sm text-text-secondary">Open new positions from Borrow. Manage existing positions here.</p>
 			</AppPageHeader>
 
-			{invalidAddress ? (
+			{invalidAddressParam ? (
 				<AppEmptyState
 					title="Enter a valid wallet address."
 					description="The public portfolio address in the URL could not be read."
@@ -112,7 +110,7 @@ export default function Positions() {
 			) : (
 				<>
 					<PublicPortfolioBanner overwrite={overwrite} />
-					<MyPositionsTotalsCard />
+					<MyPositionsTotalsCard overview={overview} />
 					{overview.challengedCount > 0 ? <PortfolioAttentionAlert /> : null}
 
 					<section id="borrowing-positions" className="space-y-3">
@@ -120,7 +118,7 @@ export default function Positions() {
 							<h2 className="text-xl font-semibold text-text-primary">Borrowing positions</h2>
 							<p className="mt-1 text-sm text-text-secondary">Manage collateral, repayment, maturity, and challenge risk.</p>
 						</div>
-						<MypositionsTable />
+						<MypositionsTable account={viewedAddress} hasAccount={hasViewedWallet} isPublicView={isPublicView} />
 					</section>
 
 					<section className="space-y-3">
@@ -168,7 +166,7 @@ export default function Positions() {
 										description="Challenge activity will appear here when available."
 									/>
 								) : (
-									<MyPositionsChallengesTable challengesOverride={matchingChallenges} />
+									<MyPositionsChallengesTable account={viewedAddress} challengesOverride={matchingChallenges} />
 								)}
 
 								<div>
@@ -181,7 +179,7 @@ export default function Positions() {
 										description="Auction bids will appear here when available."
 									/>
 								) : (
-									<MyPositionsBidsTable />
+									<MyPositionsBidsTable account={viewedAddress} />
 								)}
 							</>
 						)}
