@@ -1,7 +1,7 @@
 import AppCard from "@components/AppCard";
 import { formatCurrency, normalizeAddress } from "@utils";
 import { ChallengesPositionsMapping } from "@frankencoin/api";
-import { Address, formatUnits, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress, zeroAddress } from "viem";
 import { useRouter } from "next/router";
 import { useSelector } from "react-redux";
 import { useConnection } from "wagmi";
@@ -65,7 +65,8 @@ export function usePortfolioOverview(): PortfolioOverview {
 	const challenges = useSelector((state: RootState) => state.challenges.positions.map);
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const router = useRouter();
-	const overwrite = router.query.address as Address;
+	const rawAddress = router.query.address;
+	const overwrite: Address | undefined = typeof rawAddress === "string" && isAddress(rawAddress) ? rawAddress : undefined;
 	const { address } = useConnection();
 	const account = overwrite || address || zeroAddress;
 
