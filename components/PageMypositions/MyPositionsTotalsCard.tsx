@@ -26,7 +26,7 @@ export default function MyPositionsTotalsCard() {
 				<p className="mt-1 text-sm text-text-secondary">Your borrowing summary across active positions.</p>
 			</div>
 			<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-				<OverviewCard label="Total borrowed" value={`${formatCurrency(formatUnits(overview.totalOwed, 18), 2, 2)} ZCHF`} />
+				<OverviewCard label="Repay from wallet" value={`${formatCurrency(formatUnits(overview.totalOwed, 18), 2, 2)} ZCHF`} />
 				<OverviewCard label="Active positions" value={overview.activeCount > 0 ? String(overview.activeCount) : "None"} />
 				<OverviewCard
 					label="Challenge status"
@@ -61,7 +61,7 @@ export default function MyPositionsTotalsCard() {
 }
 
 export function usePortfolioOverview(): PortfolioOverview {
-	const positions = useSelector((state: RootState) => state.positions.openPositions);
+	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.positions.map);
 	const challengesLoaded = useSelector((state: RootState) => state.challenges.loaded);
 	const router = useRouter();
@@ -69,7 +69,7 @@ export function usePortfolioOverview(): PortfolioOverview {
 	const { address } = useConnection();
 	const account = overwrite || address || zeroAddress;
 
-	const matchingPositions = positions.filter((p) => normalizeAddress(p.owner) === normalizeAddress(account));
+	const matchingPositions = positions.filter((p) => normalizeAddress(p.owner) === normalizeAddress(account) && !p.closed && !p.denied);
 	let totalMinted = 0n;
 	let totalReserves = 0n;
 

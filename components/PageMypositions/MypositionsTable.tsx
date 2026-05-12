@@ -177,11 +177,11 @@ function RiskCell({ row }: { row: PositionViewModel }) {
 	return (
 		<div className="space-y-1">
 			{row.loanToValue !== undefined ? (
-				<MiniMetric label="Loan-to-Value" value={`${formatCurrency(row.loanToValue, 2, 2)}%`} />
+				<MiniMetric label="Estimated Loan-to-Value" value={`${formatCurrency(row.loanToValue, 2, 2)}%`} />
 			) : null}
 			<MiniMetric label="Liquidation price" value={`${formatCurrency(row.liquidationPrice, 2, 2)} ZCHF`} />
 			{row.safetyBuffer !== undefined ? (
-				<MiniMetric label="Safety buffer" value={`${formatCurrency(row.safetyBuffer, 2, 2)}%`} />
+				<MiniMetric label="Estimated safety buffer" value={`${formatCurrency(row.safetyBuffer, 2, 2)}%`} />
 			) : null}
 		</div>
 	);

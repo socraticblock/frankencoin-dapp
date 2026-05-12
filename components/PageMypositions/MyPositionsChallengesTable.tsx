@@ -19,7 +19,11 @@ import {
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 
-export default function MyPositionsChallengesTable() {
+type Props = {
+	challengesOverride?: ChallengesQueryItem[];
+};
+
+export default function MyPositionsChallengesTable({ challengesOverride }: Props) {
 	const headers: string[] = ["Size", "Averted", "Proceeds", "Succeeded", "Rewards"];
 	const [tab, setTab] = useState<string>(headers[0]);
 	const [reverse, setReverse] = useState<boolean>(false);
@@ -36,7 +40,14 @@ export default function MyPositionsChallengesTable() {
 	const { address } = useConnection();
 	const account = overwrite || address || zeroAddress;
 
-	const matchingChallenges = challenges.filter((c) => normalizeAddress(c.challenger) === normalizeAddress(account));
+	const ownedPositionIds = new Set(
+		Object.values(positions)
+			.filter((p) => normalizeAddress(p.owner) === normalizeAddress(account) && !p.closed && !p.denied)
+			.map((p) => normalizeAddress(p.position))
+	);
+	const matchingChallenges =
+		challengesOverride ??
+		challenges.filter((c) => c.status === "Active" && ownedPositionIds.has(normalizeAddress(c.position)));
 
 	const sorted: ChallengesQueryItem[] = sortChallenges({
 		challenges: matchingChallenges,

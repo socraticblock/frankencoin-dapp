@@ -4,7 +4,6 @@ import NavButton from "./NavButton";
 import { CONFIG } from "../app.config";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import { useConnection } from "wagmi";
 import ThemeToggle from "./ThemeToggle";
 import useThemeMode from "../hooks/useThemeMode";
 
@@ -85,13 +84,9 @@ export function NavItems({ items }: { items: typeof MAIN_ITEMS }) {
 
 export default function Navbar() {
 	const [isNavBarOpen, setIsNavBarOpen] = useState(false);
-	const { address } = useConnection();
 	const { theme, toggleTheme } = useThemeMode();
 
 	let mainItems = MAIN_ITEMS;
-	if (!address) {
-		mainItems = mainItems.filter((i) => i.to != "/mypositions");
-	}
 
 	let allItems = [...mainItems, ...MORE_ITEMS];
 

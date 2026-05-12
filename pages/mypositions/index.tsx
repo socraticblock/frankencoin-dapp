@@ -40,9 +40,15 @@ export default function Positions() {
 	const [ownerPositionDebt, setOwnerPositionDebt] = useState<OwnerPositionDebt[]>([]);
 	const [ownerPositionValueLocked, setOwnerPositionValueLocked] = useState<OwnerPositionValueLocked[]>([]);
 	const overview = usePortfolioOverview();
+	const positions = useSelector((state: RootState) => state.positions.list.list);
 	const challenges = useSelector((state: RootState) => state.challenges.list.list);
 	const bids = useSelector((state: RootState) => state.bids.list.list);
-	const matchingChallenges = challenges.filter((c) => normalizeAddress(c.challenger) === normalizeAddress(viewedAddress));
+	const ownedPositionIds = new Set(
+		positions
+			.filter((p) => normalizeAddress(p.owner) === normalizeAddress(viewedAddress) && !p.closed && !p.denied)
+			.map((p) => normalizeAddress(p.position))
+	);
+	const matchingChallenges = challenges.filter((c) => c.status === "Active" && ownedPositionIds.has(normalizeAddress(c.position)));
 	const matchingBids = bids.filter((b) => normalizeAddress(b.bidder) === normalizeAddress(viewedAddress));
 	const hasYearlyData = ownerPositionFees.length > 0 || ownerPositionDebt.length > 0 || ownerPositionValueLocked.length > 0;
 	const hasAdvancedActivity = matchingChallenges.length > 0 || matchingBids.length > 0;
@@ -162,7 +168,7 @@ export default function Positions() {
 										description="Challenge activity will appear here when available."
 									/>
 								) : (
-									<MyPositionsChallengesTable />
+									<MyPositionsChallengesTable challengesOverride={matchingChallenges} />
 								)}
 
 								<div>
