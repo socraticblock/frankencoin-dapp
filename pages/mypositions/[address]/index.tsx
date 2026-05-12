@@ -1,21 +1,11 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatUnits, maxUint256, erc20Abi, Address, parseEther, parseUnits, isAddress } from "viem";
 import Head from "next/head";
 import TokenInput from "@components/Input/TokenInput";
-import {
-	abs,
-	bigIntMax,
-	bigIntMin,
-	ContractUrl,
-	formatBigInt,
-	formatCurrency,
-	formatDuration,
-	normalizeAddress,
-	shortenAddress,
-} from "@utils";
+import { ContractUrl, formatBigInt, formatCurrency, formatDuration, normalizeAddress, shortenAddress } from "@utils";
 import AppButton from "@components/AppButton";
-import { useConnection, useBlockNumber, useChainId } from "wagmi";
+import { useConnection, useBlockNumber } from "wagmi";
 import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { toast } from "react-toastify";
 import { TxToast, renderErrorTxToast, renderErrorTxToastDecode } from "@components/TxToast";
@@ -25,23 +15,77 @@ import { RootState, store } from "../../../redux/redux.store";
 import { fetchPositionsList } from "../../../redux/slices/positions.slice";
 import { PositionQuery } from "@frankencoin/api";
 import { ADDRESS, PositionV1ABI, PositionV2ABI } from "@frankencoin/zchf";
-import AppTitle from "@components/AppTitle";
 import PositionRollerTable from "@components/PageMypositions/PositionRollerTable";
 import AppCard from "@components/AppCard";
 import AppLink from "@components/AppLink";
+import AppNotice from "@components/AppNotice";
+import AppPageHeader from "@components/AppPageHeader";
 import MyPositionsNotFound from "@components/PageMypositions/MyPositionsNotFound";
 import { mainnet } from "viem/chains";
 import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 import { generateExpirationCalendar, downloadCalendarFile, generateGoogleCalendarUrl } from "../../../utils/calendarGenerator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarDays, faCalendarPlus } from "@fortawesome/free-solid-svg-icons";
+import {
+	buildManageTarget,
+	estimateRisk,
+	getReserve,
+} from "@components/PageMypositions/manage/managePositionMath";
+import { ManageAction, RiskEstimate } from "@components/PageMypositions/manage/managePositionTypes";
+
+const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; description: string; inputLabel?: string }[] = [
+	{
+		action: "addCollateral",
+		label: "Add collateral",
+		title: "Add collateral",
+		description: "Add more collateral to improve the position's safety buffer. Your ZCHF repayment amount does not change.",
+		inputLabel: "Collateral to add",
+	},
+	{
+		action: "removeCollateral",
+		label: "Remove collateral",
+		title: "Remove collateral",
+		description: "Withdraw collateral from this position. This reduces your safety buffer and can make the position easier to challenge.",
+		inputLabel: "Collateral to remove",
+	},
+	{
+		action: "borrowMore",
+		label: "Borrow more",
+		title: "Borrow more",
+		description: "Increase this position's size and receive additional ZCHF, after reserve and upfront interest deductions.",
+		inputLabel: "Increase total position size by",
+	},
+	{
+		action: "repay",
+		label: "Repay ZCHF",
+		title: "Repay ZCHF",
+		description: "Reduce the position size using ZCHF from your wallet. Retained reserves may reduce the amount you need to repay from wallet.",
+		inputLabel: "Reduce position size by",
+	},
+	{
+		action: "adjustSafety",
+		label: "Adjust safety",
+		title: "Adjust safety",
+		description:
+			"Change the liquidation / challenge price. Lowering it generally increases safety. Raising it can increase risk and may trigger cooldown rules.",
+		inputLabel: "New liquidation / challenge price",
+	},
+	{
+		action: "close",
+		label: "Close position",
+		title: "Close position",
+		description: "Repay the position and return collateral if the wallet has enough ZCHF.",
+	},
+];
 
 export default function PositionAdjust() {
 	const [isApproving, setApproving] = useState(false);
 	const [isAdjusting, setAdjusting] = useState(false);
+	const [selectedAction, setSelectedAction] = useState<ManageAction>("addCollateral");
+	const [actionAmount, setActionAmount] = useState(0n);
+	const [selectedPrice, setSelectedPrice] = useState(0n);
 
 	const [challengeSize, setChallengeSize] = useState(0n);
-
 	const [userCollAllowance, setUserCollAllowance] = useState(0n);
 	const [userCollBalance, setUserCollBalance] = useState(0n);
 	const [userFrancBalance, setUserFrancBalance] = useState(0n);
@@ -58,32 +102,23 @@ export default function PositionAdjust() {
 	const matchedPosition = normalizedQuery
 		? (positions.find((p) => safeNormalizeAddress(p.position) === normalizedQuery) as PositionQuery | undefined)
 		: undefined;
-
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
 
-	const [amount, setAmount] = useState<bigint>(BigInt(matchedPosition?.minted ?? 0n));
-	const [collateralAmount, setCollateralAmount] = useState<bigint>(BigInt(matchedPosition?.collateralBalance ?? 0n));
-	const [liqPrice, setLiqPrice] = useState<bigint>(BigInt(matchedPosition?.price ?? 0n));
-
-	// ---------------------------------------------------------------------------
-
 	useEffect(() => {
-		if (!positionsLoaded) {
-			store.dispatch(fetchPositionsList());
-		}
+		if (!positionsLoaded) store.dispatch(fetchPositionsList());
 	}, [positionsLoaded]);
 
 	useEffect(() => {
-		if (matchedPosition != undefined && amount == 0n && collateralAmount == 0n && liqPrice == 0n) {
-			setAmount(BigInt(matchedPosition.minted));
-			setCollateralAmount(BigInt(matchedPosition.collateralBalance));
-			setLiqPrice(BigInt(matchedPosition.price));
-		}
-	}, [matchedPosition, amount, collateralAmount, liqPrice]);
+		if (matchedPosition) setSelectedPrice(BigInt(matchedPosition.price));
+	}, [matchedPosition]);
+
+	useEffect(() => {
+		setActionAmount(0n);
+		if (matchedPosition) setSelectedPrice(BigInt(matchedPosition.price));
+	}, [selectedAction, matchedPosition]);
 
 	useEffect(() => {
 		const acc: Address | undefined = account.address;
-		const fc: Address = ADDRESS[mainnet.id].frankencoin;
 		if (!matchedPosition || !matchedPosition.collateral) return;
 
 		const fetchAsync = async function () {
@@ -128,107 +163,131 @@ export default function PositionAdjust() {
 		fetchAsync();
 	}, [data, account.address, matchedPosition, chainId]);
 
-	// ---------------------------------------------------------------------------
 	if (!router.isReady) return <AppCard>Loading position...</AppCard>;
 	if (!normalizedQuery) return <AppCard>Invalid position address.</AppCard>;
 	if (!positionsLoaded) return <AppCard>Loading position...</AppCard>;
 	if (!matchedPosition) return <MyPositionsNotFound query={addressQuery ?? normalizedQuery} />;
 
 	const position = matchedPosition;
-
+	const currentMinted = BigInt(position.minted);
+	const currentCollateral = BigInt(position.collateralBalance);
+	const currentPrice = BigInt(position.price);
 	const priceQuery = prices[normalizeAddress(position.collateral)];
-	if (!priceQuery) return <AppCard>Market Price of position not found</AppCard>;
+	const marketPriceChf = priceQuery?.price.chf ?? null;
+	const priceDecimals = 36 - position.collateralDecimals;
+	const marketPrice80Pct =
+		marketPriceChf != null ? parseUnits(String(Math.round(marketPriceChf * 80) / 100), priceDecimals) : currentPrice;
+	const isCooldown = position.cooldown * 1000 - Date.now() > 0;
+	const isMatured = position.expiration * 1000 < Date.now();
+	const isChallenged = challengeSize > 0n;
 
-	const marketPriceDec = priceQuery.price.chf != undefined ? Math.round(priceQuery.price.chf * 80) / 100 : 1;
-	const marketPrice80Pct = parseUnits(String(marketPriceDec), 36 - position.collateralDecimals);
+	const target = buildManageTarget({
+		action: selectedAction,
+		currentMinted,
+		currentCollateral,
+		currentPrice,
+		actionAmount,
+		selectedPrice,
+	});
+	const amount = target.targetMinted;
+	const collateralAmount = target.targetCollateral;
+	const liqPrice = target.targetPrice;
+	const currentRisk = estimateRisk({
+		minted: currentMinted,
+		collateral: currentCollateral,
+		collateralDecimals: position.collateralDecimals,
+		marketPriceChf,
+	});
+	const targetRisk = estimateRisk({
+		minted: amount,
+		collateral: collateralAmount,
+		collateralDecimals: position.collateralDecimals,
+		marketPriceChf,
+	});
 
-	const isCooldown: boolean = position.cooldown * 1000 - Date.now() > 0;
+	let maxMintableInclClones = 0n;
+	if (position.version == 1) maxMintableInclClones = BigInt(position.availableForClones) + currentMinted;
+	if (position.version == 2) maxMintableInclClones = BigInt(position.availableForMinting) + currentMinted;
+	const maxTotalLimit = maxMintableInclClones;
 
-	let maxMintableInclClones: bigint = 0n;
-
-	if (position.version == 1) {
-		maxMintableInclClones = BigInt(position.availableForClones) + BigInt(position.minted);
-	} else if (position.version == 2) {
-		maxMintableInclClones = BigInt(position.availableForMinting) + BigInt(position.minted);
-	}
-
-	// @dev: deactivated limitation for collateral balance
-	//const maxMintableForCollateralAmount: bigint = BigInt(formatUnits(BigInt(position.price) * collateralAmount, 36 - 18).split(".")[0]);
-	// const maxTotalLimit: bigint = bigIntMin(maxMintableForCollateralAmount, maxMintableInclClones);
-	const maxTotalLimit: bigint = maxMintableInclClones;
-
-	// ---------------------------------------------------------------------------
+	const feeDuration = BigInt(Math.floor(position.expiration * 1000 - Date.now())) / 1000n;
+	const feePercent = (feeDuration * BigInt(position.annualInterestPPM)) / BigInt(60 * 60 * 24 * 365);
+	const calcDirection = amount > currentMinted;
+	const returnFromReserve = () => (BigInt(position.reserveContribution) * (amount - currentMinted)) / 1_000_000n;
 	const paidOutAmount = () => {
-		if (amount > BigInt(position.minted)) {
-			return (
-				((amount - BigInt(position.minted)) * (1_000_000n - BigInt(position.reserveContribution) - BigInt(feePercent))) / 1_000_000n
-			);
-		} else {
-			return amount - BigInt(position.minted) - returnFromReserve();
+		if (amount > currentMinted) {
+			return ((amount - currentMinted) * (1_000_000n - BigInt(position.reserveContribution) - feePercent)) / 1_000_000n;
 		}
+		return amount - currentMinted - returnFromReserve();
 	};
-
-	const returnFromReserve = () => {
-		return (BigInt(position.reserveContribution) * (amount - BigInt(position.minted))) / 1_000_000n;
-	};
-
-	const collateralNote =
-		collateralAmount < BigInt(position.collateralBalance)
-			? `${formatUnits(abs(collateralAmount - BigInt(position.collateralBalance)), position.collateralDecimals)} ${
-					position.collateralSymbol
-			  } sent back to your wallet`
-			: collateralAmount > BigInt(position.collateralBalance)
-			? `${formatUnits(abs(collateralAmount - BigInt(position.collateralBalance)), position.collateralDecimals)} ${
-					position.collateralSymbol
-			  } taken from your wallet`
-			: "";
-
-	const onChangeAmount = (value: string) => {
-		setAmount(BigInt(value));
-	};
-
-	const onChangeCollAmount = (value: string) => {
-		setCollateralAmount(BigInt(value));
-	};
+	const fees = calcDirection ? amount - currentMinted - returnFromReserve() - paidOutAmount() : 0n;
 
 	function getCollateralError() {
-		if (liqPrice > BigInt(position.price) && BigInt(position.price) * collateralAmount < amount * parseEther("1")) {
-			return "This position is limited to the old price, add some collateral.";
-		} else if (liqPrice * collateralAmount < amount * 10n ** 18n) {
-			return "Not enough collateral for the given price and mint amount.";
-		} else if (collateralAmount - BigInt(position.collateralBalance) > userCollBalance) {
-			return `Insufficient ${position.collateralSymbol} in your wallet.`;
+		if (liqPrice > currentPrice && currentPrice * collateralAmount < amount * parseEther("1")) {
+			return "This position is limited to the old challenge price. Add collateral or lower the target position size.";
 		}
+		if (liqPrice * collateralAmount < amount * 10n ** 18n) {
+			return "This collateral and challenge price combination is not safe enough for the selected position size.";
+		}
+		if (collateralAmount > currentCollateral && collateralAmount - currentCollateral > userCollBalance) {
+			return `Insufficient ${position.collateralSymbol} in this wallet.`;
+		}
+		return "";
 	}
 
 	function getAmountError() {
-		if (isCooldown) {
-			return `This position is ${position.cooldown > 1e30 ? "closed" : "in cooldown, please wait"}`;
-		} else if (amount > maxTotalLimit) {
-			return `This position is limited to ${formatCurrency(formatUnits(maxTotalLimit, 18), 2, 2)} ZCHF`;
-		} else if (liqPrice * collateralAmount < amount * 10n ** 18n) {
-			return `Can mint at most ${formatUnits((collateralAmount * liqPrice) / 10n ** 36n, 0)} ZCHF given price and collateral.`;
-		} else if (amount > BigInt(position.minted) && liqPrice > BigInt(position.price)) {
-			return "Amount can only be increased after new price has gone through cooldown.";
-		} else if (liqPrice > BigInt(position.price) && BigInt(position.price) * collateralAmount < amount * parseEther("1")) {
-			return "This position is limited to the old price, decrease the mint.";
-		} else if (userFrancBalance + paidOutAmount() < 0) {
-			return "Insufficient ZCHF in wallet";
-		} else {
-			return "";
+		if (selectedAction === "borrowMore" && isCooldown) return "This position is in cooldown. Borrowing more is not available yet.";
+		if (amount > maxTotalLimit) return `This position cannot mint that much additional ZCHF.`;
+		if (liqPrice * collateralAmount < amount * 10n ** 18n) {
+			return `Can mint at most ${formatUnits((collateralAmount * liqPrice) / 10n ** 36n, 0)} ZCHF with this collateral and challenge price.`;
 		}
+		if (amount > currentMinted && liqPrice > currentPrice) {
+			return "Additional borrowing is only available after the higher challenge price has gone through cooldown.";
+		}
+		if (liqPrice > currentPrice && currentPrice * collateralAmount < amount * parseEther("1")) {
+			return "This position is limited to the old challenge price. Decrease the position size or add collateral.";
+		}
+		if (userFrancBalance + paidOutAmount() < 0n) return "Insufficient ZCHF in this wallet.";
+		return "";
 	}
 
-	const onChangeLiqAmount = (value: string) => {
-		const valueBigInt = BigInt(value);
-		const isHigher = valueBigInt > BigInt(position.price);
-		setLiqPrice(valueBigInt);
-	};
+	const actionConfig = MANAGE_ACTIONS.find((item) => item.action === selectedAction)!;
+	const annualInterest = position.annualInterestPPM / 10_000;
+	const expirationDateArr = new Date(position.expiration * 1000).toDateString().split(" ");
+	const expirationDateStr = `${expirationDateArr[2]} ${expirationDateArr[1]} ${expirationDateArr[3]}`;
+	const expirationDiff = Math.round((position.expiration * 1000 - Date.now()) / 1000);
+	const expiredIn = expirationDiff > 0 ? formatDuration(expirationDiff) : "Expired";
+	const noChange = amount === currentMinted && collateralAmount === currentCollateral && liqPrice === currentPrice;
+	const needsCollateralApproval =
+		selectedAction === "addCollateral" && collateralAmount > currentCollateral && collateralAmount - currentCollateral > userCollAllowance;
+	const actionError = getActionError({
+		action: selectedAction,
+		actionAmount,
+		accountAddress: account.address,
+		positionClosed: position.closed,
+		isChallenged,
+		isCooldown,
+		noChange,
+		amountError: getAmountError(),
+		collateralError: getCollateralError(),
+		userCollBalance,
+		position,
+		targetRisk,
+		liqPrice,
+		currentPrice,
+		userFrancBalance,
+		paidOut: paidOutAmount(),
+	});
+	const primaryDisabled = Boolean(actionError) || noChange || isApproving || isAdjusting;
+	const currentReserve = getReserve(currentMinted, position.reserveContribution);
+	const targetReserve = getReserve(amount, position.reserveContribution);
+	const currentRepayFromWallet = currentMinted - currentReserve;
+	const targetRepayFromWallet = amount - targetReserve;
+	const challengeStatus = getChallengeStatus({ positionClosed: position.closed, isChallenged, isCooldown, isMatured });
 
 	const handleApprove = async () => {
 		try {
 			setApproving(true);
-
 			const approveWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: position.collateral as Address,
 				chainId,
@@ -236,29 +295,14 @@ export default function PositionAdjust() {
 				functionName: "approve",
 				args: [position.position, maxUint256],
 			});
-
 			const toastContent = [
-				{
-					title: "Amount:",
-					value: "infinite " + position.collateralSymbol,
-				},
-				{
-					title: "Spender: ",
-					value: shortenAddress(position.position),
-				},
-				{
-					title: "Transaction:",
-					hash: approveWriteHash,
-				},
+				{ title: "Amount:", value: "infinite " + position.collateralSymbol },
+				{ title: "Spender: ", value: shortenAddress(position.position) },
+				{ title: "Transaction:", hash: approveWriteHash },
 			];
-
 			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: approveWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Approving ${position.collateralSymbol}`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title={`Successfully Approved ${position.collateralSymbol}`} rows={toastContent} />,
-				},
+				pending: { render: <TxToast title={`Approving ${position.collateralSymbol}`} rows={toastContent} /> },
+				success: { render: <TxToast title={`Successfully Approved ${position.collateralSymbol}`} rows={toastContent} /> },
 			});
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));
@@ -270,7 +314,6 @@ export default function PositionAdjust() {
 	const handleAdjust = async () => {
 		try {
 			setAdjusting(true);
-
 			const adjustWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: position.position,
 				chainId,
@@ -278,124 +321,21 @@ export default function PositionAdjust() {
 				functionName: "adjust",
 				args: [amount, collateralAmount, liqPrice],
 			});
-
 			const toastContent = [
-				{
-					title: "Amount:",
-					value: formatBigInt(amount),
-				},
-				{
-					title: "Collateral Amount:",
-					value: formatBigInt(collateralAmount, position.collateralDecimals),
-				},
-				{
-					title: "Liquidation Price:",
-					value: formatBigInt(liqPrice, 36 - position.collateralDecimals),
-				},
-				{
-					title: "Transaction:",
-					hash: adjustWriteHash,
-				},
+				{ title: "Total position size:", value: formatBigInt(amount) },
+				{ title: "Collateral Amount:", value: formatBigInt(collateralAmount, position.collateralDecimals) },
+				{ title: "Liquidation Price:", value: formatBigInt(liqPrice, priceDecimals) },
+				{ title: "Transaction:", hash: adjustWriteHash },
 			];
-
 			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: adjustWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Adjusting Position`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title="Successfully Adjusted Position" rows={toastContent} />,
-				},
+				pending: { render: <TxToast title={`Managing Position`} rows={toastContent} /> },
+				success: { render: <TxToast title="Successfully Managed Position" rows={toastContent} /> },
 			});
 		} catch (error) {
 			toast.error(renderErrorTxToastDecode(error, position.version == 2 ? PositionV2ABI : PositionV1ABI, 2));
 		} finally {
 			setAdjusting(false);
 		}
-	};
-
-	const annualInterest = position.annualInterestPPM / 10_000;
-
-	const calcDirection = amount > BigInt(position.minted);
-	const feeDuration = BigInt(Math.floor(position.expiration * 1000 - Date.now())) / 1000n;
-	const feePercent = (feeDuration * BigInt(position.annualInterestPPM)) / BigInt(60 * 60 * 24 * 365);
-	const fees = calcDirection ? amount - BigInt(position.minted) - returnFromReserve() - paidOutAmount() : 0n;
-
-	const isMinted = BigInt(position.minted) > 0n;
-
-	const diffMint = amount - BigInt(position.minted);
-
-	const walletRatio = diffMint != 0n ? (paidOutAmount() * parseEther("1")) / diffMint : 0n;
-	const reserveRatio = diffMint != 0n ? (returnFromReserve() * parseEther("1")) / diffMint : 0n;
-	const feeRatio = diffMint != 0n ? (fees * parseEther("1")) / diffMint : 0n;
-	const futureRatio = isMinted ? (amount * parseEther("1")) / BigInt(position.minted) : amount > 0n ? parseEther("1") : parseEther("0");
-
-	const expirationDateArr: string[] = new Date(position.expiration * 1000).toDateString().split(" ");
-	const expirationDateStr: string = `${expirationDateArr[2]} ${expirationDateArr[1]} ${expirationDateArr[3]}`;
-	const expirationDiff: number = Math.round((position.expiration * 1000 - Date.now()) / 1000);
-	const expiredIn: string = expirationDiff > 0 ? formatDuration(expirationDiff) : "Expired";
-
-	// Minted Min
-	const mintedMin = bigIntMax(
-		0n,
-		BigInt(position.minted) - (userFrancBalance * 1000000n) / (1000000n - BigInt(position.reserveContribution))
-	);
-
-	const mintedMinCallback = () => {
-		/* Disabled: I think the user should click min separately on the collateral field if he also wants to have the collateral returned
-		const p = liqPrice;
-		const calcCollateral = (mintedMin * parseEther("1")) / p;
-		const verifyMint = (calcCollateral * p) / parseEther("1");
-		const isRoundingError = verifyMint < mintedMin;
-		const correctedCollateral = isRoundingError ? calcCollateral + 1n : calcCollateral;
-		setCollateralAmount(correctedCollateral);
-		return correctedCollateral; */
-	};
-
-	// Minted Max
-	const mintedMax = bigIntMin(maxTotalLimit, (liqPrice * collateralAmount) / parseEther("1"));
-
-	const mintedMaxCallback = () => {
-		/* Disabled: I think the user should click max separately on the collateral field if he also wants to have the collateral returned
-		const p = liqPrice;
-		if (p > 0){
-			const calcCollateral = (mintedMax * parseEther("1")) / p;
-			const verifyMint = (calcCollateral * p) / parseEther("1");
-			const isRoundingError = verifyMint < mintedMax;
-			const correctedCollateral = isRoundingError ? calcCollateral + 1n : calcCollateral;
-			setCollateralAmount(correctedCollateral);
-		} */
-	};
-
-	// Collateral Min
-	const collateralMinCallback = () => {
-		const p = liqPrice;
-		if (p > 0) {
-			const calcCollateral = (amount * parseEther("1")) / p;
-			const verifyMint = (calcCollateral * p) / parseEther("1");
-			const isRoundingError = verifyMint < amount;
-			const correctedCollateral = isRoundingError ? calcCollateral + 1n : calcCollateral;
-			setCollateralAmount(correctedCollateral);
-		}
-	};
-
-	// LiqPrice
-	const liqPriceMinCallback = () => {
-		if (collateralAmount > 0) {
-			const calcPrice = (amount * parseEther("1")) / collateralAmount;
-			const verifyMint = (calcPrice * collateralAmount) / parseEther("1");
-			const isRoundingError = verifyMint < amount;
-			const corrected = isRoundingError ? calcPrice + 1n : calcPrice;
-			setLiqPrice(corrected);
-		}
-	};
-
-	const liqPriceMaxCallback = () => {
-		// const calcPrice = (amount * parseEther("1")) / (BigInt(position.collateralBalance) + userCollBalance);
-		// const verifyMint = (calcPrice * collateralAmount) / parseEther("1");
-		// const isRoundingError = verifyMint < amount;
-		// const corrected = isRoundingError ? calcPrice + 1n : calcPrice;
-		// setLiqPrice(corrected);
-		// setCollateralAmount(BigInt(position.collateralBalance) + userCollBalance);
 	};
 
 	const handleDownloadCalendar = () => {
@@ -414,252 +354,563 @@ export default function PositionAdjust() {
 				<title>Frankencoin - Manage Position</title>
 			</Head>
 
-			<AppTitle
-				title={`${position.collateralName} (${position.collateralSymbol})`}
-				subtitle={`Manage your position.`}
-				badges={[
-					position.closed
-						? { label: "Closed", className: "bg-red-500/20 text-red-400" }
-						: isCooldown
-						? { label: "Cooldown", className: "bg-amber-500/20 text-amber-400" }
-						: { label: "Active", className: "bg-green-500/20 text-green-400" },
-					{ label: `V${position.version}`, className: "bg-blue-500/20 text-blue-400" },
-					...(position.isClone ? [{ label: "Clone", className: "bg-purple-500/20 text-purple-400" }] : []),
-				]}
-				actions={
+			<AppPageHeader
+				eyebrow="Portfolio"
+				title={`Manage ${position.collateralSymbol} position`}
+				description="Adjust collateral, repayment, and safety for this borrowing position."
+				action={
 					<div className="flex flex-wrap gap-4 text-sm">
 						<AppLink label="Details" href={`/monitoring/${position.position}`} external={false} />
 						<AppLink label="Contract" href={ContractUrl(position.position)} external={true} />
 					</div>
 				}
-			/>
+			>
+				<div className="flex flex-wrap gap-2">
+					<StatusBadge label={challengeStatus.label} tone={challengeStatus.tone} />
+					<StatusBadge label={`V${position.version}`} tone="info" />
+					{position.isClone ? <StatusBadge label="Clone" tone="neutral" /> : null}
+				</div>
+			</AppPageHeader>
 
-			<div className="md:mt-8">
-				<section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+			<div className="mt-6 space-y-6">
+				<ManagePositionWarnings
+					isChallenged={isChallenged}
+					isCooldown={isCooldown}
+					isMatured={isMatured}
+					isClosed={position.closed}
+					selectedAction={selectedAction}
+					targetRisk={targetRisk}
+					liqPrice={liqPrice}
+					currentPrice={currentPrice}
+					collateralSymbol={position.collateralSymbol}
+					userCollBalance={userCollBalance}
+					userFrancBalance={userFrancBalance}
+					paidOut={paidOutAmount()}
+					marketPriceLoaded={marketPriceChf != null}
+				/>
+
+				<ManagePositionSummary
+					position={position}
+					currentMinted={currentMinted}
+					currentCollateral={currentCollateral}
+					currentReserve={currentReserve}
+					currentRepayFromWallet={currentRepayFromWallet}
+					currentPrice={currentPrice}
+					priceDecimals={priceDecimals}
+					risk={currentRisk}
+					expirationDateStr={expirationDateStr}
+					expiredIn={expiredIn}
+					challengeStatus={challengeStatus.label}
+				/>
+
+				<section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 					<AppCard>
-						<div className="text-lg font-bold text-center">Adjustment</div>
-						<div className="space-y-8">
-							<TokenInput
-								label="Amount"
-								symbol="ZCHF"
-								output={position.closed ? "0" : ""}
-								min={mintedMin}
-								max={mintedMax}
-								reset={BigInt(position.minted)}
-								digit={18}
-								value={amount.toString()}
-								onChange={onChangeAmount}
-								onMin={mintedMinCallback}
-								onMax={mintedMaxCallback}
-								error={getAmountError()}
-								placeholder="Loan Amount"
-								limit={userFrancBalance}
-								limitDigit={18}
-								limitLabel="Balance"
-							/>
-							<TokenInput
-								label="Collateral"
-								symbol={position.collateralSymbol}
-								min={BigInt("0")}
-								max={userCollBalance + BigInt(position.collateralBalance)}
-								reset={BigInt(position.collateralBalance)}
-								value={collateralAmount.toString()}
-								onChange={onChangeCollAmount}
-								onMin={collateralMinCallback}
-								digit={position.collateralDecimals}
-								note={collateralNote}
-								error={getCollateralError()}
-								placeholder="Collateral Amount"
-								limit={userCollBalance}
-								limitDigit={position.collateralDecimals}
-								limitLabel="Balance"
-							/>
-							<TokenInput
-								label="Liquidation Price"
-								symbol={"ZCHF"}
-								min={collateralAmount == 0n ? 0n : (amount * 10n ** 18n) / collateralAmount}
-								max={marketPrice80Pct}
-								reset={BigInt(position.price)}
-								value={liqPrice.toString()}
-								digit={36 - position.collateralDecimals}
-								onChange={onChangeLiqAmount}
-								onMin={liqPriceMinCallback}
-								onMax={liqPriceMaxCallback}
-								placeholder="Liquidation Price"
-							/>
-
-							<div className="flex-1 mt-4">
-								<div className="flex">
-									<div className="flex-1 text-text-secondary">
-										<span>Annual Interest</span>
-									</div>
-									<div className="text-right">{annualInterest}%</div>
-								</div>
-								<div className="flex mt-2">
-									<div className="flex-1 text-text-secondary">
-										<span>Maturity</span>
-									</div>
-									<div className="text-right">{expirationDateStr}</div>
-								</div>
-								<div className="flex mt-2">
-									<div className="flex-1 text-text-secondary">
-										<span>Expiration</span>
-									</div>
-									<div className="text-right">{expiredIn}</div>
-								</div>
+						<div className="space-y-5">
+							<ManagePositionActionTabs selectedAction={selectedAction} onSelect={setSelectedAction} />
+							<div>
+								<h2 className="text-xl font-semibold text-text-primary">{actionConfig.title}</h2>
+								<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
 							</div>
+							{selectedAction === "close" ? (
+								<AppNotice
+									variant="warning"
+									title="Before you sign"
+									message="This will try to repay the full position and return all deposited collateral to your wallet."
+								/>
+							) : selectedAction === "adjustSafety" ? (
+								<TokenInput
+									label={actionConfig.inputLabel}
+									symbol="ZCHF"
+									min={1n}
+									max={marketPrice80Pct}
+									reset={currentPrice}
+									value={selectedPrice.toString()}
+									digit={priceDecimals}
+									onChange={(value) => setSelectedPrice(BigInt(value))}
+									placeholder="Challenge price"
+									warning={selectedPrice > currentPrice ? "Raising the challenge price can make this position riskier." : undefined}
+								/>
+							) : (
+								<TokenInput
+									label={actionConfig.inputLabel}
+									symbol={selectedAction === "addCollateral" || selectedAction === "removeCollateral" ? position.collateralSymbol : "ZCHF"}
+									min={0n}
+									max={getActionMax({
+										action: selectedAction,
+										userCollBalance,
+										currentCollateral,
+										currentMinted,
+										maxTotalLimit,
+									})}
+									reset={0n}
+									value={actionAmount.toString()}
+									digit={
+										selectedAction === "addCollateral" || selectedAction === "removeCollateral"
+											? position.collateralDecimals
+											: 18
+									}
+									onChange={(value) => setActionAmount(BigInt(value))}
+									placeholder="0.00"
+									limit={
+										selectedAction === "addCollateral"
+											? userCollBalance
+											: selectedAction === "removeCollateral"
+											? currentCollateral
+											: selectedAction === "repay"
+											? userFrancBalance
+											: maxTotalLimit > currentMinted
+											? maxTotalLimit - currentMinted
+											: 0n
+									}
+									limitDigit={
+										selectedAction === "addCollateral" || selectedAction === "removeCollateral"
+											? position.collateralDecimals
+											: 18
+									}
+									limitLabel={
+										selectedAction === "addCollateral"
+											? "Wallet"
+											: selectedAction === "removeCollateral"
+											? "Deposited"
+											: selectedAction === "repay"
+											? "Wallet"
+											: "Available"
+									}
+								/>
+							)}
 
-							<div className="mx-auto mt-8 full flex-col">
-								<GuardSupportedChain chain={mainnet}>
-									{collateralAmount - BigInt(position.collateralBalance) > userCollAllowance ? (
-										<AppButton isLoading={isApproving} onClick={() => handleApprove()}>
-											Approve Collateral
-										</AppButton>
-									) : (
-<AppButton
-											disabled={
-												(amount == BigInt(position.minted) &&
-													collateralAmount == BigInt(position.collateralBalance) &&
-													liqPrice == BigInt(position.price)) ||
-												(!position.denied &&
-													((isCooldown && amount > 0n) || !!getAmountError() || !!getCollateralError())) ||
-												(challengeSize > 0n && collateralAmount < BigInt(position.collateralBalance))
-											}
-											isLoading={isAdjusting}
-											onClick={() => handleAdjust()}
-										>
-											Adjust Position
-										</AppButton>
-									)}
-								</GuardSupportedChain>
-							</div>
+							{actionAmount === 0n && selectedAction !== "adjustSafety" && selectedAction !== "close" ? (
+								<p className="text-sm text-text-secondary">Enter an amount to preview the change.</p>
+							) : null}
+
+							<GuardSupportedChain chain={mainnet}>
+								{needsCollateralApproval ? (
+									<AppButton isLoading={isApproving} disabled={!account.address || isApproving} onClick={handleApprove}>
+										Approve collateral
+									</AppButton>
+								) : (
+									<AppButton
+										disabled={primaryDisabled}
+										isLoading={isAdjusting}
+										onClick={handleAdjust}
+										error={actionError || undefined}
+									>
+										{getButtonText(selectedAction)}
+									</AppButton>
+								)}
+							</GuardSupportedChain>
 						</div>
 					</AppCard>
 
-					<div className="flex flex-col gap-4">
-						<AppCard>
-							<div className="text-lg font-bold text-center mt-3">Connected Wallet</div>
-							<div className="flex-1 mt-4">
-								<div className="flex">
-									<div className="flex-1 text-text-secondary">
-										<span>Frankencoin Balance</span>
-									</div>
-									<div className="text-right">{formatCurrency(formatUnits(userFrancBalance, 18))} ZCHF</div>
-								</div>
-								<div className="flex mt-2">
-									<div className="flex-1 text-text-secondary">
-										<span>Collateral Balance</span>
-									</div>
-									<div className="text-right">
-										{formatCurrency(formatUnits(userCollBalance, position.collateralDecimals))}{" "}
-										{position.collateralSymbol}
-									</div>
-								</div>
-							</div>
-						</AppCard>
-
-						<AppCard>
-							<div className="text-lg font-bold text-center mt-3">Adjustment Outcome</div>
-							<div className="flex-1 mt-4">
-								<div className="flex">
-									<div className="flex-1 text-text-secondary">
-										<span>Current minted amount</span>
-									</div>
-									<div className="text-right">{formatCurrency(formatUnits(BigInt(position.minted), 18))} ZCHF</div>
-								</div>
-
-								<div className="mt-2 flex">
-									<div className="flex-1 text-text-secondary">
-										{amount >= BigInt(position.minted) ? "Sent to your wallet " : "To be added from your wallet "}
-										<span className="text-xs mr-3">({formatCurrency(formatUnits(walletRatio, 16))}%)</span>
-									</div>
-									<div className="text-right">
-										{/* <span className="text-xs mr-3">{formatCurrency(formatUnits(walletRatio, 16))}%</span> */}
-										{formatCurrency(formatUnits(paidOutAmount(), 18))} ZCHF
-									</div>
-								</div>
-
-								<div className="mt-2 flex">
-									<div className="flex-1 text-text-secondary">
-										{amount >= BigInt(position.minted) ? "Added to reserve on your behalf " : "Returned from reserve "}
-										<span className="text-xs mr-3">({formatCurrency(formatUnits(reserveRatio, 16))}%)</span>
-									</div>
-									<div className="text-right">
-										{/* <span className="text-xs mr-3">{formatCurrency(formatUnits(reserveRatio, 16))}%</span> */}
-										{formatCurrency(formatUnits(returnFromReserve(), 18))} ZCHF
-									</div>
-								</div>
-
-								<div className="mt-2 flex">
-									<div className="flex-1 text-text-secondary">
-										<span>Upfront interest </span>
-										{/* <div className="text-xs">({position.annualInterestPPM / 10000}% per year)</div> */}
-										<span className="text-xs mr-3">({formatCurrency(formatUnits(feeRatio, 16))}%)</span>
-									</div>
-									<div className="text-right">{formatCurrency(formatUnits(fees, 18))} ZCHF</div>
-								</div>
-
-								<hr className="mt-4 border-text-primary border-dashed" />
-
-								<div className="mt-2 flex font-extrabold">
-									<div className="flex-1 text-text-secondary">
-										<span>Future minted amount</span>
-									</div>
-									<div className="text-right">
-										{/* <span className="text-xs mr-3">{formatCurrency(formatUnits(futureRatio, 16))}%</span> */}
-										<span>{formatCurrency(formatUnits(amount, 18))} ZCHF</span>
-									</div>
-								</div>
-							</div>
-						</AppCard>
-						{!position.closed && !position.denied && (
-							<div className="flex justify-end gap-2">
-								<button
-									onClick={handleGoogleCalendar}
-									className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors"
-									title="Add expiration reminder to Google Calendar"
-								>
-									<FontAwesomeIcon icon={faCalendarPlus} className="mr-2" />
-									Add to Google Calendar
-								</button>
-								<button
-									onClick={handleDownloadCalendar}
-									className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors"
-									title="Download expiration alert calendar for this position"
-								>
-									<FontAwesomeIcon icon={faCalendarDays} className="mr-2" />
-									Download Calendar
-								</button>
-							</div>
-						)}
+					<div className="space-y-4">
+						<ManagePositionPreviewCard
+							action={selectedAction}
+							currentMinted={currentMinted}
+							targetMinted={amount}
+							currentCollateral={currentCollateral}
+							targetCollateral={collateralAmount}
+							currentPrice={currentPrice}
+							targetPrice={liqPrice}
+							currentRepayFromWallet={currentRepayFromWallet}
+							targetRepayFromWallet={targetRepayFromWallet}
+							currentReserve={currentReserve}
+							targetReserve={targetReserve}
+							fees={fees}
+							paidOut={paidOutAmount()}
+							risk={targetRisk}
+							collateralSymbol={position.collateralSymbol}
+							collateralDecimals={position.collateralDecimals}
+							priceDecimals={priceDecimals}
+							marketPriceLoaded={marketPriceChf != null}
+						/>
+						<ManagePositionWalletCard
+							userFrancBalance={userFrancBalance}
+							userCollBalance={userCollBalance}
+							userCollAllowance={userCollAllowance}
+							collateralSymbol={position.collateralSymbol}
+							collateralDecimals={position.collateralDecimals}
+							needsCollateralApproval={needsCollateralApproval}
+						/>
 					</div>
 				</section>
-			</div>
 
-			{position.version == 1 || position.minted == "0" ? (
-				<></>
-			) : (
-				<>
-					<AppTitle title={`Renewal`}>
-						<div className="text-text-secondary">
-							You can renew positions by rolling them into suitable new ones with the same collateral. When rolling, the owed
-							amount will be increased by the up-front interest for the new position and any excess collateral will be paid
-							out to your address. If you want to reduce the outstanding amount, you should do that before rolling.
+				<AppCard>
+					<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+						<div>
+							<h2 className="text-lg font-semibold text-text-primary">Maturity reminders</h2>
+							<p className="mt-1 text-sm text-text-secondary">
+								Add this position&apos;s maturity date to your calendar so repayment does not surprise you.
+							</p>
+							<p className="mt-2 text-sm text-text-secondary">
+								Maturity: <span className="font-medium text-text-primary">{expirationDateStr}</span> ({expiredIn})
+							</p>
 						</div>
-					</AppTitle>
-
-					<div className="mt-8">
-						<PositionRollerTable position={position} challengeSize={challengeSize} />
+						{!position.closed && !position.denied ? (
+							<div className="flex flex-wrap gap-2">
+								<button
+									onClick={handleDownloadCalendar}
+									className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-menu-separator dark:bg-card-content-secondary dark:text-text-primary"
+								>
+									<FontAwesomeIcon icon={faCalendarDays} className="mr-2" />
+									Download calendar file
+								</button>
+								<button
+									onClick={handleGoogleCalendar}
+									className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-menu-separator dark:bg-card-content-secondary dark:text-text-primary"
+								>
+									<FontAwesomeIcon icon={faCalendarPlus} className="mr-2" />
+									Open in Google Calendar
+								</button>
+							</div>
+						) : null}
 					</div>
-				</>
-			)}
+				</AppCard>
+
+				{position.version == 1 || position.minted == "0" ? null : (
+					<section className="space-y-4">
+						<div>
+							<h2 className="text-xl font-semibold text-text-primary">Renewal</h2>
+							<p className="mt-1 text-sm text-text-secondary">
+								You can renew positions by rolling them into suitable new ones with the same collateral.
+							</p>
+						</div>
+						<PositionRollerTable position={position} challengeSize={challengeSize} />
+					</section>
+				)}
+			</div>
 		</>
 	);
 }
 
+function ManagePositionActionTabs({
+	selectedAction,
+	onSelect,
+}: {
+	selectedAction: ManageAction;
+	onSelect: (action: ManageAction) => void;
+}) {
+	return (
+		<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+			{MANAGE_ACTIONS.map((item) => (
+				<button
+					key={item.action}
+					type="button"
+					onClick={() => onSelect(item.action)}
+					className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+						selectedAction === item.action
+							? "border-[#c4a75f] bg-button-default text-white"
+							: "border-menu-separator bg-card-content-secondary text-text-primary hover:border-[#c4a75f]"
+					}`}
+				>
+					{item.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+function ManagePositionSummary({
+	position,
+	currentMinted,
+	currentCollateral,
+	currentReserve,
+	currentRepayFromWallet,
+	currentPrice,
+	priceDecimals,
+	risk,
+	expirationDateStr,
+	expiredIn,
+	challengeStatus,
+}: {
+	position: PositionQuery;
+	currentMinted: bigint;
+	currentCollateral: bigint;
+	currentReserve: bigint;
+	currentRepayFromWallet: bigint;
+	currentPrice: bigint;
+	priceDecimals: number;
+	risk: RiskEstimate;
+	expirationDateStr: string;
+	expiredIn: string;
+	challengeStatus: string;
+}) {
+	const rows = [
+		{ label: "Collateral deposited", value: `${formatCurrency(formatUnits(currentCollateral, position.collateralDecimals))} ${position.collateralSymbol}` },
+		{ label: "Collateral value", value: risk.collateralValue === null ? "Unavailable" : `${formatCurrency(risk.collateralValue, 2, 2)} CHF estimated` },
+		{ label: "Total position size", value: `${formatCurrency(formatUnits(currentMinted, 18))} ZCHF` },
+		{ label: "Retained reserve", value: `${formatCurrency(formatUnits(currentReserve, 18))} ZCHF` },
+		{ label: "Repay from wallet", value: `${formatCurrency(formatUnits(currentRepayFromWallet, 18))} ZCHF` },
+		{ label: "Liquidation / challenge price", value: `${formatCurrency(formatUnits(currentPrice, priceDecimals))} ZCHF` },
+		{ label: "Estimated Loan-to-Value", value: formatRisk(risk.ltv) },
+		{ label: "Estimated safety buffer", value: formatRisk(risk.safetyBuffer) },
+		{ label: "Maturity", value: `${expirationDateStr} (${expiredIn})` },
+		{ label: "Challenge status", value: challengeStatus },
+	];
+
+	return (
+		<section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+			{rows.map((row) => (
+				<AppCard key={row.label} className="!p-4">
+					<p className="text-xs uppercase text-text-secondary">{row.label}</p>
+					<p className="mt-2 text-base font-semibold text-text-primary">{row.value}</p>
+				</AppCard>
+			))}
+		</section>
+	);
+}
+
+function ManagePositionPreviewCard(props: {
+	action: ManageAction;
+	currentMinted: bigint;
+	targetMinted: bigint;
+	currentCollateral: bigint;
+	targetCollateral: bigint;
+	currentPrice: bigint;
+	targetPrice: bigint;
+	currentRepayFromWallet: bigint;
+	targetRepayFromWallet: bigint;
+	currentReserve: bigint;
+	targetReserve: bigint;
+	fees: bigint;
+	paidOut: bigint;
+	risk: RiskEstimate;
+	collateralSymbol: string;
+	collateralDecimals: number;
+	priceDecimals: number;
+	marketPriceLoaded: boolean;
+}) {
+	const collateralDelta = props.targetCollateral - props.currentCollateral;
+	const mintedDelta = props.targetMinted - props.currentMinted;
+	const walletZchf = props.paidOut;
+	const retainedImpact = props.targetReserve - props.currentReserve + props.fees;
+
+	return (
+		<AppCard>
+			<h2 className="text-lg font-semibold text-text-primary">Before you sign</h2>
+			<div className="mt-4 space-y-3">
+				<PreviewRow label="Action" value={getActionLabel(props.action)} />
+				<PreviewRow label="From wallet" value={formatFromWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)} />
+				<PreviewRow label="To wallet" value={formatToWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)} />
+				{mintedDelta > 0n ? <PreviewRow label="Increase in position size" value={`+${formatCurrency(formatUnits(mintedDelta, 18))} ZCHF`} /> : null}
+				{mintedDelta < 0n ? <PreviewRow label="Position size reduction" value={`${formatCurrency(formatUnits(-mintedDelta, 18))} ZCHF`} /> : null}
+				{props.action === "borrowMore" ? (
+					<>
+						<PreviewRow label="Estimated sent to wallet" value={`${formatCurrency(formatUnits(walletZchf, 18))} ZCHF`} />
+						<PreviewRow label="Retained reserve / upfront interest" value={`${formatCurrency(formatUnits(retainedImpact, 18))} ZCHF`} />
+					</>
+				) : null}
+				<PreviewRow label="New total position size" value={withUnchanged(`${formatCurrency(formatUnits(props.targetMinted, 18))} ZCHF`, props.targetMinted === props.currentMinted)} />
+				<PreviewRow label="New repay from wallet" value={withUnchanged(`${formatCurrency(formatUnits(props.targetRepayFromWallet, 18))} ZCHF`, props.targetRepayFromWallet === props.currentRepayFromWallet)} />
+				<PreviewRow label="New collateral deposited" value={withUnchanged(`${formatCurrency(formatUnits(props.targetCollateral, props.collateralDecimals))} ${props.collateralSymbol}`, props.targetCollateral === props.currentCollateral)} />
+				<PreviewRow label="New liquidation / challenge price" value={withUnchanged(`${formatCurrency(formatUnits(props.targetPrice, props.priceDecimals))} ZCHF`, props.targetPrice === props.currentPrice)} />
+				<PreviewRow label="New estimated LTV" value={formatRisk(props.risk.ltv)} />
+				<PreviewRow label="New estimated safety buffer" value={formatRisk(props.risk.safetyBuffer)} />
+			</div>
+			{!props.marketPriceLoaded ? (
+				<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+					Risk estimate unavailable because market price data is not loaded.
+				</p>
+			) : null}
+		</AppCard>
+	);
+}
+
+function ManagePositionWalletCard({
+	userFrancBalance,
+	userCollBalance,
+	userCollAllowance,
+	collateralSymbol,
+	collateralDecimals,
+	needsCollateralApproval,
+}: {
+	userFrancBalance: bigint;
+	userCollBalance: bigint;
+	userCollAllowance: bigint;
+	collateralSymbol: string;
+	collateralDecimals: number;
+	needsCollateralApproval: boolean;
+}) {
+	return (
+		<AppCard>
+			<h2 className="text-lg font-semibold text-text-primary">Wallet balances</h2>
+			<div className="mt-4 space-y-3">
+				<PreviewRow label="ZCHF" value={`${formatCurrency(formatUnits(userFrancBalance, 18))} ZCHF`} />
+				<PreviewRow label={collateralSymbol} value={`${formatCurrency(formatUnits(userCollBalance, collateralDecimals))} ${collateralSymbol}`} />
+				<PreviewRow label="Collateral allowance" value={needsCollateralApproval ? "Approval needed" : `${formatCurrency(formatUnits(userCollAllowance, collateralDecimals))} ${collateralSymbol}`} />
+			</div>
+		</AppCard>
+	);
+}
+
+function ManagePositionWarnings(props: {
+	isChallenged: boolean;
+	isCooldown: boolean;
+	isMatured: boolean;
+	isClosed: boolean;
+	selectedAction: ManageAction;
+	targetRisk: RiskEstimate;
+	liqPrice: bigint;
+	currentPrice: bigint;
+	collateralSymbol: string;
+	userCollBalance: bigint;
+	userFrancBalance: bigint;
+	paidOut: bigint;
+	marketPriceLoaded: boolean;
+}) {
+	const warnings: string[] = [];
+	if (props.isClosed) warnings.push("This position is closed.");
+	if (props.isChallenged) warnings.push("This position is challenged. Market participants can challenge Frankencoin positions, so review it before the challenge period ends.");
+	if (props.isCooldown) warnings.push("This position is in cooldown. Some increases are not available until the cooldown ends.");
+	if (props.isMatured) warnings.push("This position has passed maturity. Repayment may be required.");
+	if (props.selectedAction === "removeCollateral" && props.isChallenged) {
+		warnings.push("Collateral cannot be removed while this position is challenged.");
+	}
+	if (props.selectedAction === "removeCollateral" && props.targetRisk.safetyBuffer !== null && props.targetRisk.safetyBuffer < 20) {
+		warnings.push("This leaves a thin estimated safety buffer. The position may be easier to challenge.");
+	}
+	if (props.selectedAction === "borrowMore") warnings.push("Borrowing more increases your repayment obligation and can reduce your safety buffer.");
+	if (props.selectedAction === "adjustSafety" && props.liqPrice > props.currentPrice) {
+		warnings.push("Raising the liquidation / challenge price can make this position riskier and may require a cooldown before additional minting.");
+	}
+	if (props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
+		warnings.push("Lowering the liquidation / challenge price generally gives the position more room before it can be challenged.");
+	}
+	if (props.userCollBalance === 0n && props.selectedAction === "addCollateral") {
+		warnings.push(`No ${props.collateralSymbol} available in this wallet.`);
+	}
+	if (props.userFrancBalance + props.paidOut < 0n && (props.selectedAction === "repay" || props.selectedAction === "close")) {
+		warnings.push("You need more ZCHF in this wallet to complete this transaction.");
+	}
+	if (!props.marketPriceLoaded) warnings.push("Market price data is not loaded, so estimated Loan-to-Value and safety buffer are unavailable.");
+
+	if (warnings.length === 0) return null;
+	return (
+		<div className="space-y-2">
+			{warnings.map((warning) => (
+				<AppNotice key={warning} variant="warning" title="Challenge status" message={warning} />
+			))}
+		</div>
+	);
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex gap-3 text-sm">
+			<div className="flex-1 text-text-secondary">{label}</div>
+			<div className="max-w-[55%] text-right font-medium text-text-primary">{value}</div>
+		</div>
+	);
+}
+
+function StatusBadge({ label, tone }: { label: string; tone: "success" | "warning" | "danger" | "neutral" | "info" }) {
+	const classes = {
+		success: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+		warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+		danger: "bg-red-500/15 text-red-600 dark:text-red-300",
+		neutral: "bg-slate-500/15 text-slate-600 dark:text-slate-300",
+		info: "bg-blue-500/15 text-blue-600 dark:text-blue-300",
+	}[tone];
+	return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
+}
+
+function getActionError(params: {
+	action: ManageAction;
+	actionAmount: bigint;
+	accountAddress?: Address;
+	positionClosed: boolean;
+	isChallenged: boolean;
+	isCooldown: boolean;
+	noChange: boolean;
+	amountError: string;
+	collateralError: string;
+	userCollBalance: bigint;
+	position: PositionQuery;
+	targetRisk: RiskEstimate;
+	liqPrice: bigint;
+	currentPrice: bigint;
+	userFrancBalance: bigint;
+	paidOut: bigint;
+}) {
+	if (!params.accountAddress) return "Connect your wallet before signing.";
+	if (params.positionClosed) return "This position is closed.";
+	if (params.action === "removeCollateral" && params.isChallenged) return "Collateral cannot be removed while this position is challenged.";
+	if (params.action === "borrowMore" && params.isCooldown) return "This position is in cooldown. Borrowing more is not available yet.";
+	if (params.action !== "close" && params.action !== "adjustSafety" && params.actionAmount <= 0n) return "";
+	if (params.action === "adjustSafety" && params.liqPrice <= 0n) return "Enter a valid liquidation / challenge price.";
+	if (params.action === "addCollateral" && params.actionAmount > params.userCollBalance) {
+		return `Insufficient ${params.position.collateralSymbol} in this wallet.`;
+	}
+	if ((params.action === "repay" || params.action === "close") && params.userFrancBalance + params.paidOut < 0n) {
+		return params.action === "close"
+			? "You need more ZCHF in this wallet to close the position."
+			: "Your wallet must hold enough ZCHF to complete this repayment.";
+	}
+	if (params.amountError) return params.amountError;
+	if (params.collateralError) return params.collateralError;
+	if (params.noChange) return "No changes selected.";
+	return "";
+}
+
+function getActionMax(params: {
+	action: ManageAction;
+	userCollBalance: bigint;
+	currentCollateral: bigint;
+	currentMinted: bigint;
+	maxTotalLimit: bigint;
+}) {
+	if (params.action === "addCollateral") return params.userCollBalance;
+	if (params.action === "removeCollateral") return params.currentCollateral;
+	if (params.action === "repay") return params.currentMinted;
+	if (params.action === "borrowMore") return params.maxTotalLimit > params.currentMinted ? params.maxTotalLimit - params.currentMinted : 0n;
+	return undefined;
+}
+
+function getButtonText(action: ManageAction) {
+	if (action === "addCollateral") return "Add collateral";
+	if (action === "removeCollateral") return "Remove collateral";
+	if (action === "borrowMore") return "Borrow more";
+	if (action === "repay") return "Repay ZCHF";
+	if (action === "adjustSafety") return "Adjust safety";
+	return "Close position";
+}
+
+function getActionLabel(action: ManageAction) {
+	return MANAGE_ACTIONS.find((item) => item.action === action)?.label ?? "Manage";
+}
+
+function getChallengeStatus(params: { positionClosed: boolean; isChallenged: boolean; isCooldown: boolean; isMatured: boolean }) {
+	if (params.positionClosed) return { label: "Closed", tone: "danger" as const };
+	if (params.isChallenged) return { label: "Challenged", tone: "warning" as const };
+	if (params.isCooldown) return { label: "Cooldown", tone: "warning" as const };
+	if (params.isMatured) return { label: "Matured", tone: "warning" as const };
+	return { label: "Healthy", tone: "success" as const };
+}
+
+function formatRisk(value: number | null) {
+	if (value === null || !Number.isFinite(value)) return "Unavailable";
+	return `${formatCurrency(value, 2, 2)}% estimated`;
+}
+
+function withUnchanged(value: string, unchanged: boolean) {
+	return unchanged ? `${value} unchanged` : value;
+}
+
+function formatFromWallet(action: ManageAction, walletZchf: bigint, collateralDelta: bigint, collateralSymbol: string, collateralDecimals: number) {
+	if (collateralDelta > 0n) return `${formatCurrency(formatUnits(collateralDelta, collateralDecimals))} ${collateralSymbol}`;
+	if (walletZchf < 0n) return `${formatCurrency(formatUnits(-walletZchf, 18))} ZCHF`;
+	if (action === "close") return "ZCHF repayment";
+	return "Nothing";
+}
+
+function formatToWallet(action: ManageAction, walletZchf: bigint, collateralDelta: bigint, collateralSymbol: string, collateralDecimals: number) {
+	if (collateralDelta < 0n) return `${formatCurrency(formatUnits(-collateralDelta, collateralDecimals))} ${collateralSymbol}`;
+	if (walletZchf > 0n) return `${formatCurrency(formatUnits(walletZchf, 18))} ZCHF`;
+	if (action === "close") return "Collateral returned after repayment";
+	return "Nothing";
+}
+
 function safeNormalizeAddress(address?: string): Address | undefined {
 	if (!address || !isAddress(address)) return undefined;
-
 	try {
 		return normalizeAddress(address);
 	} catch {
