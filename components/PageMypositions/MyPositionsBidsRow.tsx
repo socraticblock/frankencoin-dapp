@@ -1,4 +1,4 @@
-import { Address, formatUnits, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress, zeroAddress } from "viem";
 import TableRow from "../Table/TableRow";
 import { BidsQueryItem, ChallengesId } from "@frankencoin/api";
 import { RootState } from "../../redux/redux.store";
@@ -23,16 +23,17 @@ export default function MyPositionsBidsRow({ headers, tab, bid }: Props) {
 	const positions = useSelector((state: RootState) => state.positions.mapping);
 	const challenges = useSelector((state: RootState) => state.challenges.mapping);
 
-	const pid = normalizeAddress(bid.position);
-	const cid = `${pid}-challenge-${bid.number}` as ChallengesId;
+	const pid = safeNormalizeAddress(bid.position);
+	const cid = pid ? (`${pid}-challenge-${bid.number}` as ChallengesId) : undefined;
 
-	const position = positions.map[pid];
-	const challenge = challenges.map[cid];
-	const url = useContractUrl(position.collateral || zeroAddress);
+	const position = pid ? positions.map[pid] : undefined;
+	const challenge = cid ? challenges.map[cid] : undefined;
+	const collateralAddress = position?.collateral || zeroAddress;
+	const url = useContractUrl(collateralAddress);
 	const urlBid = TxUrl(bid.txHash);
 	const account = useConnection();
 	const navigate = useNavigation();
-	if (!position || !challenge) return null;
+	if (!position || !challenge || typeof position.collateralDecimals !== "number" || !position.collateralSymbol) return null;
 
 	const openExplorer = (e: any) => {
 		e.preventDefault();
@@ -58,10 +59,13 @@ export default function MyPositionsBidsRow({ headers, tab, bid }: Props) {
 					</AppButtonSecondary>
 				) : (
 					<div className="">
-<AppButton
+						<AppButton
 							className="h-10"
 							disabled={isDisabled}
-							onClick={() => navigate.push(`/monitoring/${normalizeAddress(challenge.position)}/auction/${challenge.number}`)}
+							onClick={() => {
+								const challengePosition = safeNormalizeAddress(challenge.position);
+								if (challengePosition) navigate.push(`/monitoring/${challengePosition}/auction/${challenge.number}`);
+							}}
 						>
 							Buy Again
 						</AppButton>
@@ -108,4 +112,14 @@ export default function MyPositionsBidsRow({ headers, tab, bid }: Props) {
 			</div>
 		</TableRow>
 	);
+}
+
+function safeNormalizeAddress(address?: string): Address | undefined {
+	if (!address || !isAddress(address)) return undefined;
+
+	try {
+		return normalizeAddress(address);
+	} catch {
+		return undefined;
+	}
 }

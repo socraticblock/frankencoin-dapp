@@ -5,9 +5,9 @@ import TableHeader from "@components/Table/TableHead";
 import TableBody from "@components/Table/TableBody";
 import TableRowEmpty from "@components/Table/TableRowEmpty";
 import { useConnection } from "wagmi";
-import { Address, formatUnits, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress, zeroAddress } from "viem";
 import { normalizeAddress } from "../../utils/format";
-import { BidsQueryItem, ChallengesQueryItemMapping, PositionQuery, PositionsQueryObjectArray } from "@frankencoin/api";
+import { BidsQueryItem, ChallengesId, ChallengesQueryItemMapping, PositionQuery, PositionsQueryObjectArray } from "@frankencoin/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import MyPositionsBidsRow from "./MyPositionsBidsRow";
@@ -28,10 +28,21 @@ export default function MyPositionsBidsTable() {
 	const { address } = useConnection();
 	const account = overwrite || address || zeroAddress;
 
-	const matchingBids = bids.filter((b) => normalizeAddress(b.bidder) === normalizeAddress(account));
+	const normalizedAccount = safeNormalizeAddress(account);
+	const matchingBids = normalizedAccount ? bids.filter((b) => safeNormalizeAddress(b.bidder) === normalizedAccount) : [];
+	const safeBids = matchingBids.filter((b) => {
+		const pid = safeNormalizeAddress(b.position);
+		if (!pid) return false;
+
+		const position = positions[pid];
+		if (!hasRenderablePosition(position)) return false;
+
+		const cid = `${pid}-challenge-${b.number}` as ChallengesId;
+		return Boolean(challenges[cid]);
+	});
 
 	const sorted: BidsQueryItem[] = sortBids({
-		bids: matchingBids,
+		bids: safeBids,
 		challenges,
 		positions,
 		headers,
@@ -79,12 +90,16 @@ type SortBids = {
 
 function sortBids(params: SortBids): BidsQueryItem[] {
 	const { bids, challenges, positions, headers, tab, reverse } = params;
+	const sortedBids = [...bids];
 
 	if (tab === headers[0]) {
 		// Filled Size
-		bids.sort((a, b) => {
+		sortedBids.sort((a, b) => {
 			const calc = function (b: BidsQueryItem) {
-				const pos: PositionQuery = positions[normalizeAddress(b.position)];
+				const pid = safeNormalizeAddress(b.position);
+				const pos: PositionQuery | undefined = pid ? positions[pid] : undefined;
+				if (!hasRenderablePosition(pos)) return Number.NEGATIVE_INFINITY;
+
 				const size: number = parseFloat(formatUnits(b.filledSize, pos.collateralDecimals));
 				const price: number = parseFloat(formatUnits(b.price, 36 - pos.collateralDecimals));
 				return size * price;
@@ -93,16 +108,19 @@ function sortBids(params: SortBids): BidsQueryItem[] {
 		});
 	} else if (tab === headers[1]) {
 		// Price
-		bids.sort((a, b) => {
+		sortedBids.sort((a, b) => {
 			const calc = function (b: BidsQueryItem) {
-				const pos: PositionQuery = positions[normalizeAddress(b.position)];
+				const pid = safeNormalizeAddress(b.position);
+				const pos: PositionQuery | undefined = pid ? positions[pid] : undefined;
+				if (!hasRenderablePosition(pos)) return Number.NEGATIVE_INFINITY;
+
 				return parseFloat(formatUnits(b.price, 36 - pos.collateralDecimals));
 			};
 			return calc(b) - calc(a);
 		});
 	} else if (tab === headers[2]) {
 		// Bid Amount
-		bids.sort((a, b) => {
+		sortedBids.sort((a, b) => {
 			const calc = function (b: BidsQueryItem) {
 				return parseFloat(formatUnits(b.bid, 18));
 			};
@@ -110,8 +128,27 @@ function sortBids(params: SortBids): BidsQueryItem[] {
 		});
 	} else if (tab === headers[3]) {
 		// Type
-		bids.sort((a, b) => a.bidType.localeCompare(b.bidType));
+		sortedBids.sort((a, b) => a.bidType.localeCompare(b.bidType));
 	}
 
-	return reverse ? bids.reverse() : bids;
+	return reverse ? sortedBids.reverse() : sortedBids;
+}
+
+function safeNormalizeAddress(address?: string): Address | undefined {
+	if (!address || !isAddress(address)) return undefined;
+
+	try {
+		return normalizeAddress(address);
+	} catch {
+		return undefined;
+	}
+}
+
+function hasRenderablePosition(position?: PositionQuery): position is PositionQuery {
+	return (
+		position != undefined &&
+		typeof position.collateralDecimals === "number" &&
+		typeof position.collateralSymbol === "string" &&
+		position.collateralSymbol.length > 0
+	);
 }
