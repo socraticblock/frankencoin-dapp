@@ -67,7 +67,7 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		label: "Adjust safety",
 		title: "Adjust safety",
 		description:
-			"Lowering the liquidation / challenge price generally improves safety. Raising it can allow more borrowing later, but starts a cooldown. During cooldown, borrowing more is temporarily blocked. This is not the same as being challenged.",
+			"Lowering the liquidation / challenge price generally improves safety. Raising it can allow more borrowing later, but starts a cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
 		inputLabel: "New liquidation / challenge price",
 	},
 	{
@@ -239,7 +239,7 @@ export default function PositionAdjust() {
 
 	function getAmountError() {
 		if (selectedAction === "borrowMore" && isCooldown)
-			return "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged.";
+			return "Minting more ZCHF from this position is temporarily blocked while it is in cooldown. This is not the same as being challenged.";
 		if (amount > maxTotalLimit) return `This position cannot mint that much additional ZCHF.`;
 		if (liqPrice * collateralAmount < amount * 10n ** 18n) {
 			return `Can mint at most ${formatUnits(
@@ -881,10 +881,10 @@ function ManagePositionWarnings(props: {
 	}
 	if (props.isCooldown) {
 		warnings.push({
-			title: props.isChallenged ? "Borrowing is also paused" : "Position in cooldown",
+			title: props.isChallenged ? "Minting is also paused" : "Position in cooldown",
 			message: props.isChallenged
-				? "Borrowing more is temporarily blocked while this position is in cooldown."
-				: "Borrowing more is temporarily paused. The position is not necessarily challenged. Cooldown usually ends automatically after the waiting period unless the position is separately challenged.",
+				? "Minting more ZCHF from this position is temporarily blocked while this position is in cooldown."
+				: "Minting more ZCHF from this position is temporarily paused. The position is not necessarily challenged. You may still be able to add collateral or repay, but you cannot increase the minted amount until cooldown ends.",
 		});
 	}
 	if (props.isMatured) warnings.push({ title: "Maturity", message: "This position has passed maturity. Repayment may be required." });
@@ -906,7 +906,7 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Before you sign",
 			message: props.isCooldown
-				? "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged."
+				? "Minting more ZCHF from this position is temporarily blocked while it is in cooldown. This is not the same as being challenged."
 				: "Borrowing more increases your repayment obligation and can reduce your safety buffer.",
 		});
 	}
@@ -914,7 +914,7 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Cooldown",
 			message:
-				"Raising the liquidation / challenge price starts a cooldown. During cooldown, borrowing more is temporarily blocked. This is not the same as being challenged.",
+				"Raising the liquidation / challenge price starts a cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
 		});
 	}
 	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
@@ -946,7 +946,7 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Challenge vs cooldown",
 			message:
-				"A challenge is separate from cooldown. Anyone can challenge a position if they believe the collateral is insufficient at the current challenge price. This is not an FPS-holder veto.",
+				"A challenge is separate from cooldown. For an active position, this is not an FPS-holder veto. FPS denial applies to new position proposals. Existing active positions are handled through cooldowns and market challenges. Anyone can challenge if they believe the collateral is insufficient at the current challenge price.",
 		});
 	}
 
@@ -1005,7 +1005,7 @@ function getActionError(params: {
 	if (params.action === "removeCollateral" && params.isChallenged)
 		return "Collateral cannot be removed while this position is challenged.";
 	if (params.action === "borrowMore" && params.isCooldown)
-		return "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged.";
+		return "Minting more ZCHF from this position is temporarily blocked while it is in cooldown. This is not the same as being challenged.";
 	if (params.action !== "close" && params.action !== "adjustSafety" && params.actionAmount <= 0n) return "";
 	if (params.action === "adjustSafety" && params.liqPrice <= 0n) return "Enter a valid liquidation / challenge price.";
 	if (params.action === "addCollateral" && params.actionAmount > params.userCollBalance) {
