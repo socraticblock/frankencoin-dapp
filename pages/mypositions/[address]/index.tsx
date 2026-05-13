@@ -194,6 +194,7 @@ export default function PositionAdjust() {
 	const isChallenged = challengeSize > 0n;
 	const isOwner = Boolean(account.address && safeNormalizeAddress(account.address) === safeNormalizeAddress(position.owner));
 	const canManagePosition = Boolean(isOwner && account.address);
+	const canPreviewManage = canManagePosition || !account.address;
 
 	const target = buildManageTarget({
 		action: selectedAction,
@@ -421,7 +422,7 @@ export default function PositionAdjust() {
 					challengeStatus={challengeStatus.label}
 				/>
 
-				{canManagePosition ? (
+				{canPreviewManage ? (
 					<section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 						<AppCard>
 							<div className="space-y-5">
@@ -431,7 +432,8 @@ export default function PositionAdjust() {
 									<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
 								</div>
 								<ManagePositionWarnings
-									canManage={canManagePosition}
+									canManage={canPreviewManage}
+									hasWallet={Boolean(account.address)}
 									isChallenged={isChallenged}
 									isCooldown={isCooldown}
 									isMatured={isMatured}
@@ -528,26 +530,32 @@ export default function PositionAdjust() {
 									<p className="text-sm text-text-secondary">Enter an amount to preview the change.</p>
 								) : null}
 
-								<GuardSupportedChain chain={mainnet}>
-									{needsCollateralApproval ? (
-										<AppButton
-											isLoading={isApproving}
-											disabled={!account.address || isApproving}
-											onClick={handleApprove}
-										>
-											Approve collateral
-										</AppButton>
-									) : (
-										<AppButton
-											disabled={primaryDisabled}
-											isLoading={isAdjusting}
-											onClick={handleAdjust}
-											error={actionError || undefined}
-										>
-											{getButtonText(selectedAction)}
-										</AppButton>
-									)}
-								</GuardSupportedChain>
+								{canManagePosition ? (
+									<GuardSupportedChain chain={mainnet}>
+										{needsCollateralApproval ? (
+											<AppButton
+												isLoading={isApproving}
+												disabled={!account.address || isApproving}
+												onClick={handleApprove}
+											>
+												Approve collateral
+											</AppButton>
+										) : (
+											<AppButton
+												disabled={primaryDisabled}
+												isLoading={isAdjusting}
+												onClick={handleAdjust}
+												error={actionError || undefined}
+											>
+												{getButtonText(selectedAction)}
+											</AppButton>
+										)}
+									</GuardSupportedChain>
+								) : (
+									<AppButton disabled note="Connect the owner wallet when you are ready to sign.">
+										Connect owner wallet to manage
+									</AppButton>
+								)}
 							</div>
 						</AppCard>
 
@@ -572,14 +580,23 @@ export default function PositionAdjust() {
 								priceDecimals={priceDecimals}
 								marketPriceLoaded={marketPriceChf != null}
 							/>
-							<ManagePositionWalletCard
-								userFrancBalance={userFrancBalance}
-								userCollBalance={userCollBalance}
-								userCollAllowance={userCollAllowance}
-								collateralSymbol={position.collateralSymbol}
-								collateralDecimals={position.collateralDecimals}
-								needsCollateralApproval={needsCollateralApproval}
-							/>
+							{account.address ? (
+								<ManagePositionWalletCard
+									userFrancBalance={userFrancBalance}
+									userCollBalance={userCollBalance}
+									userCollAllowance={userCollAllowance}
+									collateralSymbol={position.collateralSymbol}
+									collateralDecimals={position.collateralDecimals}
+									needsCollateralApproval={needsCollateralApproval}
+								/>
+							) : (
+								<AppCard>
+									<h2 className="text-lg font-semibold text-text-primary">Wallet balances</h2>
+									<p className="mt-2 text-sm text-text-secondary">
+										Connect the owner wallet to check balances, allowance, and signing readiness.
+									</p>
+								</AppCard>
+							)}
 						</div>
 					</section>
 				) : (
@@ -587,9 +604,8 @@ export default function PositionAdjust() {
 						<div className="space-y-2">
 							<h2 className="text-xl font-semibold text-text-primary">Manage position</h2>
 							<p className="text-sm text-text-secondary">
-								{account.address
-									? "Connect the owner wallet to manage this position. This connected wallet can review the public position details only."
-									: "Connect the owner wallet to manage this position."}
+								Connect the owner wallet to manage this position. This connected wallet can review the public position
+								details only.
 							</p>
 						</div>
 					</AppCard>
@@ -866,6 +882,7 @@ function ManagePositionWalletCard({
 
 function ManagePositionWarnings(props: {
 	canManage: boolean;
+	hasWallet: boolean;
 	isChallenged: boolean;
 	isCooldown: boolean;
 	isMatured: boolean;
@@ -944,7 +961,7 @@ function ManagePositionWarnings(props: {
 			message: "Lowering the liquidation / challenge price generally gives the position more room before it can be challenged.",
 		});
 	}
-	if (props.canManage && props.userCollBalance === 0n && props.selectedAction === "addCollateral") {
+	if (props.canManage && props.hasWallet && props.userCollBalance === 0n && props.selectedAction === "addCollateral") {
 		warnings.push({
 			title: "Wallet notice",
 			message: `Your connected wallet has no ${props.collateralSymbol} available for adding collateral.`,
@@ -952,6 +969,7 @@ function ManagePositionWarnings(props: {
 	}
 	if (
 		props.canManage &&
+		props.hasWallet &&
 		props.userFrancBalance + props.paidOut < 0n &&
 		(props.selectedAction === "repay" || props.selectedAction === "close")
 	) {
