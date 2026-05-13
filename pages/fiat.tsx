@@ -11,15 +11,15 @@ import {
 } from "../utils/mtpelerin";
 
 const TAB_OPTIONS: { value: MtPelerinTab; label: string }[] = [
-	{ value: "buy", label: "Buy ZCHF" },
-	{ value: "sell", label: "Cash out ZCHF" },
-	{ value: "swap", label: "Swap to ZCHF" },
+	{ value: "buy", label: "Buy ZCHF with fiat" },
+	{ value: "sell", label: "Sell ZCHF for fiat" },
+	{ value: "swap", label: "Swap or bridge to ZCHF" },
 ];
 
 const FLOW_COPY: Record<MtPelerinTab, string> = {
 	buy: "Buy ZCHF with fiat through Mt Pelerin. Default route: CHF to ZCHF.",
-	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Default route: ZCHF to CHF.",
-	swap: "Swap supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
+	sell: "Sell ZCHF for fiat through Mt Pelerin. Default route: ZCHF to CHF.",
+	swap: "Swap or bridge supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
 };
 
 export default function FiatPage() {
@@ -31,13 +31,13 @@ export default function FiatPage() {
 	return (
 		<>
 			<Head>
-				<title>Buy & Cash Out ZCHF | ZCHF Desk</title>
+				<title>Buy, Sell & Swap ZCHF | ZCHF Desk</title>
 			</Head>
 
 			<AppPageHeader
 				eyebrow="FIAT GATEWAY"
-				title="Buy & Cash Out ZCHF"
-				description="Buy ZCHF from fiat, cash out ZCHF to your bank, or swap supported assets into ZCHF."
+				title="Buy, Sell & Swap ZCHF"
+				description="Buy ZCHF with fiat, sell ZCHF for fiat to your bank, or swap or bridge supported assets into ZCHF."
 			>
 				<AppNotice
 					variant="neutral"
