@@ -34,7 +34,8 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		action: "addCollateral",
 		label: "Add collateral",
 		title: "Add collateral",
-		description: "Add more collateral to improve the position's safety buffer. Your ZCHF repayment amount does not change.",
+		description:
+			"Adding collateral improves the safety buffer and may create more room to borrow at the current challenge price. It does not change the challenge price and does not start cooldown.",
 		inputLabel: "Collateral to add",
 	},
 	{
@@ -42,14 +43,15 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		label: "Remove collateral",
 		title: "Remove collateral",
 		description:
-			"Withdraw collateral from this position. This reduces your safety buffer and can make the position easier to challenge.",
+			"Withdraw collateral from this position. This reduces the safety buffer and can make the position easier to challenge.",
 		inputLabel: "Collateral to remove",
 	},
 	{
 		action: "borrowMore",
 		label: "Borrow more",
 		title: "Borrow more",
-		description: "Increase this position's size and receive additional ZCHF, after reserve and upfront interest deductions.",
+		description:
+			"Borrowing more uses the current liquidation / challenge price. If this position is already at the limit for the current challenge price, add collateral or adjust the challenge price first.",
 		inputLabel: "Increase total position size by",
 	},
 	{
@@ -65,7 +67,7 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		label: "Adjust safety",
 		title: "Adjust safety",
 		description:
-			"Change the liquidation / challenge price. Lowering it generally increases the safety buffer. Raising it can reduce the safety buffer and may trigger cooldown rules.",
+			"Lowering the liquidation / challenge price generally improves safety. Raising it can allow more borrowing later, but starts a cooldown. During cooldown, borrowing more is temporarily blocked. This is not the same as being challenged.",
 		inputLabel: "New liquidation / challenge price",
 	},
 	{
@@ -236,7 +238,8 @@ export default function PositionAdjust() {
 	}
 
 	function getAmountError() {
-		if (selectedAction === "borrowMore" && isCooldown) return "This position is in cooldown. Borrowing more is not available yet.";
+		if (selectedAction === "borrowMore" && isCooldown)
+			return "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged.";
 		if (amount > maxTotalLimit) return `This position cannot mint that much additional ZCHF.`;
 		if (liqPrice * collateralAmount < amount * 10n ** 18n) {
 			return `Can mint at most ${formatUnits(
@@ -245,7 +248,7 @@ export default function PositionAdjust() {
 			)} ZCHF with this collateral and challenge price.`;
 		}
 		if (amount > currentMinted && liqPrice > currentPrice) {
-			return "Additional borrowing is only available after the higher challenge price has gone through cooldown.";
+			return "Additional borrowing is only available after the higher challenge price has gone through cooldown. Until then, the higher price is visible, but cannot be used to mint more ZCHF.";
 		}
 		if (liqPrice > currentPrice && currentPrice * collateralAmount < amount * parseEther("1")) {
 			return "This position is limited to the old challenge price. Decrease the position size or add collateral.";
@@ -397,6 +400,7 @@ export default function PositionAdjust() {
 					isCooldown={isCooldown}
 					isMatured={isMatured}
 					isClosed={position.closed}
+					challengeSize={challengeSize}
 					selectedAction={selectedAction}
 					targetRisk={targetRisk}
 					liqPrice={liqPrice}
@@ -618,7 +622,15 @@ export default function PositionAdjust() {
 								You can renew positions by rolling them into suitable new ones with the same collateral.
 							</p>
 						</div>
-						<PositionRollerTable position={position} challengeSize={challengeSize} />
+						{canManagePosition ? (
+							<PositionRollerTable position={position} challengeSize={challengeSize} />
+						) : (
+							<AppNotice
+								variant="neutral"
+								title="Renewal is owner-only"
+								message="This position may be rolled into a newer compatible position by its owner. Connect the owner wallet to approve or roll this position."
+							/>
+						)}
 					</section>
 				)}
 			</div>
@@ -845,6 +857,7 @@ function ManagePositionWarnings(props: {
 	isCooldown: boolean;
 	isMatured: boolean;
 	isClosed: boolean;
+	challengeSize: bigint;
 	selectedAction: ManageAction;
 	targetRisk: RiskEstimate;
 	liqPrice: bigint;
@@ -859,15 +872,19 @@ function ManagePositionWarnings(props: {
 	if (props.isClosed) warnings.push({ title: "Challenge status", message: "This position is closed." });
 	if (props.isChallenged) {
 		warnings.push({
-			title: "Challenge status",
+			title: "Position is challenged",
 			message:
-				"This position is challenged. Market participants can challenge Frankencoin positions, so review it before the challenge period ends.",
+				props.challengeSize > 0n
+					? "Part of this position is under challenge. Market participants can challenge Frankencoin positions, so review it before the challenge period ends."
+					: "This position is challenged. Market participants can challenge Frankencoin positions, so review it before the challenge period ends.",
 		});
 	}
 	if (props.isCooldown) {
 		warnings.push({
-			title: "Cooldown",
-			message: "This position is in cooldown. Borrowing more may be temporarily blocked. This is not the same as being challenged.",
+			title: props.isChallenged ? "Borrowing is also paused" : "Position in cooldown",
+			message: props.isChallenged
+				? "Borrowing more is temporarily blocked while this position is in cooldown."
+				: "Borrowing more is temporarily paused. The position is not necessarily challenged. Cooldown usually ends automatically after the waiting period unless the position is separately challenged.",
 		});
 	}
 	if (props.isMatured) warnings.push({ title: "Maturity", message: "This position has passed maturity. Repayment may be required." });
@@ -889,7 +906,7 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Before you sign",
 			message: props.isCooldown
-				? "Borrowing more is temporarily blocked while this position is in cooldown. The position is not necessarily challenged."
+				? "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged."
 				: "Borrowing more increases your repayment obligation and can reduce your safety buffer.",
 		});
 	}
@@ -923,6 +940,13 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Risk estimate",
 			message: "Market price data is not loaded, so estimated Loan-to-Value and safety buffer are unavailable.",
+		});
+	}
+	if (props.canManage && (props.selectedAction === "adjustSafety" || props.isCooldown)) {
+		warnings.push({
+			title: "Challenge vs cooldown",
+			message:
+				"A challenge is separate from cooldown. Anyone can challenge a position if they believe the collateral is insufficient at the current challenge price. This is not an FPS-holder veto.",
 		});
 	}
 
@@ -981,7 +1005,7 @@ function getActionError(params: {
 	if (params.action === "removeCollateral" && params.isChallenged)
 		return "Collateral cannot be removed while this position is challenged.";
 	if (params.action === "borrowMore" && params.isCooldown)
-		return "Borrowing more is temporarily blocked while this position is in cooldown. The position is not necessarily challenged.";
+		return "Borrowing more is temporarily blocked while this position is in cooldown. This is not the same as being challenged.";
 	if (params.action !== "close" && params.action !== "adjustSafety" && params.actionAmount <= 0n) return "";
 	if (params.action === "adjustSafety" && params.liqPrice <= 0n) return "Enter a valid liquidation / challenge price.";
 	if (params.action === "addCollateral" && params.actionAmount > params.userCollBalance) {
