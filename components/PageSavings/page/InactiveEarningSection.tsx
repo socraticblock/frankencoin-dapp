@@ -61,7 +61,7 @@ export default function InactiveEarningSection({
 						))
 					) : (
 						<div className="rounded-xl border border-dashed border-menu-separator p-4 text-sm text-text-secondary">
-							No inactive chain currently has wallet ZCHF ready to deposit.
+							No other chain currently has wallet ZCHF ready to deposit.
 						</div>
 					)}
 
