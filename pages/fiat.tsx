@@ -16,6 +16,12 @@ const TAB_OPTIONS: { value: MtPelerinTab; label: string }[] = [
 	{ value: "swap", label: "Swap to ZCHF" },
 ];
 
+const FLOW_COPY: Record<MtPelerinTab, string> = {
+	buy: "Buy ZCHF with fiat through Mt Pelerin. Default route: CHF to ZCHF.",
+	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Default route: ZCHF to CHF.",
+	swap: "Swap supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
+};
+
 export default function FiatPage() {
 	const [tab, setTab] = useState<MtPelerinTab>("buy");
 	const [network, setNetwork] = useState<MtPelerinNetwork>("base_mainnet");
@@ -73,6 +79,7 @@ export default function FiatPage() {
 						</select>
 					</label>
 				</div>
+				<p className="mt-4 text-sm leading-6 text-text-secondary">{FLOW_COPY[tab]}</p>
 
 				{activation.usingDevFallback ? (
 					<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">

@@ -30,28 +30,35 @@ export function buildMtPelerinWidgetUrl(tab: MtPelerinTab, network: MtPelerinNet
 		_ctkn: activation.key,
 		type: "web",
 		lang: "en",
-		tabs: "buy,sell,swap",
-		crys: "ZCHF",
-		curs: "CHF,EUR,USD",
-		nets: MTP_NETWORKS.map((item) => item.value).join(","),
-		net: network,
+		tabs: tab,
 		tab,
+		net: network,
+		nets: MTP_NETWORKS.map((item) => item.value).join(","),
+		curs: "CHF,EUR,USD",
 	});
 
 	if (tab === "buy") {
-		params.set("bdc", "ZCHF");
+		params.set("crys", "ZCHF");
 		params.set("bsc", "CHF");
+		params.set("bdc", "ZCHF");
+		params.set("bsa", "100");
 		params.set("dnet", network);
 	}
 
 	if (tab === "sell") {
+		params.set("crys", "ZCHF");
 		params.set("ssc", "ZCHF");
 		params.set("sdc", "CHF");
+		params.set("ssa", "100");
 		params.set("snet", network);
 	}
 
 	if (tab === "swap") {
+		params.set("crys", "USDC,ZCHF");
+		params.set("wsc", "USDC");
 		params.set("wdc", "ZCHF");
+		params.set("wsa", "100");
+		params.set("snet", network);
 		params.set("dnet", network);
 	}
 
