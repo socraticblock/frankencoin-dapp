@@ -3,9 +3,6 @@ export type MtPelerinTab = "buy" | "sell" | "swap";
 export type MtPelerinNetwork =
 	| "base_mainnet"
 	| "mainnet"
-	| "arbitrum_mainnet"
-	| "optimism_mainnet"
-	| "matic_mainnet"
 	| "xdai_mainnet";
 
 export const MTP_DEV_ACTIVATION_KEY = "bec6626e-8913-497d-9835-6e6ae9edb144";
@@ -13,9 +10,6 @@ export const MTP_DEV_ACTIVATION_KEY = "bec6626e-8913-497d-9835-6e6ae9edb144";
 export const MTP_NETWORKS: { value: MtPelerinNetwork; label: string }[] = [
 	{ value: "base_mainnet", label: "Base" },
 	{ value: "mainnet", label: "Ethereum" },
-	{ value: "arbitrum_mainnet", label: "Arbitrum" },
-	{ value: "optimism_mainnet", label: "Optimism" },
-	{ value: "matic_mainnet", label: "Polygon" },
 	{ value: "xdai_mainnet", label: "Gnosis" },
 ];
 
@@ -40,6 +34,7 @@ export function buildMtPelerinWidgetUrl(tab: MtPelerinTab, network: MtPelerinNet
 		crys: "ZCHF",
 		curs: "CHF,EUR,USD",
 		nets: MTP_NETWORKS.map((item) => item.value).join(","),
+		net: network,
 		tab,
 	});
 

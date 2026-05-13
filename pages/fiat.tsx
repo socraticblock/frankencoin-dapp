@@ -81,10 +81,11 @@ export default function FiatPage() {
 				) : null}
 
 				{widgetUrl ? (
-					<div className="mt-5 overflow-hidden rounded-xl border border-[#e0d4bd] bg-white shadow-sm dark:border-menu-separator dark:bg-card-content-secondary">
+					<div className="mx-auto mt-5 max-w-[920px] overflow-hidden rounded-xl border border-[#e0d4bd] bg-white shadow-sm dark:border-menu-separator dark:bg-card-content-secondary">
 						<iframe
+							key={widgetUrl}
 							allow="usb; ethereum; clipboard-write; payment; microphone; camera"
-							className="h-[760px] w-full bg-white"
+							className="h-[640px] w-full bg-white"
 							loading="lazy"
 							src={widgetUrl}
 							title="Mt Pelerin ZCHF fiat gateway"
