@@ -67,7 +67,7 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		label: "Adjust safety",
 		title: "Adjust safety",
 		description:
-			"Lowering the liquidation / challenge price generally improves safety. Raising it can allow more borrowing later, but starts a cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
+			"Lowering the liquidation / challenge price generally improves safety. Raising it can allow more borrowing later, but starts a 3-day cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
 		inputLabel: "New liquidation / challenge price",
 	},
 	{
@@ -177,7 +177,13 @@ export default function PositionAdjust() {
 	const priceDecimals = 36 - position.collateralDecimals;
 	const marketPrice80Pct =
 		marketPriceChf != null ? parseUnits(String(Math.round(marketPriceChf * 80) / 100), priceDecimals) : currentPrice;
-	const isCooldown = position.cooldown * 1000 - Date.now() > 0;
+	const cooldownEndsAtMs = position.cooldown * 1000;
+	const cooldownRemainingSeconds = Math.max(0, Math.ceil((cooldownEndsAtMs - Date.now()) / 1000));
+	const isCooldown = cooldownRemainingSeconds > 0;
+	const cooldownRemainingLabel = isCooldown ? formatDuration(cooldownRemainingSeconds) : "";
+	const cooldownEndLabel = isCooldown
+		? new Date(cooldownEndsAtMs).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+		: "";
 	const isMatured = position.expiration * 1000 < Date.now();
 	const isChallenged = challengeSize > 0n;
 	const isOwner = Boolean(account.address && safeNormalizeAddress(account.address) === safeNormalizeAddress(position.owner));
@@ -293,6 +299,7 @@ export default function PositionAdjust() {
 	const currentRepayFromWallet = currentMinted - currentReserve;
 	const targetRepayFromWallet = amount - targetReserve;
 	const challengeStatus = getChallengeStatus({ positionClosed: position.closed, isChallenged, isCooldown, isMatured });
+	const challengeBadgeLabel = isCooldown ? `In cooldown · ${cooldownRemainingLabel}` : challengeStatus.label;
 
 	const handleApprove = async () => {
 		try {
@@ -375,7 +382,7 @@ export default function PositionAdjust() {
 				}
 			>
 				<div className="flex flex-wrap gap-2">
-					<StatusBadge label={challengeStatus.label} tone={challengeStatus.tone} />
+					<StatusBadge label={challengeBadgeLabel} tone={challengeStatus.tone} />
 					<StatusBadge label={`V${position.version}`} tone="info" />
 					{position.isClone ? <StatusBadge label="Clone" tone="neutral" /> : null}
 				</div>
@@ -401,6 +408,7 @@ export default function PositionAdjust() {
 					isMatured={isMatured}
 					isClosed={position.closed}
 					challengeSize={challengeSize}
+					cooldownEndLabel={cooldownEndLabel}
 					selectedAction={selectedAction}
 					targetRisk={targetRisk}
 					liqPrice={liqPrice}
@@ -858,6 +866,7 @@ function ManagePositionWarnings(props: {
 	isMatured: boolean;
 	isClosed: boolean;
 	challengeSize: bigint;
+	cooldownEndLabel: string;
 	selectedAction: ManageAction;
 	targetRisk: RiskEstimate;
 	liqPrice: bigint;
@@ -881,10 +890,10 @@ function ManagePositionWarnings(props: {
 	}
 	if (props.isCooldown) {
 		warnings.push({
-			title: props.isChallenged ? "Minting is also paused" : "Position in cooldown",
+			title: props.isChallenged ? "Minting is also paused" : "Cooldown active",
 			message: props.isChallenged
-				? "Minting more ZCHF from this position is temporarily blocked while this position is in cooldown."
-				: "Minting more ZCHF from this position is temporarily paused. The position is not necessarily challenged. You may still be able to add collateral or repay, but you cannot increase the minted amount until cooldown ends.",
+				? `Minting more ZCHF from this position is paused until ${props.cooldownEndLabel}. This cooldown is separate from the challenge.`
+				: `Minting more ZCHF from this position is paused until ${props.cooldownEndLabel}. This is not the same as being challenged. You may still be able to add collateral or repay, but you cannot increase the minted amount until cooldown ends.`,
 		});
 	}
 	if (props.isMatured) warnings.push({ title: "Maturity", message: "This position has passed maturity. Repayment may be required." });
@@ -914,7 +923,7 @@ function ManagePositionWarnings(props: {
 		warnings.push({
 			title: "Cooldown",
 			message:
-				"Raising the liquidation / challenge price starts a cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
+				"Raising the liquidation / challenge price starts a 3-day cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
 		});
 	}
 	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
