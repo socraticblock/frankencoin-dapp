@@ -30,7 +30,7 @@ type CockpitCardProps = {
 	help?: string;
 	iconLabel: string;
 	action?: ChainAction;
-	secondaryActions?: { label: string; note: string }[];
+	secondaryActions?: { label: string; note: string; action?: ChainAction }[];
 	tone: CockpitCardTone;
 	onAction: (action: ChainAction) => void;
 };
@@ -447,7 +447,16 @@ export default function MainPage() {
 				},
 				help: "Transfer ZCHF to another wallet or bridge it to another chain.",
 				secondaryActions: [
-					{ label: "Buy with bank", note: "Coming soon" },
+					{
+						label: "Buy with bank",
+						note: "Mt Pelerin",
+						action: {
+							label: "Buy with bank",
+							targetChainId: currentChainId as ChainId,
+							href: "/fiat",
+							skipNetworkSwitch: true,
+						},
+					},
 					{ label: "Buy on DEX", note: "Coming soon" },
 				],
 				tone: "slate",
@@ -714,8 +723,13 @@ function CockpitCard({ title, copy, amount, secondaryCopy, help, iconLabel, acti
 						<button
 							key={secondaryAction.label}
 							type="button"
-							disabled
-							className="flex min-h-[38px] w-full cursor-not-allowed items-center justify-between rounded-lg border border-[#e0d4bd] bg-[#f4efe6] px-3 text-sm text-text-secondary opacity-80 dark:border-menu-separator dark:bg-card-content-primary"
+							disabled={!secondaryAction.action}
+							onClick={() => secondaryAction.action && onAction(secondaryAction.action)}
+							className={`flex min-h-[38px] w-full items-center justify-between rounded-lg border border-[#e0d4bd] px-3 text-sm transition dark:border-menu-separator dark:bg-card-content-primary ${
+								secondaryAction.action
+									? "bg-card-content-secondary text-text-primary hover:border-[#c4a75f]"
+									: "cursor-not-allowed bg-[#f4efe6] text-text-secondary opacity-80"
+							}`}
 						>
 							<span>{secondaryAction.label}</span>
 							<span className="rounded-full border border-[#d7c28a] px-2 py-0.5 text-[10px] font-semibold text-[#80601d] dark:border-[#8a7448] dark:text-[#e5c978]">

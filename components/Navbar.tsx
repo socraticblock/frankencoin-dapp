@@ -16,6 +16,7 @@ const MAIN_ITEMS = [
 ];
 
 const MORE_ITEMS = [
+	{ to: "/fiat", name: "Buy / Sell ZCHF" },
 	{ to: "/transfer", name: "Transfer" },
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
