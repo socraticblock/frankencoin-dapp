@@ -1,5 +1,5 @@
 import AppCard from "@components/AppCard";
-import { Address, formatUnits, isAddress, zeroAddress } from "viem";
+import { Address, formatUnits, isAddress } from "viem";
 import AppLink from "@components/AppLink";
 import { useConnection } from "wagmi";
 import { ContractUrl, shortenAddress, TxUrl } from "@utils";
@@ -34,10 +34,8 @@ export default function TransferDetailsCard({
 	const { address } = useConnection();
 	const isBridge = mode === "bridge";
 	const hasAmount = amount > 0n;
+	const hasSender = Boolean(senderAddress && isAddress(senderAddress));
 	const hasRecipient = Boolean(recipientAddress && isAddress(recipientAddress));
-
-	senderAddress = senderAddress || zeroAddress;
-	recipientAddress = recipientAddress || zeroAddress;
 
 	return (
 		<AppCard>
@@ -55,12 +53,11 @@ export default function TransferDetailsCard({
 
 				<div className="flex">
 					<div className="flex-1 text-text-secondary">From wallet</div>
-					<AppLink
-						className=""
-						label={isAddress(senderAddress) ? shortenAddress(senderAddress) : "Invalid Input"}
-						href={ContractUrl(senderAddress || zeroAddress, fromChain)}
-						external={true}
-					/>
+					{hasSender && senderAddress ? (
+						<AppLink className="" label={shortenAddress(senderAddress)} href={ContractUrl(senderAddress, fromChain)} external={true} />
+					) : (
+						<div>Connect wallet</div>
+					)}
 				</div>
 
 				<div className="flex">
@@ -77,12 +74,11 @@ export default function TransferDetailsCard({
 
 				<div className="flex">
 					<div className="flex-1 text-text-secondary">Recipient wallet</div>
-					<AppLink
-						className=""
-						label={isAddress(recipientAddress) ? shortenAddress(recipientAddress) : "Invalid Input"}
-						href={ContractUrl(recipientAddress || zeroAddress, toChain)}
-						external={true}
-					/>
+					{hasRecipient && recipientAddress ? (
+						<AppLink className="" label={shortenAddress(recipientAddress)} href={ContractUrl(recipientAddress, toChain)} external={true} />
+					) : (
+						<div>Enter recipient wallet</div>
+					)}
 				</div>
 
 				<div className="flex">

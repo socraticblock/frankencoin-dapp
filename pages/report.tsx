@@ -109,11 +109,12 @@ export default function ReportPage() {
 				} else {
 					setError("Something did not work correctly");
 				}
+			} finally {
+				setLoading(false);
 			}
 		};
 
 		fetcher();
-		setLoading(false);
 	}, [reportingAddress]);
 
 	useEffect(() => {

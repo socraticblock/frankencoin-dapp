@@ -45,7 +45,7 @@ function ModeTabButton({ active, children, onClick }: { active: boolean; childre
 export default function TransferInteractionCard() {
 	const router = useRouter();
 	const connectedChainId = useChainId() as ChainId;
-	const { address } = useConnection();
+	const { address, isConnected } = useConnection();
 	const appKitNetwork = useAppKitNetwork();
 	const isMainnetChain = connectedChainId === mainnet.id;
 	const chainBalances = useZchfChainBalances(address as Address | undefined);
@@ -190,7 +190,7 @@ export default function TransferInteractionCard() {
 						<div className="mt-2 space-y-2">
 							{displayBalanceRows.length === 0 ? (
 								<div className="rounded-md bg-card-content-primary px-3 py-2 text-sm text-text-secondary">
-									No chain has at least 0.1 ZCHF.
+									{isConnected ? "No chain has at least 0.1 ZCHF." : "Connect wallet to view ZCHF balances."}
 								</div>
 							) : (
 								displayBalanceRows.map((entry) => {
