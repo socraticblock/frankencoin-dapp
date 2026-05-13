@@ -10,23 +10,30 @@ import {
 	MtPelerinTab,
 } from "../utils/mtpelerin";
 
-const TAB_OPTIONS: { value: MtPelerinTab; label: string }[] = [
-	{ value: "buy", label: "Buy ZCHF with fiat" },
-	{ value: "sell", label: "Sell ZCHF for fiat" },
-	{ value: "swap", label: "Swap or bridge to ZCHF" },
+const FLOW_OPTIONS: { value: MtPelerinTab; label: string; copy: string }[] = [
+	{
+		value: "buy",
+		label: "Buy ZCHF",
+		copy: "Buy ZCHF with fiat through Mt Pelerin. Default route: CHF to ZCHF.",
+	},
+	{
+		value: "sell",
+		label: "Cash out ZCHF",
+		copy: "Cash out ZCHF back to fiat through Mt Pelerin. Default route: ZCHF to CHF.",
+	},
+	{
+		value: "swap",
+		label: "Swap to ZCHF",
+		copy: "Swap supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
+	},
 ];
-
-const FLOW_COPY: Record<MtPelerinTab, string> = {
-	buy: "Buy ZCHF with fiat through Mt Pelerin. Default route: CHF to ZCHF.",
-	sell: "Sell ZCHF for fiat through Mt Pelerin. Default route: ZCHF to CHF.",
-	swap: "Swap or bridge supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
-};
 
 export default function FiatPage() {
 	const [tab, setTab] = useState<MtPelerinTab>("buy");
 	const [network, setNetwork] = useState<MtPelerinNetwork>("base_mainnet");
 	const activation = getMtPelerinActivationKey();
 	const widgetUrl = useMemo(() => buildMtPelerinWidgetUrl(tab, network), [network, tab]);
+	const selectedFlow = FLOW_OPTIONS.find((option) => option.value === tab) ?? FLOW_OPTIONS[0];
 
 	return (
 		<>
@@ -36,8 +43,8 @@ export default function FiatPage() {
 
 			<AppPageHeader
 				eyebrow="FIAT GATEWAY"
-				title="Buy, Sell & Swap ZCHF"
-				description="Buy ZCHF with fiat, sell ZCHF for fiat to your bank, or swap or bridge supported assets into ZCHF."
+				title="Buy & Cash Out ZCHF"
+				description="Buy ZCHF with fiat, cash out ZCHF to your bank, or swap supported assets into ZCHF."
 			>
 				<AppNotice
 					variant="neutral"
@@ -48,7 +55,7 @@ export default function FiatPage() {
 			<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 				<div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 					<div className="flex flex-wrap gap-2">
-						{TAB_OPTIONS.map((option) => (
+						{FLOW_OPTIONS.map((option) => (
 							<button
 								key={option.value}
 								type="button"
@@ -79,7 +86,7 @@ export default function FiatPage() {
 						</select>
 					</label>
 				</div>
-				<p className="mt-4 text-sm leading-6 text-text-secondary">{FLOW_COPY[tab]}</p>
+				<p className="mt-4 text-sm leading-6 text-text-secondary">{selectedFlow.copy}</p>
 
 				{activation.usingDevFallback ? (
 					<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">

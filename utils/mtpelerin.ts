@@ -1,19 +1,42 @@
 export type MtPelerinTab = "buy" | "sell" | "swap";
 
-export type MtPelerinNetwork =
-	| "base_mainnet"
-	| "mainnet"
-	| "xdai_mainnet";
-
 export const MTP_DEV_ACTIVATION_KEY = "bec6626e-8913-497d-9835-6e6ae9edb144";
 
-export const MTP_NETWORKS: { value: MtPelerinNetwork; label: string }[] = [
+export const MTP_NETWORKS = [
 	{ value: "base_mainnet", label: "Base" },
 	{ value: "mainnet", label: "Ethereum" },
 	{ value: "xdai_mainnet", label: "Gnosis" },
-];
+] as const;
+
+export type MtPelerinNetwork = (typeof MTP_NETWORKS)[number]["value"];
 
 const MTP_WIDGET_BASE_URL = "https://widget.mtpelerin.com/";
+const MTP_ALLOWED_NETWORKS = MTP_NETWORKS.map((item) => item.value).join(",");
+
+const MTP_FLOW_DEFAULTS: Record<MtPelerinTab, (network: MtPelerinNetwork) => Record<string, string>> = {
+	buy: (network) => ({
+		crys: "ZCHF",
+		bsc: "CHF",
+		bdc: "ZCHF",
+		bsa: "100",
+		dnet: network,
+	}),
+	sell: (network) => ({
+		crys: "ZCHF",
+		ssc: "ZCHF",
+		sdc: "CHF",
+		ssa: "100",
+		snet: network,
+	}),
+	swap: (network) => ({
+		crys: "USDC,ZCHF",
+		wsc: "USDC",
+		wdc: "ZCHF",
+		wsa: "100",
+		snet: network,
+		dnet: network,
+	}),
+};
 
 export function getMtPelerinActivationKey() {
 	const configuredKey = process.env.NEXT_PUBLIC_MTP_ACTIVATION_KEY?.trim();
@@ -33,33 +56,12 @@ export function buildMtPelerinWidgetUrl(tab: MtPelerinTab, network: MtPelerinNet
 		tabs: tab,
 		tab,
 		net: network,
-		nets: MTP_NETWORKS.map((item) => item.value).join(","),
+		nets: MTP_ALLOWED_NETWORKS,
 		curs: "CHF,EUR,USD",
 	});
 
-	if (tab === "buy") {
-		params.set("crys", "ZCHF");
-		params.set("bsc", "CHF");
-		params.set("bdc", "ZCHF");
-		params.set("bsa", "100");
-		params.set("dnet", network);
-	}
-
-	if (tab === "sell") {
-		params.set("crys", "ZCHF");
-		params.set("ssc", "ZCHF");
-		params.set("sdc", "CHF");
-		params.set("ssa", "100");
-		params.set("snet", network);
-	}
-
-	if (tab === "swap") {
-		params.set("crys", "USDC,ZCHF");
-		params.set("wsc", "USDC");
-		params.set("wdc", "ZCHF");
-		params.set("wsa", "100");
-		params.set("snet", network);
-		params.set("dnet", network);
+	for (const [key, value] of Object.entries(MTP_FLOW_DEFAULTS[tab](network))) {
+		params.set(key, value);
 	}
 
 	// TODO V2: generate a random 4-digit code, request a wallet signature for
