@@ -26,11 +26,7 @@ import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 import { generateExpirationCalendar, downloadCalendarFile, generateGoogleCalendarUrl } from "../../../utils/calendarGenerator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarDays, faCalendarPlus } from "@fortawesome/free-solid-svg-icons";
-import {
-	buildManageTarget,
-	estimateRisk,
-	getReserve,
-} from "@components/PageMypositions/manage/managePositionMath";
+import { buildManageTarget, estimateRisk, getReserve } from "@components/PageMypositions/manage/managePositionMath";
 import { ManageAction, RiskEstimate } from "@components/PageMypositions/manage/managePositionTypes";
 
 const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; description: string; inputLabel?: string }[] = [
@@ -45,7 +41,8 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		action: "removeCollateral",
 		label: "Remove collateral",
 		title: "Remove collateral",
-		description: "Withdraw collateral from this position. This reduces your safety buffer and can make the position easier to challenge.",
+		description:
+			"Withdraw collateral from this position. This reduces your safety buffer and can make the position easier to challenge.",
 		inputLabel: "Collateral to remove",
 	},
 	{
@@ -59,7 +56,8 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		action: "repay",
 		label: "Repay ZCHF",
 		title: "Repay ZCHF",
-		description: "Reduce the position size using ZCHF from your wallet. Retained reserves may reduce the amount you need to repay from wallet.",
+		description:
+			"Reduce the position size using ZCHF from your wallet. Retained reserves may reduce the amount you need to repay from wallet.",
 		inputLabel: "Reduce position size by",
 	},
 	{
@@ -180,6 +178,8 @@ export default function PositionAdjust() {
 	const isCooldown = position.cooldown * 1000 - Date.now() > 0;
 	const isMatured = position.expiration * 1000 < Date.now();
 	const isChallenged = challengeSize > 0n;
+	const isOwner = Boolean(account.address && safeNormalizeAddress(account.address) === safeNormalizeAddress(position.owner));
+	const canManagePosition = Boolean(isOwner && account.address);
 
 	const target = buildManageTarget({
 		action: selectedAction,
@@ -239,7 +239,10 @@ export default function PositionAdjust() {
 		if (selectedAction === "borrowMore" && isCooldown) return "This position is in cooldown. Borrowing more is not available yet.";
 		if (amount > maxTotalLimit) return `This position cannot mint that much additional ZCHF.`;
 		if (liqPrice * collateralAmount < amount * 10n ** 18n) {
-			return `Can mint at most ${formatUnits((collateralAmount * liqPrice) / 10n ** 36n, 0)} ZCHF with this collateral and challenge price.`;
+			return `Can mint at most ${formatUnits(
+				(collateralAmount * liqPrice) / 10n ** 36n,
+				0
+			)} ZCHF with this collateral and challenge price.`;
 		}
 		if (amount > currentMinted && liqPrice > currentPrice) {
 			return "Additional borrowing is only available after the higher challenge price has gone through cooldown.";
@@ -259,11 +262,14 @@ export default function PositionAdjust() {
 	const expiredIn = expirationDiff > 0 ? formatDuration(expirationDiff) : "Expired";
 	const noChange = amount === currentMinted && collateralAmount === currentCollateral && liqPrice === currentPrice;
 	const needsCollateralApproval =
-		selectedAction === "addCollateral" && collateralAmount > currentCollateral && collateralAmount - currentCollateral > userCollAllowance;
+		selectedAction === "addCollateral" &&
+		collateralAmount > currentCollateral &&
+		collateralAmount - currentCollateral > userCollAllowance;
 	const actionError = getActionError({
 		action: selectedAction,
 		actionAmount,
 		accountAddress: account.address,
+		isOwner,
 		positionClosed: position.closed,
 		isChallenged,
 		isCooldown,
@@ -278,7 +284,7 @@ export default function PositionAdjust() {
 		userFrancBalance,
 		paidOut: paidOutAmount(),
 	});
-	const primaryDisabled = Boolean(actionError) || noChange || isApproving || isAdjusting;
+	const primaryDisabled = !canManagePosition || Boolean(actionError) || noChange || isApproving || isAdjusting;
 	const currentReserve = getReserve(currentMinted, position.reserveContribution);
 	const targetReserve = getReserve(amount, position.reserveContribution);
 	const currentRepayFromWallet = currentMinted - currentReserve;
@@ -373,7 +379,20 @@ export default function PositionAdjust() {
 			</AppPageHeader>
 
 			<div className="mt-6 space-y-6">
+				{!canManagePosition ? (
+					<AppNotice
+						variant="neutral"
+						title="Viewing public position"
+						message={
+							account.address
+								? "Your connected wallet is not the owner of this position. You can review it, but only the owner can adjust collateral, borrow more, repay, or close it."
+								: "Connect the owner wallet to manage this position."
+						}
+					/>
+				) : null}
+
 				<ManagePositionWarnings
+					canManage={canManagePosition}
 					isChallenged={isChallenged}
 					isCooldown={isCooldown}
 					isMatured={isMatured}
@@ -403,136 +422,161 @@ export default function PositionAdjust() {
 					challengeStatus={challengeStatus.label}
 				/>
 
-				<section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-					<AppCard>
-						<div className="space-y-5">
-							<ManagePositionActionTabs selectedAction={selectedAction} onSelect={setSelectedAction} />
-							<div>
-								<h2 className="text-xl font-semibold text-text-primary">{actionConfig.title}</h2>
-								<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
-							</div>
-							{selectedAction === "close" ? (
-								<AppNotice
-									variant="warning"
-									title="Before you sign"
-									message="This will try to repay the full position and return all deposited collateral to your wallet."
-								/>
-							) : selectedAction === "adjustSafety" ? (
-								<TokenInput
-									label={actionConfig.inputLabel}
-									symbol="ZCHF"
-									min={1n}
-									max={marketPrice80Pct}
-									reset={currentPrice}
-									value={selectedPrice.toString()}
-									digit={priceDecimals}
-									onChange={(value) => setSelectedPrice(BigInt(value))}
-									placeholder="Challenge price"
-									warning={selectedPrice > currentPrice ? "Raising the challenge price can reduce this position's safety buffer." : undefined}
-								/>
-							) : (
-								<TokenInput
-									label={actionConfig.inputLabel}
-									symbol={selectedAction === "addCollateral" || selectedAction === "removeCollateral" ? position.collateralSymbol : "ZCHF"}
-									min={0n}
-									max={getActionMax({
-										action: selectedAction,
-										userCollBalance,
-										currentCollateral,
-										currentMinted,
-										maxTotalLimit,
-									})}
-									reset={0n}
-									value={actionAmount.toString()}
-									digit={
-										selectedAction === "addCollateral" || selectedAction === "removeCollateral"
-											? position.collateralDecimals
-											: 18
-									}
-									onChange={(value) => setActionAmount(BigInt(value))}
-									placeholder="0.00"
-									limit={
-										selectedAction === "addCollateral"
-											? userCollBalance
-											: selectedAction === "removeCollateral"
-											? currentCollateral
-											: selectedAction === "repay"
-											? userFrancBalance
-											: maxTotalLimit > currentMinted
-											? maxTotalLimit - currentMinted
-											: 0n
-									}
-									limitDigit={
-										selectedAction === "addCollateral" || selectedAction === "removeCollateral"
-											? position.collateralDecimals
-											: 18
-									}
-									limitLabel={
-										selectedAction === "addCollateral"
-											? "Wallet"
-											: selectedAction === "removeCollateral"
-											? "Deposited"
-											: selectedAction === "repay"
-											? "Wallet"
-											: "Available"
-									}
-								/>
-							)}
-
-							{actionAmount === 0n && selectedAction !== "adjustSafety" && selectedAction !== "close" ? (
-								<p className="text-sm text-text-secondary">Enter an amount to preview the change.</p>
-							) : null}
-
-							<GuardSupportedChain chain={mainnet}>
-								{needsCollateralApproval ? (
-									<AppButton isLoading={isApproving} disabled={!account.address || isApproving} onClick={handleApprove}>
-										Approve collateral
-									</AppButton>
+				{canManagePosition ? (
+					<section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+						<AppCard>
+							<div className="space-y-5">
+								<ManagePositionActionTabs selectedAction={selectedAction} onSelect={setSelectedAction} />
+								<div>
+									<h2 className="text-xl font-semibold text-text-primary">{actionConfig.title}</h2>
+									<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
+								</div>
+								{selectedAction === "close" ? (
+									<AppNotice
+										variant="warning"
+										title="Before you sign"
+										message="This will try to repay the full position and return all deposited collateral to your wallet."
+									/>
+								) : selectedAction === "adjustSafety" ? (
+									<TokenInput
+										label={actionConfig.inputLabel}
+										symbol="ZCHF"
+										min={1n}
+										max={marketPrice80Pct}
+										reset={currentPrice}
+										value={selectedPrice.toString()}
+										digit={priceDecimals}
+										onChange={(value) => setSelectedPrice(BigInt(value))}
+										placeholder="Challenge price"
+										warning={
+											selectedPrice > currentPrice
+												? "Raising the challenge price can reduce this position's safety buffer."
+												: undefined
+										}
+									/>
 								) : (
-									<AppButton
-										disabled={primaryDisabled}
-										isLoading={isAdjusting}
-										onClick={handleAdjust}
-										error={actionError || undefined}
-									>
-										{getButtonText(selectedAction)}
-									</AppButton>
+									<TokenInput
+										label={actionConfig.inputLabel}
+										symbol={
+											selectedAction === "addCollateral" || selectedAction === "removeCollateral"
+												? position.collateralSymbol
+												: "ZCHF"
+										}
+										min={0n}
+										max={getActionMax({
+											action: selectedAction,
+											userCollBalance,
+											currentCollateral,
+											currentMinted,
+											maxTotalLimit,
+										})}
+										reset={0n}
+										value={actionAmount.toString()}
+										digit={
+											selectedAction === "addCollateral" || selectedAction === "removeCollateral"
+												? position.collateralDecimals
+												: 18
+										}
+										onChange={(value) => setActionAmount(BigInt(value))}
+										placeholder="0.00"
+										limit={
+											selectedAction === "addCollateral"
+												? userCollBalance
+												: selectedAction === "removeCollateral"
+												? currentCollateral
+												: selectedAction === "repay"
+												? userFrancBalance
+												: maxTotalLimit > currentMinted
+												? maxTotalLimit - currentMinted
+												: 0n
+										}
+										limitDigit={
+											selectedAction === "addCollateral" || selectedAction === "removeCollateral"
+												? position.collateralDecimals
+												: 18
+										}
+										limitLabel={
+											selectedAction === "addCollateral"
+												? "Wallet"
+												: selectedAction === "removeCollateral"
+												? "Deposited"
+												: selectedAction === "repay"
+												? "Wallet"
+												: "Available"
+										}
+									/>
 								)}
-							</GuardSupportedChain>
+
+								{actionAmount === 0n && selectedAction !== "adjustSafety" && selectedAction !== "close" ? (
+									<p className="text-sm text-text-secondary">Enter an amount to preview the change.</p>
+								) : null}
+
+								<GuardSupportedChain chain={mainnet}>
+									{needsCollateralApproval ? (
+										<AppButton
+											isLoading={isApproving}
+											disabled={!account.address || isApproving}
+											onClick={handleApprove}
+										>
+											Approve collateral
+										</AppButton>
+									) : (
+										<AppButton
+											disabled={primaryDisabled}
+											isLoading={isAdjusting}
+											onClick={handleAdjust}
+											error={actionError || undefined}
+										>
+											{getButtonText(selectedAction)}
+										</AppButton>
+									)}
+								</GuardSupportedChain>
+							</div>
+						</AppCard>
+
+						<div className="space-y-4">
+							<ManagePositionPreviewCard
+								action={selectedAction}
+								currentMinted={currentMinted}
+								targetMinted={amount}
+								currentCollateral={currentCollateral}
+								targetCollateral={collateralAmount}
+								currentPrice={currentPrice}
+								targetPrice={liqPrice}
+								currentRepayFromWallet={currentRepayFromWallet}
+								targetRepayFromWallet={targetRepayFromWallet}
+								currentReserve={currentReserve}
+								targetReserve={targetReserve}
+								fees={fees}
+								paidOut={paidOutAmount()}
+								risk={targetRisk}
+								collateralSymbol={position.collateralSymbol}
+								collateralDecimals={position.collateralDecimals}
+								priceDecimals={priceDecimals}
+								marketPriceLoaded={marketPriceChf != null}
+							/>
+							<ManagePositionWalletCard
+								userFrancBalance={userFrancBalance}
+								userCollBalance={userCollBalance}
+								userCollAllowance={userCollAllowance}
+								collateralSymbol={position.collateralSymbol}
+								collateralDecimals={position.collateralDecimals}
+								needsCollateralApproval={needsCollateralApproval}
+							/>
+						</div>
+					</section>
+				) : (
+					<AppCard>
+						<div className="space-y-2">
+							<h2 className="text-xl font-semibold text-text-primary">Manage position</h2>
+							<p className="text-sm text-text-secondary">
+								{account.address
+									? "Connect the owner wallet to manage this position. This connected wallet can review the public position details only."
+									: "Connect the owner wallet to manage this position."}
+							</p>
 						</div>
 					</AppCard>
-
-					<div className="space-y-4">
-						<ManagePositionPreviewCard
-							action={selectedAction}
-							currentMinted={currentMinted}
-							targetMinted={amount}
-							currentCollateral={currentCollateral}
-							targetCollateral={collateralAmount}
-							currentPrice={currentPrice}
-							targetPrice={liqPrice}
-							currentRepayFromWallet={currentRepayFromWallet}
-							targetRepayFromWallet={targetRepayFromWallet}
-							currentReserve={currentReserve}
-							targetReserve={targetReserve}
-							fees={fees}
-							paidOut={paidOutAmount()}
-							risk={targetRisk}
-							collateralSymbol={position.collateralSymbol}
-							collateralDecimals={position.collateralDecimals}
-							priceDecimals={priceDecimals}
-							marketPriceLoaded={marketPriceChf != null}
-						/>
-						<ManagePositionWalletCard
-							userFrancBalance={userFrancBalance}
-							userCollBalance={userCollBalance}
-							userCollAllowance={userCollAllowance}
-							collateralSymbol={position.collateralSymbol}
-							collateralDecimals={position.collateralDecimals}
-							needsCollateralApproval={needsCollateralApproval}
-						/>
-					</div>
-				</section>
+				)}
 
 				<AppCard>
 					<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -635,8 +679,14 @@ function ManagePositionSummary({
 	challengeStatus: string;
 }) {
 	const rows = [
-		{ label: "Collateral deposited", value: `${formatCurrency(formatUnits(currentCollateral, position.collateralDecimals))} ${position.collateralSymbol}` },
-		{ label: "Collateral value", value: risk.collateralValue === null ? "Unavailable" : `${formatCurrency(risk.collateralValue, 2, 2)} CHF estimated` },
+		{
+			label: "Collateral deposited",
+			value: `${formatCurrency(formatUnits(currentCollateral, position.collateralDecimals))} ${position.collateralSymbol}`,
+		},
+		{
+			label: "Collateral value",
+			value: risk.collateralValue === null ? "Unavailable" : `${formatCurrency(risk.collateralValue, 2, 2)} CHF estimated`,
+		},
 		{ label: "Total position size", value: `${formatCurrency(formatUnits(currentMinted, 18))} ZCHF` },
 		{ label: "Retained reserve", value: `${formatCurrency(formatUnits(currentReserve, 18))} ZCHF` },
 		{ label: "Repay from wallet", value: `${formatCurrency(formatUnits(currentRepayFromWallet, 18))} ZCHF` },
@@ -689,20 +739,57 @@ function ManagePositionPreviewCard(props: {
 			<h2 className="text-lg font-semibold text-text-primary">Before you sign</h2>
 			<div className="mt-4 space-y-3">
 				<PreviewRow label="Action" value={getActionLabel(props.action)} />
-				<PreviewRow label="From wallet" value={formatFromWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)} />
-				<PreviewRow label="To wallet" value={formatToWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)} />
-				{mintedDelta > 0n ? <PreviewRow label="Increase in position size" value={`+${formatCurrency(formatUnits(mintedDelta, 18))} ZCHF`} /> : null}
-				{mintedDelta < 0n ? <PreviewRow label="Position size reduction" value={`${formatCurrency(formatUnits(-mintedDelta, 18))} ZCHF`} /> : null}
+				<PreviewRow
+					label="From wallet"
+					value={formatFromWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)}
+				/>
+				<PreviewRow
+					label="To wallet"
+					value={formatToWallet(props.action, walletZchf, collateralDelta, props.collateralSymbol, props.collateralDecimals)}
+				/>
+				{mintedDelta > 0n ? (
+					<PreviewRow label="Increase in position size" value={`+${formatCurrency(formatUnits(mintedDelta, 18))} ZCHF`} />
+				) : null}
+				{mintedDelta < 0n ? (
+					<PreviewRow label="Position size reduction" value={`${formatCurrency(formatUnits(-mintedDelta, 18))} ZCHF`} />
+				) : null}
 				{props.action === "borrowMore" ? (
 					<>
 						<PreviewRow label="Estimated sent to wallet" value={`${formatCurrency(formatUnits(walletZchf, 18))} ZCHF`} />
-						<PreviewRow label="Retained reserve / upfront interest" value={`${formatCurrency(formatUnits(retainedImpact, 18))} ZCHF`} />
+						<PreviewRow
+							label="Retained reserve / upfront interest"
+							value={`${formatCurrency(formatUnits(retainedImpact, 18))} ZCHF`}
+						/>
 					</>
 				) : null}
-				<PreviewRow label="New total position size" value={withUnchanged(`${formatCurrency(formatUnits(props.targetMinted, 18))} ZCHF`, props.targetMinted === props.currentMinted)} />
-				<PreviewRow label="New repay from wallet" value={withUnchanged(`${formatCurrency(formatUnits(props.targetRepayFromWallet, 18))} ZCHF`, props.targetRepayFromWallet === props.currentRepayFromWallet)} />
-				<PreviewRow label="New collateral deposited" value={withUnchanged(`${formatCurrency(formatUnits(props.targetCollateral, props.collateralDecimals))} ${props.collateralSymbol}`, props.targetCollateral === props.currentCollateral)} />
-				<PreviewRow label="New liquidation / challenge price" value={withUnchanged(`${formatCurrency(formatUnits(props.targetPrice, props.priceDecimals))} ZCHF`, props.targetPrice === props.currentPrice)} />
+				<PreviewRow
+					label="New total position size"
+					value={withUnchanged(
+						`${formatCurrency(formatUnits(props.targetMinted, 18))} ZCHF`,
+						props.targetMinted === props.currentMinted
+					)}
+				/>
+				<PreviewRow
+					label="New repay from wallet"
+					value={withUnchanged(
+						`${formatCurrency(formatUnits(props.targetRepayFromWallet, 18))} ZCHF`,
+						props.targetRepayFromWallet === props.currentRepayFromWallet
+					)}
+				/>
+				<PreviewRow
+					label="New collateral deposited"
+					value={withUnchanged(
+						`${formatCurrency(formatUnits(props.targetCollateral, props.collateralDecimals))} ${props.collateralSymbol}`,
+						props.targetCollateral === props.currentCollateral
+					)}
+				/>
+				<PreviewRow
+					label="New liquidation / challenge price"
+					value={withUnchanged(
+						`${formatCurrency(formatUnits(props.targetPrice, props.priceDecimals))} ZCHF`,
+						props.targetPrice === props.currentPrice
+					)}
+				/>
 				<PreviewRow label="New estimated LTV" value={formatRisk(props.risk.ltv)} />
 				<PreviewRow label="New estimated safety buffer" value={formatRisk(props.risk.safetyBuffer)} />
 			</div>
@@ -735,14 +822,25 @@ function ManagePositionWalletCard({
 			<h2 className="text-lg font-semibold text-text-primary">Wallet balances</h2>
 			<div className="mt-4 space-y-3">
 				<PreviewRow label="ZCHF" value={`${formatCurrency(formatUnits(userFrancBalance, 18))} ZCHF`} />
-				<PreviewRow label={collateralSymbol} value={`${formatCurrency(formatUnits(userCollBalance, collateralDecimals))} ${collateralSymbol}`} />
-				<PreviewRow label="Collateral allowance" value={needsCollateralApproval ? "Approval needed" : `${formatCurrency(formatUnits(userCollAllowance, collateralDecimals))} ${collateralSymbol}`} />
+				<PreviewRow
+					label={collateralSymbol}
+					value={`${formatCurrency(formatUnits(userCollBalance, collateralDecimals))} ${collateralSymbol}`}
+				/>
+				<PreviewRow
+					label="Collateral allowance"
+					value={
+						needsCollateralApproval
+							? "Approval needed"
+							: `${formatCurrency(formatUnits(userCollAllowance, collateralDecimals))} ${collateralSymbol}`
+					}
+				/>
 			</div>
 		</AppCard>
 	);
 }
 
 function ManagePositionWarnings(props: {
+	canManage: boolean;
 	isChallenged: boolean;
 	isCooldown: boolean;
 	isMatured: boolean;
@@ -757,37 +855,82 @@ function ManagePositionWarnings(props: {
 	paidOut: bigint;
 	marketPriceLoaded: boolean;
 }) {
-	const warnings: string[] = [];
-	if (props.isClosed) warnings.push("This position is closed.");
-	if (props.isChallenged) warnings.push("This position is challenged. Market participants can challenge Frankencoin positions, so review it before the challenge period ends.");
-	if (props.isCooldown) warnings.push("This position is in cooldown. Some increases are not available until the cooldown ends.");
-	if (props.isMatured) warnings.push("This position has passed maturity. Repayment may be required.");
-	if (props.selectedAction === "removeCollateral" && props.isChallenged) {
-		warnings.push("Collateral cannot be removed while this position is challenged.");
+	const warnings: { title: string; message: string }[] = [];
+	if (props.isClosed) warnings.push({ title: "Challenge status", message: "This position is closed." });
+	if (props.isChallenged) {
+		warnings.push({
+			title: "Challenge status",
+			message:
+				"This position is challenged. Market participants can challenge Frankencoin positions, so review it before the challenge period ends.",
+		});
 	}
-	if (props.selectedAction === "removeCollateral" && props.targetRisk.safetyBuffer !== null && props.targetRisk.safetyBuffer < 20) {
-		warnings.push("This leaves a thin estimated safety buffer. The position may be easier to challenge.");
+	if (props.isCooldown) {
+		warnings.push({
+			title: "Cooldown",
+			message: "This position is in cooldown. Borrowing more may be temporarily blocked. This is not the same as being challenged.",
+		});
 	}
-	if (props.selectedAction === "borrowMore") warnings.push("Borrowing more increases your repayment obligation and can reduce your safety buffer.");
-	if (props.selectedAction === "adjustSafety" && props.liqPrice > props.currentPrice) {
-		warnings.push("Raising the liquidation / challenge price can reduce this position's safety buffer and may require a cooldown before additional minting.");
+	if (props.isMatured) warnings.push({ title: "Maturity", message: "This position has passed maturity. Repayment may be required." });
+	if (props.canManage && props.selectedAction === "removeCollateral" && props.isChallenged) {
+		warnings.push({ title: "Challenge status", message: "Collateral cannot be removed while this position is challenged." });
 	}
-	if (props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
-		warnings.push("Lowering the liquidation / challenge price generally gives the position more room before it can be challenged.");
+	if (
+		props.canManage &&
+		props.selectedAction === "removeCollateral" &&
+		props.targetRisk.safetyBuffer !== null &&
+		props.targetRisk.safetyBuffer < 20
+	) {
+		warnings.push({
+			title: "Estimated safety buffer",
+			message: "This leaves a thin estimated safety buffer. The position may be easier to challenge.",
+		});
 	}
-	if (props.userCollBalance === 0n && props.selectedAction === "addCollateral") {
-		warnings.push(`No ${props.collateralSymbol} available in this wallet.`);
+	if (props.canManage && props.selectedAction === "borrowMore") {
+		warnings.push({
+			title: "Before you sign",
+			message: props.isCooldown
+				? "Borrowing more is temporarily blocked while this position is in cooldown. The position is not necessarily challenged."
+				: "Borrowing more increases your repayment obligation and can reduce your safety buffer.",
+		});
 	}
-	if (props.userFrancBalance + props.paidOut < 0n && (props.selectedAction === "repay" || props.selectedAction === "close")) {
-		warnings.push("You need more ZCHF in this wallet to complete this transaction.");
+	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice > props.currentPrice) {
+		warnings.push({
+			title: "Cooldown",
+			message:
+				"Raising the liquidation / challenge price starts a cooldown. During cooldown, borrowing more is temporarily blocked. This is not the same as being challenged.",
+		});
 	}
-	if (!props.marketPriceLoaded) warnings.push("Market price data is not loaded, so estimated Loan-to-Value and safety buffer are unavailable.");
+	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
+		warnings.push({
+			title: "Liquidation / challenge price",
+			message: "Lowering the liquidation / challenge price generally gives the position more room before it can be challenged.",
+		});
+	}
+	if (props.canManage && props.userCollBalance === 0n && props.selectedAction === "addCollateral") {
+		warnings.push({
+			title: "Wallet notice",
+			message: `Your connected wallet has no ${props.collateralSymbol} available for adding collateral.`,
+		});
+	}
+	if (
+		props.canManage &&
+		props.userFrancBalance + props.paidOut < 0n &&
+		(props.selectedAction === "repay" || props.selectedAction === "close")
+	) {
+		warnings.push({ title: "Wallet notice", message: "You need more ZCHF in this wallet to complete this transaction." });
+	}
+	if (!props.marketPriceLoaded) {
+		warnings.push({
+			title: "Risk estimate",
+			message: "Market price data is not loaded, so estimated Loan-to-Value and safety buffer are unavailable.",
+		});
+	}
 
 	if (warnings.length === 0) return null;
 	return (
 		<div className="space-y-2">
 			{warnings.map((warning) => (
-				<AppNotice key={warning} variant="warning" title="Challenge status" message={warning} />
+				<AppNotice key={`${warning.title}-${warning.message}`} variant="warning" title={warning.title} message={warning.message} />
 			))}
 		</div>
 	);
@@ -817,6 +960,7 @@ function getActionError(params: {
 	action: ManageAction;
 	actionAmount: bigint;
 	accountAddress?: Address;
+	isOwner: boolean;
 	positionClosed: boolean;
 	isChallenged: boolean;
 	isCooldown: boolean;
@@ -832,9 +976,12 @@ function getActionError(params: {
 	paidOut: bigint;
 }) {
 	if (!params.accountAddress) return "Connect your wallet before signing.";
+	if (!params.isOwner) return "Connect the owner wallet to manage this position.";
 	if (params.positionClosed) return "This position is closed.";
-	if (params.action === "removeCollateral" && params.isChallenged) return "Collateral cannot be removed while this position is challenged.";
-	if (params.action === "borrowMore" && params.isCooldown) return "This position is in cooldown. Borrowing more is not available yet.";
+	if (params.action === "removeCollateral" && params.isChallenged)
+		return "Collateral cannot be removed while this position is challenged.";
+	if (params.action === "borrowMore" && params.isCooldown)
+		return "Borrowing more is temporarily blocked while this position is in cooldown. The position is not necessarily challenged.";
 	if (params.action !== "close" && params.action !== "adjustSafety" && params.actionAmount <= 0n) return "";
 	if (params.action === "adjustSafety" && params.liqPrice <= 0n) return "Enter a valid liquidation / challenge price.";
 	if (params.action === "addCollateral" && params.actionAmount > params.userCollBalance) {
@@ -861,7 +1008,8 @@ function getActionMax(params: {
 	if (params.action === "addCollateral") return params.userCollBalance;
 	if (params.action === "removeCollateral") return params.currentCollateral;
 	if (params.action === "repay") return params.currentMinted;
-	if (params.action === "borrowMore") return params.maxTotalLimit > params.currentMinted ? params.maxTotalLimit - params.currentMinted : 0n;
+	if (params.action === "borrowMore")
+		return params.maxTotalLimit > params.currentMinted ? params.maxTotalLimit - params.currentMinted : 0n;
 	return undefined;
 }
 
@@ -895,14 +1043,26 @@ function withUnchanged(value: string, unchanged: boolean) {
 	return unchanged ? `${value} unchanged` : value;
 }
 
-function formatFromWallet(action: ManageAction, walletZchf: bigint, collateralDelta: bigint, collateralSymbol: string, collateralDecimals: number) {
+function formatFromWallet(
+	action: ManageAction,
+	walletZchf: bigint,
+	collateralDelta: bigint,
+	collateralSymbol: string,
+	collateralDecimals: number
+) {
 	if (collateralDelta > 0n) return `${formatCurrency(formatUnits(collateralDelta, collateralDecimals))} ${collateralSymbol}`;
 	if (walletZchf < 0n) return `${formatCurrency(formatUnits(-walletZchf, 18))} ZCHF`;
 	if (action === "close") return "ZCHF repayment";
 	return "Nothing";
 }
 
-function formatToWallet(action: ManageAction, walletZchf: bigint, collateralDelta: bigint, collateralSymbol: string, collateralDecimals: number) {
+function formatToWallet(
+	action: ManageAction,
+	walletZchf: bigint,
+	collateralDelta: bigint,
+	collateralSymbol: string,
+	collateralDecimals: number
+) {
 	if (collateralDelta < 0n) return `${formatCurrency(formatUnits(-collateralDelta, collateralDecimals))} ${collateralSymbol}`;
 	if (walletZchf > 0n) return `${formatCurrency(formatUnits(walletZchf, 18))} ZCHF`;
 	if (action === "close") return "Collateral returned after repayment";
