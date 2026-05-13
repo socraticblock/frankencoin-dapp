@@ -33,6 +33,7 @@ export default function SavingsPage() {
 
 	const queryAddress: Address = normalizeAddress(String(router.query.address));
 	const account: Address = isAddress(queryAddress) ? queryAddress : address ?? zeroAddress;
+	const hasWallet = Boolean(isConnected && account !== zeroAddress);
 
 	const {
 		chainRows,
@@ -158,8 +159,8 @@ export default function SavingsPage() {
 		return [...chainRows]
 			.filter((row) => (row.savingsZchf ?? 0) > 0 || (row.interestStatus === "ready" && (row.interestZchf ?? 0) > 0))
 			.sort((a, b) => {
-				const ai = a.interestStatus === "ready" ? (a.interestZchf ?? 0) : -1;
-				const bi = b.interestStatus === "ready" ? (b.interestZchf ?? 0) : -1;
+				const ai = a.interestStatus === "ready" ? a.interestZchf ?? 0 : -1;
+				const bi = b.interestStatus === "ready" ? b.interestZchf ?? 0 : -1;
 				if (bi !== ai) return bi - ai;
 				return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
 			});
@@ -170,26 +171,19 @@ export default function SavingsPage() {
 		return chainRows.filter((row) => !activeIds.has(row.chainId));
 	}, [activeEarningRows, chainRows]);
 
-	const summaryEarningDisplay =
-		!isConnected || account === zeroAddress
-			? "—"
-			: !savingsLoaded
-				? "Loading…"
-				: `${formatCurrency(totalEarningZchf ?? 0, 2, 2)} ZCHF`;
+	const summaryEarningDisplay = !hasWallet ? "—" : !savingsLoaded ? "Loading…" : `${formatCurrency(totalEarningZchf ?? 0, 2, 2)} ZCHF`;
 
-	const summaryInterestDisplay =
-		!isConnected || account === zeroAddress
-			? "—"
-			: interestTotalsIncomplete
-				? "—"
-				: `${formatCurrency(totalInterestReadyZchf ?? 0, 2, 2)} ZCHF`;
+	const summaryInterestDisplay = !hasWallet
+		? "—"
+		: interestTotalsIncomplete
+		? "—"
+		: `${formatCurrency(totalInterestReadyZchf ?? 0, 2, 2)} ZCHF`;
 
-	const chainsCountLabel =
-		!isConnected || account === zeroAddress
-			? "—"
-			: !savingsLoaded
-				? "Loading…"
-				: `${activeEarningChainCount} ${activeEarningChainCount === 1 ? "chain" : "chains"}`;
+	const chainsCountLabel = !hasWallet
+		? "—"
+		: !savingsLoaded
+		? "Loading…"
+		: `${activeEarningChainCount} ${activeEarningChainCount === 1 ? "chain" : "chains"}`;
 
 	const bestStartChainId = useMemo(() => {
 		const sorted = [...inactiveEarningRows].sort((a, b) => (b.walletZchf ?? 0) - (a.walletZchf ?? 0));
@@ -210,10 +204,7 @@ export default function SavingsPage() {
 			</Head>
 
 			<div className="space-y-8">
-				<AppPageHeader
-					title="Earn with ZCHF"
-					description="Manage where your ZCHF earns protocol interest."
-				/>
+				<AppPageHeader title="Earn with ZCHF" description="Manage where your ZCHF earns protocol interest." />
 
 				<EarnSummaryCards
 					totalBalanceHuman={totalBalance}
@@ -264,16 +255,35 @@ export default function SavingsPage() {
 					.
 				</div>
 
-				<AppTitle title="Yearly Accounts">
-					<div className="text-text-secondary text-sm">
-						Yearly interest income for this account. See also the <AppLink className="" label="report page" href="/report" />.
-					</div>
-				</AppTitle>
-				<ReportsYearlyTable activity={account === zeroAddress ? [] : activities} />
+				{!hasWallet ? (
+					<>
+						<AppTitle title="Yearly Accounts">
+							<div className="text-text-secondary text-sm">Connect wallet to view yearly savings records.</div>
+						</AppTitle>
+						<div className="rounded-xl border border-dashed border-menu-separator p-4 text-sm text-text-secondary">
+							Connect your wallet to see savings balances, interest collected, and year-end records.
+						</div>
 
-				<AppTitle title="Your latest activities" />
-				<p className="text-xs text-text-secondary">Showing activity for {selectedMeta.name}.</p>
-				<SavingsRecentActivitiesTable filterChainId={selectedChainId} />
+						<AppTitle title="Your latest activities" />
+						<div className="rounded-xl border border-dashed border-menu-separator p-4 text-sm text-text-secondary">
+							Connect your wallet to view recent savings activity.
+						</div>
+					</>
+				) : (
+					<>
+						<AppTitle title="Yearly Accounts">
+							<div className="text-text-secondary text-sm">
+								Yearly interest income for this account. See also the{" "}
+								<AppLink className="" label="report page" href="/report" />.
+							</div>
+						</AppTitle>
+						<ReportsYearlyTable activity={activities} />
+
+						<AppTitle title="Your latest activities" />
+						<p className="text-xs text-text-secondary">Showing activity for {selectedMeta.name}.</p>
+						<SavingsRecentActivitiesTable filterChainId={selectedChainId} />
+					</>
+				)}
 			</div>
 		</>
 	);
