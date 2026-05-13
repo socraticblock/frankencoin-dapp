@@ -82,7 +82,7 @@ export default function MypositionsTable({ account, hasAccount, isPublicView }: 
 				<div className="grid grid-cols-[1.15fr_1.05fr_1.1fr_0.75fr_0.7fr_0.55fr] gap-4 border-b border-[#eadfcd] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-secondary dark:border-menu-separator">
 					<div>Collateral</div>
 					<div>Borrowed</div>
-					<div>Risk</div>
+					<div>Position terms</div>
 					<div>Maturity</div>
 					<div>Status</div>
 					<div className="text-right">Actions</div>
@@ -114,7 +114,7 @@ function PositionDesktopRow({ row, onManage }: { row: PositionViewModel; onManag
 		<div className="grid grid-cols-[1.15fr_1.05fr_1.1fr_0.75fr_0.7fr_0.55fr] gap-4 border-b border-[#eadfcd] px-4 py-4 text-sm last:border-b-0 dark:border-menu-separator">
 			<CollateralCell row={row} />
 			<BorrowedCell row={row} />
-			<RiskCell row={row} />
+			<PositionTermsCell row={row} />
 			<div className="font-medium text-text-primary">{row.maturity}</div>
 			<div>
 				<StatusPill status={row.status} />
@@ -137,7 +137,7 @@ function PositionMobileCard({ row, onManage }: { row: PositionViewModel; onManag
 			</div>
 			<div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
 				<BorrowedCell row={row} />
-				<RiskCell row={row} />
+				<PositionTermsCell row={row} />
 				<div>
 					<div className="text-xs text-text-secondary">Maturity</div>
 					<div className="font-semibold text-text-primary">{row.maturity}</div>
@@ -179,14 +179,14 @@ function BorrowedCell({ row }: { row: PositionViewModel }) {
 	);
 }
 
-function RiskCell({ row }: { row: PositionViewModel }) {
+function PositionTermsCell({ row }: { row: PositionViewModel }) {
 	return (
 		<div className="space-y-1">
 			{row.loanToValue !== undefined ? (
 				<MiniMetric label="Estimated Loan-to-Value" value={`${formatCurrency(row.loanToValue, 2, 2)}%`} />
 			) : null}
 			<MiniMetric
-				label="Liquidation price"
+				label="Liquidation / challenge price"
 				value={row.liquidationPrice !== undefined ? `${formatCurrency(row.liquidationPrice, 2, 2)} ZCHF` : "Unavailable"}
 				muted={row.liquidationPrice === undefined}
 			/>

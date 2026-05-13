@@ -370,7 +370,7 @@ export default function PositionBorrow({}) {
 
 					<div className="grid md:grid-cols-1 gap-4">
 						<LiquidationSlider
-							label="Liquidation Price"
+							label="Liquidation / challenge price"
 							value={newPrice}
 							digit={priceDigit}
 							sliderMin={parseUnits(String(collateralPriceZchf * 0.1), priceDigit)}

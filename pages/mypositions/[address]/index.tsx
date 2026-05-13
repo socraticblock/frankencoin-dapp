@@ -67,7 +67,7 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		label: "Adjust safety",
 		title: "Adjust safety",
 		description:
-			"Change the liquidation / challenge price. Lowering it generally increases safety. Raising it can increase risk and may trigger cooldown rules.",
+			"Change the liquidation / challenge price. Lowering it generally increases the safety buffer. Raising it can reduce the safety buffer and may trigger cooldown rules.",
 		inputLabel: "New liquidation / challenge price",
 	},
 	{
@@ -428,7 +428,7 @@ export default function PositionAdjust() {
 									digit={priceDecimals}
 									onChange={(value) => setSelectedPrice(BigInt(value))}
 									placeholder="Challenge price"
-									warning={selectedPrice > currentPrice ? "Raising the challenge price can make this position riskier." : undefined}
+									warning={selectedPrice > currentPrice ? "Raising the challenge price can reduce this position's safety buffer." : undefined}
 								/>
 							) : (
 								<TokenInput
@@ -708,7 +708,7 @@ function ManagePositionPreviewCard(props: {
 			</div>
 			{!props.marketPriceLoaded ? (
 				<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-					Risk estimate unavailable because market price data is not loaded.
+					LTV and safety buffer estimates are unavailable because market price data is not loaded.
 				</p>
 			) : null}
 		</AppCard>
@@ -770,7 +770,7 @@ function ManagePositionWarnings(props: {
 	}
 	if (props.selectedAction === "borrowMore") warnings.push("Borrowing more increases your repayment obligation and can reduce your safety buffer.");
 	if (props.selectedAction === "adjustSafety" && props.liqPrice > props.currentPrice) {
-		warnings.push("Raising the liquidation / challenge price can make this position riskier and may require a cooldown before additional minting.");
+		warnings.push("Raising the liquidation / challenge price can reduce this position's safety buffer and may require a cooldown before additional minting.");
 	}
 	if (props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
 		warnings.push("Lowering the liquidation / challenge price generally gives the position more room before it can be challenged.");

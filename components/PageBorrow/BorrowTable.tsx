@@ -136,6 +136,7 @@ export default function BorrowTable({ inMyWalletLabel = "Only assets in connecte
 			<div className="px-1 text-sm text-text-secondary">
 				<p>
 					Loan-to-Value shows how much ZCHF can be minted compared with collateral value. Higher LTV means less safety buffer.
+					It is not a full rating of the collateral asset.
 				</p>
 				<p className="mt-1">Maturity is the latest repayment date under the selected position terms.</p>
 			</div>

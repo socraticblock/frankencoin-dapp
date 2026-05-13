@@ -19,11 +19,10 @@ interface Props {
 	walletBalance?: Record<string, bigint>;
 }
 
-function getLtvRiskTone(ltv: number) {
-	if (ltv < 40) return { label: "Conservative", className: "text-emerald-700 dark:text-emerald-300" };
-	if (ltv < 65) return { label: "Moderate", className: "text-text-secondary" };
-	if (ltv <= 80) return { label: "Higher risk", className: "text-amber-700 dark:text-amber-300" };
-	return { label: "Aggressive", className: "text-amber-800 dark:text-amber-200" };
+function getLtvClassName(ltv: number) {
+	if (ltv < 40) return "text-emerald-700 dark:text-emerald-300";
+	if (ltv < 65) return "text-text-primary";
+	return "text-amber-700 dark:text-amber-300";
 }
 
 export default function BorrowRow({ headers, tab, position, vchfBridge, hideMyWallet, walletBalance }: Props) {
@@ -42,7 +41,8 @@ export default function BorrowRow({ headers, tab, position, vchfBridge, hideMyWa
 	const expirationString: string = `${expirationStr[2]} ${expirationStr[1]} ${expirationStr[3]}`;
 
 	const nominalLTV: number = (price / collTokenPrice) * zchfPrice * 100;
-	const ltvTone = getLtvRiskTone(nominalLTV);
+	const ltvClassName = getLtvClassName(nominalLTV);
+	const safetyBuffer = Math.max(0, 100 - nominalLTV);
 	const effectiveInterest: number = interest / (1 - reserve / 100);
 
 	const isPending = position.start * 1000 > Date.now();
@@ -101,9 +101,10 @@ export default function BorrowRow({ headers, tab, position, vchfBridge, hideMyWa
 					{isVCHF ? (
 						"Swap 1:1"
 					) : (
-						<>
-							{formatCurrency(nominalLTV, 2, 2)}% · <span className={ltvTone.className}>{ltvTone.label}</span>
-						</>
+						<div className="space-y-1">
+							<div className={ltvClassName}>LTV: {formatCurrency(nominalLTV, 2, 2)}%</div>
+							<div className="text-xs text-text-secondary">Safety buffer: {formatCurrency(safetyBuffer, 2, 2)}%</div>
+						</div>
 					)}
 				</div>
 			</div>
