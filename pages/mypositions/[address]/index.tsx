@@ -84,6 +84,7 @@ export default function PositionAdjust() {
 	const [selectedAction, setSelectedAction] = useState<ManageAction>("addCollateral");
 	const [actionAmount, setActionAmount] = useState(0n);
 	const [selectedPrice, setSelectedPrice] = useState(0n);
+	const [nowMs, setNowMs] = useState(() => Date.now());
 
 	const [challengeSize, setChallengeSize] = useState(0n);
 	const [userCollAllowance, setUserCollAllowance] = useState(0n);
@@ -116,6 +117,11 @@ export default function PositionAdjust() {
 		setActionAmount(0n);
 		if (matchedPosition) setSelectedPrice(BigInt(matchedPosition.price));
 	}, [selectedAction, matchedPosition]);
+
+	useEffect(() => {
+		const interval = window.setInterval(() => setNowMs(Date.now()), 30_000);
+		return () => window.clearInterval(interval);
+	}, []);
 
 	useEffect(() => {
 		const acc: Address | undefined = account.address;
@@ -178,13 +184,13 @@ export default function PositionAdjust() {
 	const marketPrice80Pct =
 		marketPriceChf != null ? parseUnits(String(Math.round(marketPriceChf * 80) / 100), priceDecimals) : currentPrice;
 	const cooldownEndsAtMs = position.cooldown * 1000;
-	const cooldownRemainingSeconds = Math.max(0, Math.ceil((cooldownEndsAtMs - Date.now()) / 1000));
+	const cooldownRemainingSeconds = Math.max(0, Math.ceil((cooldownEndsAtMs - nowMs) / 1000));
 	const isCooldown = cooldownRemainingSeconds > 0;
 	const cooldownRemainingLabel = isCooldown ? formatDuration(cooldownRemainingSeconds) : "";
 	const cooldownEndLabel = isCooldown
 		? new Date(cooldownEndsAtMs).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 		: "";
-	const isMatured = position.expiration * 1000 < Date.now();
+	const isMatured = position.expiration * 1000 < nowMs;
 	const isChallenged = challengeSize > 0n;
 	const isOwner = Boolean(account.address && safeNormalizeAddress(account.address) === safeNormalizeAddress(position.owner));
 	const canManagePosition = Boolean(isOwner && account.address);
@@ -218,7 +224,7 @@ export default function PositionAdjust() {
 	if (position.version == 2) maxMintableInclClones = BigInt(position.availableForMinting) + currentMinted;
 	const maxTotalLimit = maxMintableInclClones;
 
-	const feeDuration = BigInt(Math.floor(position.expiration * 1000 - Date.now())) / 1000n;
+	const feeDuration = BigInt(Math.floor(position.expiration * 1000 - nowMs)) / 1000n;
 	const feePercent = (feeDuration * BigInt(position.annualInterestPPM)) / BigInt(60 * 60 * 24 * 365);
 	const calcDirection = amount > currentMinted;
 	const returnFromReserve = () => (BigInt(position.reserveContribution) * (amount - currentMinted)) / 1_000_000n;
@@ -267,7 +273,7 @@ export default function PositionAdjust() {
 	const annualInterest = position.annualInterestPPM / 10_000;
 	const expirationDateArr = new Date(position.expiration * 1000).toDateString().split(" ");
 	const expirationDateStr = `${expirationDateArr[2]} ${expirationDateArr[1]} ${expirationDateArr[3]}`;
-	const expirationDiff = Math.round((position.expiration * 1000 - Date.now()) / 1000);
+	const expirationDiff = Math.round((position.expiration * 1000 - nowMs) / 1000);
 	const expiredIn = expirationDiff > 0 ? formatDuration(expirationDiff) : "Expired";
 	const noChange = amount === currentMinted && collateralAmount === currentCollateral && liqPrice === currentPrice;
 	const needsCollateralApproval =
@@ -401,25 +407,6 @@ export default function PositionAdjust() {
 					/>
 				) : null}
 
-				<ManagePositionWarnings
-					canManage={canManagePosition}
-					isChallenged={isChallenged}
-					isCooldown={isCooldown}
-					isMatured={isMatured}
-					isClosed={position.closed}
-					challengeSize={challengeSize}
-					cooldownEndLabel={cooldownEndLabel}
-					selectedAction={selectedAction}
-					targetRisk={targetRisk}
-					liqPrice={liqPrice}
-					currentPrice={currentPrice}
-					collateralSymbol={position.collateralSymbol}
-					userCollBalance={userCollBalance}
-					userFrancBalance={userFrancBalance}
-					paidOut={paidOutAmount()}
-					marketPriceLoaded={marketPriceChf != null}
-				/>
-
 				<ManagePositionSummary
 					position={position}
 					currentMinted={currentMinted}
@@ -443,6 +430,24 @@ export default function PositionAdjust() {
 									<h2 className="text-xl font-semibold text-text-primary">{actionConfig.title}</h2>
 									<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
 								</div>
+								<ManagePositionWarnings
+									canManage={canManagePosition}
+									isChallenged={isChallenged}
+									isCooldown={isCooldown}
+									isMatured={isMatured}
+									isClosed={position.closed}
+									challengeSize={challengeSize}
+									cooldownEndLabel={cooldownEndLabel}
+									selectedAction={selectedAction}
+									targetRisk={targetRisk}
+									liqPrice={liqPrice}
+									currentPrice={currentPrice}
+									collateralSymbol={position.collateralSymbol}
+									userCollBalance={userCollBalance}
+									userFrancBalance={userFrancBalance}
+									paidOut={paidOutAmount()}
+									marketPriceLoaded={marketPriceChf != null}
+								/>
 								{selectedAction === "close" ? (
 									<AppNotice
 										variant="warning"
@@ -919,11 +924,18 @@ function ManagePositionWarnings(props: {
 				: "Borrowing more increases your repayment obligation and can reduce your safety buffer.",
 		});
 	}
+	if (props.canManage && props.selectedAction === "adjustSafety") {
+		warnings.push({
+			title: "Cooldown applies to minting",
+			message:
+				"Raising the liquidation / challenge price starts a 3-day cooldown. During cooldown, minting more ZCHF from this position is blocked. You may still be able to add collateral or repay.",
+		});
+	}
 	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice > props.currentPrice) {
 		warnings.push({
-			title: "Cooldown",
+			title: "Selected price starts cooldown",
 			message:
-				"Raising the liquidation / challenge price starts a 3-day cooldown. During cooldown, minting more ZCHF from this position is temporarily blocked. This is not the same as being challenged.",
+				"Your selected liquidation / challenge price is higher than the current price. If signed, minting more ZCHF from this position is blocked until the cooldown ends.",
 		});
 	}
 	if (props.canManage && props.selectedAction === "adjustSafety" && props.liqPrice < props.currentPrice) {
