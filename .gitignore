@@ -26,6 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Local Ankr RPC indexer experiments (never commit secrets)
+/scripts/ankr-local.env
+
 # dotenv environment variable files
 .env
 .env.development.local

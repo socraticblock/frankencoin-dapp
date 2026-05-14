@@ -14,6 +14,9 @@
 		"lint": "next lint",
 		"lint:check": "prettier --check .",
 		"lint:fix": "prettier --write .",
+		"test:ankr-rpc": "node scripts/ankr-indexing-rpc-test.mjs",
+		"test:ankr-rpc:local": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test.mjs",
+		"test:ankr-rpc:local:all": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test-all.mjs",
 		"prettier-watch": "onchange \"**/*\" -- prettier --write --ignore-unknown {{changed}}",
 		"deploy": "gh-pages -d build"
 	},
