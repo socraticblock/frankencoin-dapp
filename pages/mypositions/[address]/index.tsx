@@ -132,10 +132,14 @@ export default function PositionAdjust() {
 		const currentPrice = BigInt(matchedPosition.price);
 		const isCooldown = Math.max(0, Math.ceil((matchedPosition.cooldown * 1000 - nowMs) / 1000)) > 0;
 		const isChallenged = challengeSize > 0n;
+		let maxMintableInclClones = 0n;
+		if (matchedPosition.version == 1) maxMintableInclClones = BigInt(matchedPosition.availableForClones) + currentMinted;
+		if (matchedPosition.version == 2) maxMintableInclClones = BigInt(matchedPosition.availableForMinting) + currentMinted;
 		const availability = getActionAvailability({
 			currentMinted,
 			currentCollateral,
 			currentPrice,
+			maxTotalLimit: maxMintableInclClones,
 			isChallenged,
 			isCooldown,
 			positionClosed: matchedPosition.closed,
@@ -240,20 +244,32 @@ export default function PositionAdjust() {
 		collateralDecimals: position.collateralDecimals,
 		marketPriceChf,
 	});
-	const actionAvailability = getActionAvailability({
-		currentMinted,
-		currentCollateral,
-		currentPrice,
-		isChallenged,
-		isCooldown,
-		positionClosed: position.closed,
-	});
-	const selectedActionAvailability = actionAvailability[selectedAction];
 
 	let maxMintableInclClones = 0n;
 	if (position.version == 1) maxMintableInclClones = BigInt(position.availableForClones) + currentMinted;
 	if (position.version == 2) maxMintableInclClones = BigInt(position.availableForMinting) + currentMinted;
 	const maxTotalLimit = maxMintableInclClones;
+	const maxRemovableCollateral = getMaxRemovableCollateral({
+		currentMinted,
+		currentCollateral,
+		currentPrice,
+	});
+	const maxBorrowMore = getMaxBorrowMore({
+		currentMinted,
+		currentCollateral,
+		currentPrice,
+		maxTotalLimit,
+	});
+	const actionAvailability = getActionAvailability({
+		currentMinted,
+		currentCollateral,
+		currentPrice,
+		maxTotalLimit,
+		isChallenged,
+		isCooldown,
+		positionClosed: position.closed,
+	});
+	const selectedActionAvailability = actionAvailability[selectedAction];
 
 	const feeDuration = BigInt(Math.floor(position.expiration * 1000 - nowMs)) / 1000n;
 	const feePercent = (feeDuration * BigInt(position.annualInterestPPM)) / BigInt(60 * 60 * 24 * 365);
@@ -526,9 +542,9 @@ export default function PositionAdjust() {
 										max={getActionMax({
 											action: selectedAction,
 											userCollBalance,
-											currentCollateral,
 											currentMinted,
-											maxTotalLimit,
+											maxRemovableCollateral,
+											maxBorrowMore,
 										})}
 										reset={0n}
 										value={actionAmount.toString()}
@@ -543,12 +559,10 @@ export default function PositionAdjust() {
 											selectedAction === "addCollateral"
 												? userCollBalance
 												: selectedAction === "removeCollateral"
-												? currentCollateral
+												? maxRemovableCollateral
 												: selectedAction === "repay"
 												? userFrancBalance
-												: maxTotalLimit > currentMinted
-												? maxTotalLimit - currentMinted
-												: 0n
+												: maxBorrowMore
 										}
 										limitDigit={
 											selectedAction === "addCollateral" || selectedAction === "removeCollateral"
@@ -1108,15 +1122,14 @@ function getActionError(params: {
 function getActionMax(params: {
 	action: ManageAction;
 	userCollBalance: bigint;
-	currentCollateral: bigint;
 	currentMinted: bigint;
-	maxTotalLimit: bigint;
+	maxRemovableCollateral: bigint;
+	maxBorrowMore: bigint;
 }) {
 	if (params.action === "addCollateral") return params.userCollBalance;
-	if (params.action === "removeCollateral") return params.currentCollateral;
+	if (params.action === "removeCollateral") return params.maxRemovableCollateral;
 	if (params.action === "repay") return params.currentMinted;
-	if (params.action === "borrowMore")
-		return params.maxTotalLimit > params.currentMinted ? params.maxTotalLimit - params.currentMinted : 0n;
+	if (params.action === "borrowMore") return params.maxBorrowMore;
 	return undefined;
 }
 
@@ -1124,6 +1137,7 @@ function getActionAvailability(params: {
 	currentMinted: bigint;
 	currentCollateral: bigint;
 	currentPrice: bigint;
+	maxTotalLimit: bigint;
 	isChallenged: boolean;
 	isCooldown: boolean;
 	positionClosed: boolean;
@@ -1133,7 +1147,7 @@ function getActionAvailability(params: {
 	const removeUnavailableReason =
 		"No collateral can be removed at the current borrowed amount and challenge price. Repay ZCHF to reduce the borrowed amount, or raise the challenge price and wait for cooldown to finish.";
 	const borrowUnavailableReason =
-		"No additional ZCHF can be borrowed at the current collateral amount and challenge price. Add collateral, or raise the challenge price and wait for cooldown to finish.";
+		"No additional ZCHF can be borrowed from this position. It is already at the current collateral/challenge-price limit or the position's minting limit.";
 	const cooldownReason = "Cooldown active. This action is unavailable until the cooldown ends.";
 	const result: ActionAvailability = {
 		addCollateral: params.positionClosed ? unavailable("This position is closed.") : available,
@@ -1163,18 +1177,35 @@ function getActionAvailability(params: {
 		return result;
 	}
 
-	const requiredCollateral =
-		params.currentMinted === 0n ? 0n : (params.currentMinted * 10n ** 18n + params.currentPrice - 1n) / params.currentPrice;
-	if (params.currentCollateral <= requiredCollateral) {
+	if (getMaxRemovableCollateral(params) <= 0n) {
 		result.removeCollateral = unavailable(removeUnavailableReason);
 	}
 
-	const maxMintedAtCurrentPrice = (params.currentCollateral * params.currentPrice) / 10n ** 18n;
-	if (maxMintedAtCurrentPrice <= params.currentMinted) {
+	if (getMaxBorrowMore(params) <= 0n) {
 		result.borrowMore = unavailable(borrowUnavailableReason);
 	}
 
 	return result;
+}
+
+function getMaxRemovableCollateral(params: { currentMinted: bigint; currentCollateral: bigint; currentPrice: bigint }) {
+	if (params.currentMinted <= 0n) return params.currentCollateral;
+	if (params.currentPrice <= 0n) return 0n;
+	const requiredCollateral = (params.currentMinted * 10n ** 18n + params.currentPrice - 1n) / params.currentPrice;
+	return params.currentCollateral > requiredCollateral ? params.currentCollateral - requiredCollateral : 0n;
+}
+
+function getMaxBorrowMore(params: {
+	currentMinted: bigint;
+	currentCollateral: bigint;
+	currentPrice: bigint;
+	maxTotalLimit: bigint;
+}) {
+	if (params.currentPrice <= 0n) return 0n;
+	const maxMintedAtCurrentPrice = (params.currentCollateral * params.currentPrice) / 10n ** 18n;
+	const collateralCapacity = maxMintedAtCurrentPrice > params.currentMinted ? maxMintedAtCurrentPrice - params.currentMinted : 0n;
+	const protocolCapacity = params.maxTotalLimit > params.currentMinted ? params.maxTotalLimit - params.currentMinted : 0n;
+	return collateralCapacity < protocolCapacity ? collateralCapacity : protocolCapacity;
 }
 
 function getButtonText(action: ManageAction) {
