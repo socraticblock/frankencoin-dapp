@@ -1,6 +1,6 @@
 "use client";
 
-import { ApolloClient, InMemoryCache } from "@apollo/client";
+import { ApolloClient, ApolloLink, HttpLink, InMemoryCache, Observable } from "@apollo/client";
 import { cookieStorage, createStorage, http } from "@wagmi/core";
 import { injected, coinbaseWallet, safe } from "@wagmi/connectors";
 import { mainnet, polygon, Chain, arbitrum, optimism, avalanche, gnosis, sonic, base, AppKitNetwork } from "@reown/appkit/networks";
@@ -16,6 +16,7 @@ export type ConfigEnv = {
 	app: string;
 	api: string;
 	ponder: string;
+	canonicalPonder: string;
 	morphoGraph: string;
 	rpc: string;
 	wagmiId: string;
@@ -25,6 +26,42 @@ export type ConfigEnv = {
 // if (!process.env.NEXT_PUBLIC_WAGMI_ID) throw new Error("Project ID is not available");
 // if (!process.env.NEXT_PUBLIC_RPC_KEY) throw new Error("RPC KEY is not available");
 
+const SELF_HOSTED_PONDER_URL = "https://ponder-production-c7e8.up.railway.app";
+const CANONICAL_PONDER_URL = "https://ponder.frankencoin.com";
+
+const normalizeUrl = (url: string): string => url.replace(/\/+$/, "");
+
+const createFallbackLink = (primaryUri: string, fallbackUri: string): ApolloLink => {
+	const primary = new HttpLink({ uri: primaryUri });
+	const fallback = new HttpLink({ uri: fallbackUri });
+
+	return new ApolloLink(
+		(operation) =>
+			new Observable((observer) => {
+				const primarySub = primary.request(operation)?.subscribe({
+					next: (value) => observer.next(value),
+					complete: () => observer.complete(),
+					error: (error) => {
+						if (primaryUri === fallbackUri) {
+							observer.error(error);
+							return;
+						}
+
+						const fallbackSub = fallback.request(operation)?.subscribe({
+							next: (value) => observer.next(value),
+							complete: () => observer.complete(),
+							error: (fallbackError) => observer.error(fallbackError),
+						});
+
+						return () => fallbackSub?.unsubscribe();
+					},
+				});
+
+				return () => primarySub?.unsubscribe();
+			})
+	);
+};
+
 // Config
 export const CONFIG: ConfigEnv = {
 	verbose: false,
@@ -32,7 +69,8 @@ export const CONFIG: ConfigEnv = {
 	landing: process.env.NEXT_PUBLIC_LANDINGPAGE_URL || "https://frankencoin.com",
 	app: process.env.NEXT_PUBLIC_APP_URL || "https://app.frankencoin.com",
 	api: process.env.NEXT_PUBLIC_API_URL || "https://api.frankencoin.com",
-	ponder: process.env.NEXT_PUBLIC_PONDER_URL || "https://ponder.frankencoin.com",
+	ponder: normalizeUrl(process.env.NEXT_PUBLIC_PONDER_URL || SELF_HOSTED_PONDER_URL),
+	canonicalPonder: normalizeUrl(process.env.NEXT_PUBLIC_CANONICAL_PONDER_URL || CANONICAL_PONDER_URL),
 	morphoGraph: process.env.NEXT_PUBLIC_MORPHOGRAPH_URL || "https://blue-api.morpho.org/graphql",
 	wagmiId: process.env.NEXT_PUBLIC_WAGMI_ID || "3321ad5a4f22083fe6fe82208a4c9ddc",
 	rpc: process.env.NEXT_PUBLIC_RPC_KEY || "dhaKbi2HDlKYW1JaSHm1i_hGkE2gnA5t",
@@ -43,7 +81,7 @@ console.log(CONFIG);
 
 // PONDER CLIENT
 export const PONDER_CLIENT = new ApolloClient({
-	uri: CONFIG.ponder,
+	link: createFallbackLink(CONFIG.ponder, CONFIG.canonicalPonder),
 	cache: new InMemoryCache(),
 });
 

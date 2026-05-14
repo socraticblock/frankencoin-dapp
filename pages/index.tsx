@@ -639,20 +639,23 @@ export default function MainPage() {
 							<li>
 								Desk data:{" "}
 								<span className={`font-medium ${protocolLive ? "text-text-success" : "text-text-warning"}`}>
-									{protocolLive ? "Live" : "Partial"}
+									{protocolLive ? "Available" : "Partial"}
 								</span>
 							</li>
 							<li>
 								API:{" "}
 								<span className={`font-medium ${apiStatus ? "text-text-success" : "text-text-warning"}`}>
-									{apiStatus ? "Live" : "Delayed"}
+									{apiStatus ? "Available" : "Delayed"}
 								</span>
 							</li>
 							<li>
-								Indexer:{" "}
+								Self-hosted API:{" "}
 								<span className={`font-medium ${indexerStatus ? "text-text-success" : "text-text-warning"}`}>
-									{indexerStatus ? "Live" : "Delayed"}
+									{indexerStatus ? "Restored snapshot" : "Delayed"}
 								</span>
+							</li>
+							<li>
+								Live indexing: <span className="font-medium text-text-warning">Not yet</span>
 							</li>
 							<li>
 								Wallet:{" "}
