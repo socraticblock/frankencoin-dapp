@@ -24,7 +24,7 @@ Edit `.env.local`:
 NEXT_PUBLIC_LANDINGPAGE_URL=https://frankencoin.com
 NEXT_PUBLIC_APP_URL=https://app.frankencoin.com
 NEXT_PUBLIC_API_URL=https://api.frankencoin.com
-NEXT_PUBLIC_PONDER_URL=https://ponder-production-c7e8.up.railway.app
+NEXT_PUBLIC_PONDER_URL=https://ponder.frankencoin.com
 NEXT_PUBLIC_CANONICAL_PONDER_URL=https://ponder.frankencoin.com
 NEXT_PUBLIC_CHAIN_NAME=mainnet
 NEXT_PUBLIC_WAGMI_ID=your_walletconnect_project_id
@@ -56,3 +56,15 @@ yarn start
 
 -   `main` → [app.frankencoin.com](https://app.frankencoin.com)
 -   `...` → app.test.frankencoin.com
+
+Current production frontend uses canonical Frankencoin live Ponder for fresh data. A self-hosted restored-snapshot Ponder API remains available on Railway for demonstration and future live-indexer work. Live indexing was tested on production-6 with free RPC providers, but free-tier RPC was not sufficient.
+
+Self-hosted snapshot Ponder:
+
+```txt
+URL: https://ponder-production-c7e8.up.railway.app
+Mode: restored snapshot only
+Schema: production-5
+Command: npx ponder serve --schema production-5
+Live indexing: disabled
+```

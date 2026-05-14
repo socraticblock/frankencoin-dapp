@@ -34,7 +34,7 @@ export function useServiceStatus(): Loading[] {
 	}, []);
 
 	return [
-		{ id: "ponder", title: "Self-hosted API snapshot", isLoaded: ponderStatus },
+		{ id: "ponder", title: "Ponder API", isLoaded: ponderStatus },
 		{ id: "api", title: "Api", isLoaded: apiStatus },
 	];
 }

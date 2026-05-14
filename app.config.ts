@@ -26,7 +26,6 @@ export type ConfigEnv = {
 // if (!process.env.NEXT_PUBLIC_WAGMI_ID) throw new Error("Project ID is not available");
 // if (!process.env.NEXT_PUBLIC_RPC_KEY) throw new Error("RPC KEY is not available");
 
-const SELF_HOSTED_PONDER_URL = "https://ponder-production-c7e8.up.railway.app";
 const CANONICAL_PONDER_URL = "https://ponder.frankencoin.com";
 
 const normalizeUrl = (url: string): string => url.replace(/\/+$/, "");
@@ -69,7 +68,7 @@ export const CONFIG: ConfigEnv = {
 	landing: process.env.NEXT_PUBLIC_LANDINGPAGE_URL || "https://frankencoin.com",
 	app: process.env.NEXT_PUBLIC_APP_URL || "https://app.frankencoin.com",
 	api: process.env.NEXT_PUBLIC_API_URL || "https://api.frankencoin.com",
-	ponder: normalizeUrl(process.env.NEXT_PUBLIC_PONDER_URL || SELF_HOSTED_PONDER_URL),
+	ponder: normalizeUrl(process.env.NEXT_PUBLIC_PONDER_URL || CANONICAL_PONDER_URL),
 	canonicalPonder: normalizeUrl(process.env.NEXT_PUBLIC_CANONICAL_PONDER_URL || CANONICAL_PONDER_URL),
 	morphoGraph: process.env.NEXT_PUBLIC_MORPHOGRAPH_URL || "https://blue-api.morpho.org/graphql",
 	wagmiId: process.env.NEXT_PUBLIC_WAGMI_ID || "3321ad5a4f22083fe6fe82208a4c9ddc",
