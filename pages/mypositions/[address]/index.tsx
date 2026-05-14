@@ -56,10 +56,10 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 	},
 	{
 		action: "repay",
-		label: "Repay ZCHF",
-		title: "Repay ZCHF",
+		label: "Repay ZCHF / reduce debt",
+		title: "Repay ZCHF / reduce debt",
 		description:
-			"Reduce the position size using ZCHF from your wallet. Retained reserves may reduce the amount you need to repay from wallet.",
+			"Repaying ZCHF reduces the borrowed amount. This can make the position safer and may create room to remove collateral later.",
 		inputLabel: "Reduce position size by",
 	},
 	{
@@ -77,6 +77,8 @@ const MANAGE_ACTIONS: { action: ManageAction; label: string; title: string; desc
 		description: "Repay the position and return collateral if the wallet has enough ZCHF.",
 	},
 ];
+
+type ActionAvailability = Record<ManageAction, { available: boolean; reason?: string }>;
 
 export default function PositionAdjust() {
 	const [isApproving, setApproving] = useState(false);
@@ -122,6 +124,26 @@ export default function PositionAdjust() {
 		const interval = window.setInterval(() => setNowMs(Date.now()), 30_000);
 		return () => window.clearInterval(interval);
 	}, []);
+
+	useEffect(() => {
+		if (!matchedPosition) return;
+		const currentMinted = BigInt(matchedPosition.minted);
+		const currentCollateral = BigInt(matchedPosition.collateralBalance);
+		const currentPrice = BigInt(matchedPosition.price);
+		const isCooldown = Math.max(0, Math.ceil((matchedPosition.cooldown * 1000 - nowMs) / 1000)) > 0;
+		const isChallenged = challengeSize > 0n;
+		const availability = getActionAvailability({
+			currentMinted,
+			currentCollateral,
+			currentPrice,
+			isChallenged,
+			isCooldown,
+			positionClosed: matchedPosition.closed,
+		});
+		if (availability[selectedAction].available) return;
+		const fallback = MANAGE_ACTIONS.find((item) => availability[item.action].available);
+		if (fallback && fallback.action !== selectedAction) setSelectedAction(fallback.action);
+	}, [challengeSize, matchedPosition, nowMs, selectedAction]);
 
 	useEffect(() => {
 		const acc: Address | undefined = account.address;
@@ -218,6 +240,15 @@ export default function PositionAdjust() {
 		collateralDecimals: position.collateralDecimals,
 		marketPriceChf,
 	});
+	const actionAvailability = getActionAvailability({
+		currentMinted,
+		currentCollateral,
+		currentPrice,
+		isChallenged,
+		isCooldown,
+		positionClosed: position.closed,
+	});
+	const selectedActionAvailability = actionAvailability[selectedAction];
 
 	let maxMintableInclClones = 0n;
 	if (position.version == 1) maxMintableInclClones = BigInt(position.availableForClones) + currentMinted;
@@ -425,11 +456,22 @@ export default function PositionAdjust() {
 					<section className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 						<AppCard>
 							<div className="space-y-5">
-								<ManagePositionActionTabs selectedAction={selectedAction} onSelect={setSelectedAction} />
+								<ManagePositionActionTabs
+									selectedAction={selectedAction}
+									onSelect={setSelectedAction}
+									availability={actionAvailability}
+								/>
 								<div>
 									<h2 className="text-xl font-semibold text-text-primary">{actionConfig.title}</h2>
 									<p className="mt-1 text-sm leading-6 text-text-secondary">{actionConfig.description}</p>
 								</div>
+								{!selectedActionAvailability.available ? (
+									<AppNotice
+										variant="warning"
+										title="This action is currently unavailable."
+										message={selectedActionAvailability.reason ?? "Choose another available action."}
+									/>
+								) : null}
 								<ManagePositionWarnings
 									canManage={canManagePosition}
 									isChallenged={isChallenged}
@@ -437,6 +479,7 @@ export default function PositionAdjust() {
 									isMatured={isMatured}
 									isClosed={position.closed}
 									challengeSize={challengeSize}
+									cooldownRemainingLabel={cooldownRemainingLabel}
 									cooldownEndLabel={cooldownEndLabel}
 									selectedAction={selectedAction}
 									targetRisk={targetRisk}
@@ -654,26 +697,42 @@ export default function PositionAdjust() {
 function ManagePositionActionTabs({
 	selectedAction,
 	onSelect,
+	availability,
 }: {
 	selectedAction: ManageAction;
 	onSelect: (action: ManageAction) => void;
+	availability: ActionAvailability;
 }) {
 	return (
 		<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-			{MANAGE_ACTIONS.map((item) => (
-				<button
-					key={item.action}
-					type="button"
-					onClick={() => onSelect(item.action)}
-					className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-						selectedAction === item.action
-							? "border-[#c4a75f] bg-button-default text-white"
-							: "border-menu-separator bg-card-content-secondary text-text-primary hover:border-[#c4a75f]"
-					}`}
-				>
-					{item.label}
-				</button>
-			))}
+			{MANAGE_ACTIONS.map((item) => {
+				const state = availability[item.action];
+				return (
+					<button
+						key={item.action}
+						type="button"
+						disabled={!state.available}
+						onClick={() => state.available && onSelect(item.action)}
+						className={`min-h-[44px] rounded-lg border px-3 py-2 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+							selectedAction === item.action
+								? "border-[#c4a75f] bg-button-default text-white"
+								: state.available
+								? "border-menu-separator bg-card-content-secondary text-text-primary hover:border-[#c4a75f]"
+								: "border-menu-separator bg-card-content-secondary text-text-secondary"
+						}`}
+					>
+						<span className="flex flex-wrap items-center gap-2">
+							<span>{item.label}</span>
+							{!state.available ? (
+								<span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+									Unavailable
+								</span>
+							) : null}
+						</span>
+						{!state.available ? <span className="mt-2 block text-xs font-normal leading-5">{state.reason}</span> : null}
+					</button>
+				);
+			})}
 		</div>
 	);
 }
@@ -871,6 +930,7 @@ function ManagePositionWarnings(props: {
 	isMatured: boolean;
 	isClosed: boolean;
 	challengeSize: bigint;
+	cooldownRemainingLabel: string;
 	cooldownEndLabel: string;
 	selectedAction: ManageAction;
 	targetRisk: RiskEstimate;
@@ -895,10 +955,10 @@ function ManagePositionWarnings(props: {
 	}
 	if (props.isCooldown) {
 		warnings.push({
-			title: props.isChallenged ? "Minting is also paused" : "Cooldown active",
+			title: "Cooldown active",
 			message: props.isChallenged
-				? `Minting more ZCHF from this position is paused until ${props.cooldownEndLabel}. This cooldown is separate from the challenge.`
-				: `Minting more ZCHF from this position is paused until ${props.cooldownEndLabel}. This is not the same as being challenged. You may still be able to add collateral or repay, but you cannot increase the minted amount until cooldown ends.`,
+				? `Borrowing more and removing collateral are temporarily unavailable. Time remaining: ${props.cooldownRemainingLabel}. Ends: ${props.cooldownEndLabel}. This cooldown is separate from the challenge.`
+				: `Borrowing more and removing collateral are temporarily unavailable. Time remaining: ${props.cooldownRemainingLabel}. Ends: ${props.cooldownEndLabel}. Adding collateral and repaying ZCHF remain available.`,
 		});
 	}
 	if (props.isMatured) warnings.push({ title: "Maturity", message: "This position has passed maturity. Repayment may be required." });
@@ -1025,8 +1085,10 @@ function getActionError(params: {
 	if (params.positionClosed) return "This position is closed.";
 	if (params.action === "removeCollateral" && params.isChallenged)
 		return "Collateral cannot be removed while this position is challenged.";
+	if (params.action === "removeCollateral" && params.isCooldown)
+		return "Cooldown active. This action is unavailable until the cooldown ends.";
 	if (params.action === "borrowMore" && params.isCooldown)
-		return "Minting more ZCHF from this position is temporarily blocked while it is in cooldown. This is not the same as being challenged.";
+		return "Cooldown active. This action is unavailable until the cooldown ends.";
 	if (params.action !== "close" && params.action !== "adjustSafety" && params.actionAmount <= 0n) return "";
 	if (params.action === "adjustSafety" && params.liqPrice <= 0n) return "Enter a valid liquidation / challenge price.";
 	if (params.action === "addCollateral" && params.actionAmount > params.userCollBalance) {
@@ -1058,11 +1120,68 @@ function getActionMax(params: {
 	return undefined;
 }
 
+function getActionAvailability(params: {
+	currentMinted: bigint;
+	currentCollateral: bigint;
+	currentPrice: bigint;
+	isChallenged: boolean;
+	isCooldown: boolean;
+	positionClosed: boolean;
+}): ActionAvailability {
+	const unavailable = (reason: string) => ({ available: false, reason });
+	const available = { available: true };
+	const removeUnavailableReason =
+		"No collateral can be removed at the current borrowed amount and challenge price. Repay ZCHF to reduce the borrowed amount, or raise the challenge price and wait for cooldown to finish.";
+	const borrowUnavailableReason =
+		"No additional ZCHF can be borrowed at the current collateral amount and challenge price. Add collateral, or raise the challenge price and wait for cooldown to finish.";
+	const cooldownReason = "Cooldown active. This action is unavailable until the cooldown ends.";
+	const result: ActionAvailability = {
+		addCollateral: params.positionClosed ? unavailable("This position is closed.") : available,
+		removeCollateral: available,
+		borrowMore: available,
+		repay: params.positionClosed ? unavailable("This position is closed.") : available,
+		adjustSafety: params.positionClosed ? unavailable("This position is closed.") : available,
+		close: params.positionClosed ? unavailable("This position is closed.") : available,
+	};
+
+	if (params.positionClosed) {
+		result.removeCollateral = unavailable("This position is closed.");
+		result.borrowMore = unavailable("This position is closed.");
+		return result;
+	}
+	if (params.isCooldown) {
+		result.removeCollateral = unavailable(cooldownReason);
+		result.borrowMore = unavailable(cooldownReason);
+		return result;
+	}
+	if (params.isChallenged) {
+		result.removeCollateral = unavailable("Collateral cannot be removed while this position is challenged.");
+	}
+	if (params.currentPrice <= 0n) {
+		result.removeCollateral = unavailable(removeUnavailableReason);
+		result.borrowMore = unavailable(borrowUnavailableReason);
+		return result;
+	}
+
+	const requiredCollateral =
+		params.currentMinted === 0n ? 0n : (params.currentMinted * 10n ** 18n + params.currentPrice - 1n) / params.currentPrice;
+	if (params.currentCollateral <= requiredCollateral) {
+		result.removeCollateral = unavailable(removeUnavailableReason);
+	}
+
+	const maxMintedAtCurrentPrice = (params.currentCollateral * params.currentPrice) / 10n ** 18n;
+	if (maxMintedAtCurrentPrice <= params.currentMinted) {
+		result.borrowMore = unavailable(borrowUnavailableReason);
+	}
+
+	return result;
+}
+
 function getButtonText(action: ManageAction) {
 	if (action === "addCollateral") return "Add collateral";
 	if (action === "removeCollateral") return "Remove collateral";
 	if (action === "borrowMore") return "Borrow more";
-	if (action === "repay") return "Repay ZCHF";
+	if (action === "repay") return "Repay ZCHF / reduce debt";
 	if (action === "adjustSafety") return "Adjust safety";
 	return "Close position";
 }
