@@ -7,17 +7,34 @@ export function useServiceStatus(): Loading[] {
 	const [ponderStatus, setPonderStatus] = useState(false);
 
 	useEffect(() => {
+		const fetchPonderStatus = async () => {
+			try {
+				const response = await fetch(`${CONFIG.ponder}/status`);
+				if (response.ok) {
+					setPonderStatus(true);
+					return;
+				}
+			} catch {}
+
+			if (CONFIG.canonicalPonder === CONFIG.ponder) {
+				setPonderStatus(false);
+				return;
+			}
+
+			fetch(`${CONFIG.canonicalPonder}/status`)
+				.then((res) => setPonderStatus(res.ok))
+				.catch(() => setPonderStatus(false));
+		};
+
 		fetch(`${CONFIG.api}/ecosystem/coinmarketcap/totalsupply`)
 			.then((res) => setApiStatus(res.ok))
 			.catch(() => setApiStatus(false));
 
-		fetch(`${CONFIG.ponder}/status`)
-			.then((res) => setPonderStatus(res.ok))
-			.catch(() => setPonderStatus(false));
+		fetchPonderStatus();
 	}, []);
 
 	return [
-		{ id: "ponder", title: "Indexer", isLoaded: ponderStatus },
+		{ id: "ponder", title: "Self-hosted API snapshot", isLoaded: ponderStatus },
 		{ id: "api", title: "Api", isLoaded: apiStatus },
 	];
 }
