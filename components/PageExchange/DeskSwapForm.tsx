@@ -1,12 +1,13 @@
 import AppButton from "@components/AppButton";
 import AppNotice from "@components/AppNotice";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount, useChainId, useReadContract } from "wagmi";
+import { formatUnits, parseUnits } from "viem";
 import type { ChainId } from "@frankencoin/zchf";
 import { WAGMI_CHAINS } from "../../app.config";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
+import { requestDeskQuote, type DeskQuoteResponse } from "../../utils/cowDeskQuote";
 import {
 	FRANKENCOIN_ASSET_META,
 	getAllowedDeskChainsForMode,
@@ -22,6 +23,16 @@ import {
 	type DeskSwapMode,
 	type DeskSwapSide,
 } from "../../utils/exchangeAssets";
+
+const ERC20_BALANCE_ABI = [
+	{
+		type: "function",
+		name: "balanceOf",
+		stateMutability: "view",
+		inputs: [{ name: "account", type: "address" }],
+		outputs: [{ name: "balance", type: "uint256" }],
+	},
+] as const;
 
 type QuoteState = {
 	status: "idle" | "ready" | "blocked";
@@ -39,7 +50,9 @@ function getChainLabel(chainId: number) {
 }
 
 function TokenLogo({ asset }: { asset: DeskAsset }) {
-	return <Image src={asset.logoURI} alt="" width={32} height={32} className="h-8 w-8 rounded-full bg-white object-contain" />;
+	// Token logos are curated remote URLs and should not require a global Next image allowlist.
+	// eslint-disable-next-line @next/next/no-img-element
+	return <img src={asset.logoURI} alt="" width={32} height={32} className="h-8 w-8 rounded-full bg-white object-contain" />;
 }
 
 function TokenSelectCard({
@@ -115,7 +128,11 @@ export default function DeskSwapForm() {
 	const counterAssets = useMemo(() => getDeskCounterAssets(mode, chainId), [chainId, mode]);
 	const [counterAssetId, setCounterAssetId] = useState<string>(counterAssets[0]?.id ?? "");
 	const [amount, setAmount] = useState<string>("");
-	const route = getDeskRoute(mode, chainId, counterAssetId);
+	const [quote, setQuote] = useState<DeskQuoteResponse | null>(null);
+	const [quoteError, setQuoteError] = useState<string | null>(null);
+	const [isQuoteLoading, setIsQuoteLoading] = useState(false);
+	const route = useMemo(() => getDeskRoute(mode, chainId, counterAssetId), [chainId, counterAssetId, mode]);
+	const sellAsset = route?.sellAsset ?? null;
 	const selectedChain = getDeskChain(chainId);
 	const allowedChains = getAllowedDeskChainsForMode(mode);
 	const selectedCounterAsset = route?.counterAsset ?? counterAssets.find((asset) => asset.id === counterAssetId) ?? null;
@@ -128,6 +145,39 @@ export default function DeskSwapForm() {
 	const amountLabel = side === "buy" ? "Amount to pay" : "Amount to sell";
 	const assetChoiceLabel = side === "buy" ? "What do you want to buy?" : "What do you want to sell?";
 	const wfpsConfigured = isWfpsConfigured();
+	const {
+		data: sellBalance,
+		isLoading: isBalanceLoading,
+	} = useReadContract({
+		address: sellAsset?.address,
+		abi: ERC20_BALANCE_ABI,
+		functionName: "balanceOf",
+		args: address ? [address] : undefined,
+		chainId,
+		query: {
+			enabled: Boolean(address && sellAsset?.address),
+		},
+	});
+	const sellAmountBeforeFee = useMemo(() => {
+		if (!amount || !sellAsset) return null;
+		try {
+			return parseUnits(amount, sellAsset.decimals).toString();
+		} catch {
+			return null;
+		}
+	}, [amount, sellAsset]);
+	const estimatedReceive =
+		quote?.quote?.buyAmount && quote.buyAsset
+			? `${formatUnits(BigInt(quote.quote.buyAmount), quote.buyAsset.decimals)} ${quote.buyAsset.symbol}`
+			: null;
+	const feeAmount =
+		quote?.quote?.feeAmount && quote.sellAsset
+			? `${formatUnits(BigInt(quote.quote.feeAmount), quote.sellAsset.decimals)} ${quote.sellAsset.symbol}`
+			: null;
+	const hasInsufficientBalance =
+		sellBalance !== undefined &&
+		sellAmountBeforeFee !== null &&
+		BigInt(sellAmountBeforeFee) > sellBalance;
 
 	useEffect(() => {
 		const fallback = getDefaultDeskChainForMode(mode);
@@ -172,8 +222,42 @@ export default function DeskSwapForm() {
 	};
 
 	const onMaxClick = () => {
-		setAmount("");
+		if (!sellAsset || sellBalance === undefined) return;
+		setAmount(formatUnits(sellBalance, sellAsset.decimals));
 	};
+
+	useEffect(() => {
+		setQuote(null);
+		setQuoteError(null);
+		setIsQuoteLoading(false);
+
+		if (!address || !route || !sellAmountBeforeFee || !isConnectedToRouteChain) return;
+
+		let cancelled = false;
+		const timeout = window.setTimeout(async () => {
+			setIsQuoteLoading(true);
+			try {
+				const result = await requestDeskQuote({
+					chainId,
+					mode,
+					counterAssetId,
+					sellAmountBeforeFee,
+					from: address,
+					receiver: address,
+				});
+				if (!cancelled) setQuote(result);
+			} catch (error) {
+				if (!cancelled) setQuoteError(error instanceof Error ? error.message : "Quote request failed.");
+			} finally {
+				if (!cancelled) setIsQuoteLoading(false);
+			}
+		}, 700);
+
+		return () => {
+			cancelled = true;
+			window.clearTimeout(timeout);
+		};
+	}, [address, route, sellAmountBeforeFee, isConnectedToRouteChain, chainId, mode, counterAssetId]);
 
 	return (
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
@@ -284,12 +368,19 @@ export default function DeskSwapForm() {
 							<button
 								type="button"
 								onClick={onMaxClick}
+								disabled={!sellAsset || sellBalance === undefined}
 								className="border-l border-[#e0d4bd] px-4 text-sm font-semibold text-text-secondary hover:text-text-primary dark:border-menu-separator"
 							>
 								Max
 							</button>
 						</div>
-						<p className="mt-2 text-xs text-text-secondary">Balance-aware Max will be enabled with the quote and balance step.</p>
+						<p className="mt-2 text-xs text-text-secondary">
+							{isBalanceLoading
+								? "Loading balance…"
+								: sellAsset && sellBalance !== undefined
+									? `Balance: ${formatUnits(sellBalance, sellAsset.decimals)} ${sellAsset.symbol}`
+									: "Connect your wallet to see balance."}
+						</p>
 					</label>
 
 					<AppNotice
@@ -328,15 +419,36 @@ export default function DeskSwapForm() {
 						</div>
 					</div>
 
-					<div className={`mt-4 rounded-xl border px-4 py-3 text-sm leading-6 ${quoteState.status === "blocked" ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200" : "border-[#e0d4bd] bg-card-content-primary text-text-secondary dark:border-menu-separator"}`}>
-						{quoteState.message}
-					</div>
+					{hasInsufficientBalance ? (
+						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+							This route may be available, but your wallet balance is too low.
+						</div>
+					) : isQuoteLoading ? (
+						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							Checking route…
+						</div>
+					) : quoteError ? (
+						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+							{quoteError}
+						</div>
+					) : estimatedReceive ? (
+						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							<p className="font-semibold text-text-primary">Quote found</p>
+							<p className="mt-1">Estimated receive: {estimatedReceive}</p>
+							{feeAmount ? <p className="mt-1">CoW fee estimate: {feeAmount}</p> : null}
+							{quote?.expiration ? <p className="mt-1">Quote expires: {quote.expiration}</p> : null}
+						</div>
+					) : (
+						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							{quoteState.message}
+						</div>
+					)}
 
 					<AppButton disabled width="w-full" className="mt-4">
-						Quote execution coming next
+						Quote preview only
 					</AppButton>
 					<p className="mt-3 text-xs leading-5 text-text-secondary">
-						Next step: connect this locked route form to CoW quotes, then add approval and order signing after small-route testing.
+						Next step: add approval and order signing after small-route testing.
 					</p>
 				</div>
 			</div>

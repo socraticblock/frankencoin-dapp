@@ -121,7 +121,7 @@ function FiatExchangeModule() {
 								: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
 						}`}
 					>
-						Buy ZCHF
+						Buy ZCHF with fiat
 					</button>
 					<button
 						type="button"
@@ -132,7 +132,7 @@ function FiatExchangeModule() {
 								: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
 						}`}
 					>
-						Sell ZCHF
+						Sell ZCHF to fiat
 					</button>
 				</div>
 			</div>
@@ -239,7 +239,7 @@ export default function ExchangePage() {
 						<h2 className="mt-1 text-2xl font-semibold text-text-primary">What do you want to do?</h2>
 					</div>
 					<p className="max-w-xl text-sm leading-6 text-text-secondary">
-						Current recommendation: swap on Base when possible. Use the bridge if you need ZCHF on a chain with weak direct swap liquidity.
+						Current recommendation: buy or swap on Base when possible. Use the bridge if you need ZCHF on a chain with weak direct swap liquidity.
 					</p>
 				</div>
 
