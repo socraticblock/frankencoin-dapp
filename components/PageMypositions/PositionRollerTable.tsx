@@ -22,7 +22,7 @@ type PositionRollerTableParams = {
 export default function PositionRollerTable({ position }: PositionRollerTableParams) {
 	const navigate = useNavigation();
 
-	const headers: string[] = ["Position", "Liquidation Price", "Annual Interest", "Maturity", "Additional Funds"];
+	const headers: string[] = ["Position", "Liquidation Price", "Annual Interest", "Maturity", "ZCHF needed from wallet"];
 	const [tab, setTab] = useState<string>(headers[3]);
 	const [reverse, setReverse] = useState<boolean>(false);
 	const [list, setList] = useState<PositionQuery[]>([]);
@@ -76,27 +76,46 @@ export default function PositionRollerTable({ position }: PositionRollerTablePar
 	};
 
 	return (
-		<Table>
-			<TableHeader headers={headers} tab={tab} reverse={reverse} tabOnChange={handleTabOnChange} actionCol />
-			<TableBody>
-				{list.length == 0 ? (
-					<TableRowEmpty>
-						{
-							<div className={`flex flex-col`}>
-								<div className="">No open positions available for rolling.</div>
-								<div className="mt-4">
-									<AppButton className="h-10" onClick={() => handleClick(position)}>
-										Propose with new Parameter
-									</AppButton>
+		<>
+			<div className="mb-3 rounded-xl border border-[#e0d4bd] bg-card-content-secondary px-4 py-3 text-sm text-text-secondary dark:border-menu-separator">
+				<div className="font-semibold text-text-primary">How Roll / Merge pays interest</div>
+				<p className="mt-1">
+					Rolling moves the old debt into the selected target position. The upfront interest for the next period is
+					included in the new loan. <span className="font-semibold text-text-primary">ZCHF needed from wallet</span> only
+					shows the shortfall that cannot be covered by the target position.
+				</p>
+				<p className="mt-1">
+					0.00 ZCHF means no extra wallet ZCHF is needed: the target already has enough borrowing room, either because
+					its liquidation / challenge price is higher or because the collateral is not fully used. Collateral is not sold
+					during a normal Roll / Merge.
+				</p>
+				<p className="mt-1 text-xs">
+					Cooldown only matters when more borrowing room must be created by raising the liquidation / challenge price. If
+					a target is already in cooldown, the row shows the remaining cooldown time and cannot be used yet.
+				</p>
+			</div>
+			<Table>
+				<TableHeader headers={headers} tab={tab} reverse={reverse} tabOnChange={handleTabOnChange} actionCol />
+				<TableBody>
+					{list.length == 0 ? (
+						<TableRowEmpty>
+							{
+								<div className={`flex flex-col`}>
+									<div className="">No open positions available for rolling.</div>
+									<div className="mt-4">
+										<AppButton className="h-10" onClick={() => handleClick(position)}>
+											Propose with new Parameter
+										</AppButton>
+									</div>
 								</div>
-							</div>
-						}
-					</TableRowEmpty>
-				) : (
-					list.map((pos) => <PositionRollerRow headers={headers} tab={tab} source={position} target={pos} key={pos.position} />)
-				)}
-			</TableBody>
-		</Table>
+							}
+						</TableRowEmpty>
+					) : (
+						list.map((pos) => <PositionRollerRow headers={headers} tab={tab} source={position} target={pos} key={pos.position} />)
+					)}
+				</TableBody>
+			</Table>
+		</>
 	);
 }
 
@@ -135,7 +154,7 @@ function sortPositions(params: SortPositions): PositionQuery[] {
 			return b.expiration - a.expiration;
 		});
 	} else if (tab === headers[4]) {
-		// sort for Additional Funds
+		// sort for wallet ZCHF shortfall
 		// sortingList.sort((a, b) => {
 		// 	return b.expiration - a.expiration; // FIXME: correct logic
 		// });
