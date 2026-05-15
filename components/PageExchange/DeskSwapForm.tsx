@@ -1,41 +1,31 @@
 import AppButton from "@components/AppButton";
 import AppNotice from "@components/AppNotice";
 import { useEffect, useMemo, useState } from "react";
-import { useChainId, useConnection } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
 import type { ChainId } from "@frankencoin/zchf";
 import { WAGMI_CHAINS } from "../../app.config";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import {
+	FRANKENCOIN_ASSET_META,
 	getAllowedDeskChainsForMode,
 	getDefaultDeskChainForMode,
 	getDeskChain,
 	getDeskCounterAssets,
 	getDeskRoute,
+	isWfpsConfigured,
 	isWfpsMode,
+	modeFromDeskSelection,
 	type DeskAsset,
+	type DeskFrankencoinAsset,
 	type DeskSwapMode,
+	type DeskSwapSide,
 } from "../../utils/exchangeAssets";
-
-type SwapSide = "buy" | "sell";
-type FrankencoinAssetChoice = "zchf" | "wfps";
 
 type QuoteState = {
 	status: "idle" | "ready" | "blocked";
 	message: string;
 };
-
-const FRANKENCOIN_ASSET_META: Record<FrankencoinAssetChoice, { symbol: string; name: string }> = {
-	zchf: { symbol: "ZCHF", name: "Frankencoin" },
-	wfps: { symbol: "WFPS", name: "Wrapped Frankencoin Pool Shares" },
-};
-
-function modeFromSelection(side: SwapSide, asset: FrankencoinAssetChoice): DeskSwapMode {
-	if (side === "buy" && asset === "zchf") return "get-zchf";
-	if (side === "sell" && asset === "zchf") return "sell-zchf";
-	if (side === "buy" && asset === "wfps") return "get-wfps";
-	return "sell-wfps";
-}
 
 function parseChainId(value: string, mode: DeskSwapMode): ChainId {
 	const id = Number(value);
@@ -115,11 +105,11 @@ function LockedAssetCard({ asset, label }: { asset: DeskAsset | null; label: str
 
 export default function DeskSwapForm() {
 	const connectedChainId = useChainId();
-	const { address, isConnected } = useConnection();
+	const { address, isConnected } = useAccount();
 	const appKitNetwork = useAppKitNetwork();
-	const [side, setSide] = useState<SwapSide>("buy");
-	const [frankencoinAsset, setFrankencoinAsset] = useState<FrankencoinAssetChoice>("zchf");
-	const mode = modeFromSelection(side, frankencoinAsset);
+	const [side, setSide] = useState<DeskSwapSide>("buy");
+	const [frankencoinAsset, setFrankencoinAsset] = useState<DeskFrankencoinAsset>("zchf");
+	const mode = modeFromDeskSelection(side, frankencoinAsset);
 	const [chainId, setChainId] = useState<ChainId>(getDefaultDeskChainForMode(mode));
 	const counterAssets = useMemo(() => getDeskCounterAssets(mode, chainId), [chainId, mode]);
 	const [counterAssetId, setCounterAssetId] = useState<string>(counterAssets[0]?.id ?? "");
@@ -136,6 +126,7 @@ export default function DeskSwapForm() {
 	const assetMeta = FRANKENCOIN_ASSET_META[frankencoinAsset];
 	const amountLabel = side === "buy" ? "Amount to pay" : "Amount to sell";
 	const assetChoiceLabel = side === "buy" ? "What do you want to buy?" : "What do you want to sell?";
+	const wfpsConfigured = isWfpsConfigured();
 
 	useEffect(() => {
 		const fallback = getDefaultDeskChainForMode(mode);
@@ -151,9 +142,11 @@ export default function DeskSwapForm() {
 		const target = WAGMI_CHAINS.find((chain) => chain.id === nextChainId) as AppKitNetwork | undefined;
 		if (!target || connectedChainId === nextChainId) return;
 		const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
-		void appKitNetwork.switchNetwork(target).finally(() => {
-			if (typeof window !== "undefined") window.requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
-		});
+		Promise.resolve(appKitNetwork.switchNetwork(target))
+			.catch(() => null)
+			.finally(() => {
+				if (typeof window !== "undefined") window.requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
+			});
 	};
 
 	const onChainChange = (value: string) => {
@@ -162,16 +155,17 @@ export default function DeskSwapForm() {
 		switchWalletToChain(nextChainId);
 	};
 
-	const onAssetChoiceChange = (asset: FrankencoinAssetChoice) => {
+	const onAssetChoiceChange = (asset: DeskFrankencoinAsset) => {
+		if (asset === "wfps" && !wfpsConfigured) return;
 		setFrankencoinAsset(asset);
-		const nextMode = modeFromSelection(side, asset);
+		const nextMode = modeFromDeskSelection(side, asset);
 		const nextChain = getDefaultDeskChainForMode(nextMode);
 		setChainId(nextChain);
 		setAmount("");
 		switchWalletToChain(nextChain);
 	};
 
-	const onSideChange = (nextSide: SwapSide) => {
+	const onSideChange = (nextSide: DeskSwapSide) => {
 		setSide(nextSide);
 		setAmount("");
 	};
@@ -200,7 +194,7 @@ export default function DeskSwapForm() {
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-3 dark:border-menu-separator dark:bg-card-content-secondary">
 					<p className="text-xs uppercase tracking-wider text-text-secondary">Buy or sell ZCHF or WFPS?</p>
 					<div className="mt-2 grid grid-cols-2 gap-2">
-						{(["buy", "sell"] as SwapSide[]).map((item) => (
+						{(["buy", "sell"] as DeskSwapSide[]).map((item) => (
 							<button
 								key={item}
 								type="button"
@@ -220,21 +214,25 @@ export default function DeskSwapForm() {
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-3 dark:border-menu-separator dark:bg-card-content-secondary">
 					<p className="text-xs uppercase tracking-wider text-text-secondary">{assetChoiceLabel}</p>
 					<div className="mt-2 grid grid-cols-2 gap-2">
-						{(["zchf", "wfps"] as FrankencoinAssetChoice[]).map((asset) => {
+						{(["zchf", "wfps"] as DeskFrankencoinAsset[]).map((asset) => {
 							const meta = FRANKENCOIN_ASSET_META[asset];
+							const disabled = asset === "wfps" && !wfpsConfigured;
 							return (
 								<button
 									key={asset}
 									type="button"
+									disabled={disabled}
 									onClick={() => onAssetChoiceChange(asset)}
 									className={`rounded-xl border px-3 py-2.5 text-left transition ${
 										frankencoinAsset === asset
 											? "border-[#c4a75f] bg-button-default text-white"
 											: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
-									}`}
+									} ${disabled ? "cursor-not-allowed opacity-50 hover:border-[#e0d4bd]" : ""}`}
 								>
 									<p className="text-sm font-semibold leading-5">{meta.symbol}</p>
-									<p className={`mt-0.5 truncate text-xs leading-4 ${frankencoinAsset === asset ? "text-white/75" : "text-text-secondary"}`}>{meta.name}</p>
+									<p className={`mt-0.5 truncate text-xs leading-4 ${frankencoinAsset === asset ? "text-white/75" : "text-text-secondary"}`}>
+										{disabled ? "Wrapper address not verified" : meta.name}
+									</p>
 								</button>
 							);
 						})}
