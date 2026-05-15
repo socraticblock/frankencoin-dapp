@@ -76,20 +76,31 @@ export default function PositionRollerTable({ position }: PositionRollerTablePar
 	return (
 		<>
 			<div className="mb-3 rounded-xl border border-[#e0d4bd] bg-card-content-secondary px-4 py-3 text-sm text-text-secondary dark:border-menu-separator">
-				<div className="font-semibold text-text-primary">How Roll / Merge pays interest</div>
+				<div className="font-semibold text-text-primary">What happens when you Roll / Merge?</div>
+				<p className="mt-1">Rolling means your current loan is moved into a newer compatible position.</p>
 				<p className="mt-1">
-					Rolling moves the old debt into the selected target position. The upfront interest for the next period is
-					included in the new loan. <span className="font-semibold text-text-primary">ZCHF needed from wallet</span> only
-					shows the shortfall that cannot be covered by the target position.
+					The new loan can be a little bigger because the upfront interest for the next period is added to the loan.
 				</p>
 				<p className="mt-1">
-					0.00 ZCHF means no extra wallet ZCHF is needed: the target already has enough borrowing room, either because
-					its liquidation / challenge price is higher or because the collateral is not fully used. Collateral is not sold
-					during a normal Roll / Merge.
+					Example: if you currently owe 1,000 ZCHF and the next period&apos;s upfront interest is 10 ZCHF, after rolling
+					you may owe about 1,010 ZCHF.
 				</p>
+				<p className="mt-1">
+					<span className="font-semibold text-text-primary">ZCHF needed from wallet</span> tells you whether extra ZCHF
+					must come from your wallet.
+				</p>
+				<p className="mt-1">
+					<span className="font-semibold text-text-primary">If it says 0.00 ZCHF:</span> no extra ZCHF is needed from
+					your wallet, except gas. The interest is added to the new loan.
+				</p>
+				<p className="mt-1">
+					<span className="font-semibold text-text-primary">If it is above 0:</span> the new position cannot borrow enough
+					by itself. You need that much ZCHF in your wallet, or you need to choose a position with more borrowing room.
+				</p>
+				<p className="mt-1">Your collateral is not sold during a normal Roll / Merge.</p>
 				<p className="mt-1 text-xs">
-					Cooldown only matters when more borrowing room must be created by raising the liquidation / challenge price. If
-					a target is already in cooldown, the row shows the remaining cooldown time and cannot be used yet.
+					Cooldown only matters if more borrowing room must be created by raising the liquidation / challenge price, or if
+					the selected new position is already in cooldown.
 				</p>
 			</div>
 			<Table>
