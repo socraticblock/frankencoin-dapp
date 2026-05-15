@@ -131,17 +131,16 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 				</span>
 				{isCooldown ? (
 					<span className="text-xs text-text-warning">
-						Target is in cooldown. Extra minting becomes available after cooldown ends.
+						This new position is in cooldown. It can be used after cooldown ends.
 					</span>
 				) : hasWalletShortfall ? (
 					<span className="text-xs text-text-secondary">
-						Target can mint {formatCurrency(formatUnits(maxMintByCollateral, 18), 2)} ZCHF from the moved collateral, but this roll
-						 needs about {formatCurrency(formatUnits(mintAmount, 18), 2)} ZCHF. Keep the difference in your wallet or choose a target
-						 with more room.
+						This Roll / Merge needs {formatCurrency(formatUnits(missingFunds, 18), 2)} ZCHF from your wallet because the new position
+						 cannot borrow enough by itself. Choose a position with more room or keep this ZCHF in your wallet.
 					</span>
 				) : (
 					<span className="text-xs text-text-secondary">
-						No extra wallet ZCHF needed. Interest is included in the new loan because this target has enough borrowing room.
+						No extra wallet ZCHF needed. The interest is added to the new loan.
 					</span>
 				)}
 			</div>
