@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
 import type { ChainId } from "@frankencoin/zchf";
+import { COW_EMPTY_APP_DATA, COW_EMPTY_APP_DATA_HASH } from "../../utils/cowDeskOrder";
 import { getDeskRoute, type DeskSwapMode } from "../../utils/exchangeAssets";
 
 const COW_CHAIN_BY_ID: Record<number, string> = {
@@ -58,6 +59,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 				kind: "sell",
 				sellAmountBeforeFee,
 				partiallyFillable: false,
+				appData: COW_EMPTY_APP_DATA,
+				appDataHash: COW_EMPTY_APP_DATA_HASH,
+				sellTokenBalance: "erc20",
+				buyTokenBalance: "erc20",
 				signingScheme: "eip712",
 				priceQuality: "optimal",
 			}),
@@ -90,6 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 function getCowError(value: unknown) {
+	if (typeof value === "string") return value;
 	if (value && typeof value === "object") {
 		const data = value as Record<string, unknown>;
 		if (typeof data.description === "string") return data.description;
