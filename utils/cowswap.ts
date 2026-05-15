@@ -14,8 +14,21 @@ export type CowSwapNetwork = {
 	suggested?: boolean;
 };
 
-const COW_SWAP_BASE_URL = "https://swap.cow.fi";
-const COW_SWAP_APP_CODE = "ZCHF-Desk";
+const COW_ZCHF_TOKEN_LIST_META = {
+	name: "Frankencoin",
+	symbol: "ZCHF",
+	decimals: 18,
+	logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
+} as const;
+
+export type CowDeskZchfTokenListEntry = {
+	chainId: number;
+	address: Address;
+	name: string;
+	symbol: string;
+	decimals: number;
+	logoURI: string;
+};
 
 export const COW_SWAP_NETWORKS: CowSwapNetwork[] = [
 	{
@@ -41,7 +54,7 @@ export const COW_SWAP_NETWORKS: CowSwapNetwork[] = [
 		counterAsset: "WXDAI",
 		counterAssetLabel: "WXDAI",
 		liquidityLabel: "Low gas",
-		note: "Useful for low-cost swaps on Gnosis. Users can change the input token inside CoW Swap.",
+		note: "Low-cost ZCHF swaps on Gnosis. Use CoW Swap directly for unrelated token pairs.",
 	},
 ];
 
@@ -57,22 +70,19 @@ export function getCowZchfAddress(chainId: ChainId): Address | null {
 	return null;
 }
 
-export function buildCowSwapWidgetUrl(direction: CowSwapDirection, chainId: ChainId) {
-	const network = getCowSwapNetwork(chainId);
-	const zchfAddress = getCowZchfAddress(chainId);
-	if (!network || !zchfAddress) return null;
-
-	const sellAsset = direction === "buy-zchf" ? network.counterAsset : zchfAddress;
-	const buyAsset = direction === "buy-zchf" ? zchfAddress : network.counterAsset;
-	const params = new URLSearchParams({
-		appCode: COW_SWAP_APP_CODE,
-		theme: "light",
-		tradeType: "swap",
-		disablePostTradeTips: "true",
-		hideOrdersTable: "false",
-	});
-
-	return `${COW_SWAP_BASE_URL}/#/${chainId}/swap/${sellAsset}/${buyAsset}?${params.toString()}`;
+/** ZCHF rows for the desk CoW token list API — one source of truth with {@link getCowZchfAddress}. */
+export function getCowDeskZchfTokenListEntries(): CowDeskZchfTokenListEntry[] {
+	const out: CowDeskZchfTokenListEntry[] = [];
+	for (const network of COW_SWAP_NETWORKS) {
+		const address = getCowZchfAddress(network.chainId);
+		if (!address) continue;
+		out.push({
+			chainId: network.chainId,
+			address,
+			...COW_ZCHF_TOKEN_LIST_META,
+		});
+	}
+	return out;
 }
 
 export function getCowRouteLabels(direction: CowSwapDirection, network: CowSwapNetwork) {

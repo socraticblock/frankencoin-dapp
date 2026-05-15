@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CowSwapWidgetParams, EthereumProvider, SupportedChainId, TradeType } from "@cowprotocol/widget-lib";
 import { CowSwapDirection, getCowRouteLabels, getCowSwapNetwork, getCowZchfAddress } from "../../utils/cowswap";
 import type { ChainId } from "@frankencoin/zchf";
 
@@ -15,7 +16,7 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 	const zchfAddress = getCowZchfAddress(chainId);
 	const routeLabels = network ? getCowRouteLabels(direction, network) : null;
 
-	const params = useMemo(() => {
+	const params = useMemo((): CowSwapWidgetParams | null => {
 		if (!network || !zchfAddress) return null;
 		const sellAsset = direction === "buy-zchf" ? network.counterAsset : zchfAddress;
 		const buyAsset = direction === "buy-zchf" ? zchfAddress : network.counterAsset;
@@ -26,15 +27,13 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			width: "100%",
 			height: "640px",
 			maxHeight: 760,
-			chainId,
-			tradeType: "swap",
-			enabledTradeTypes: ["swap"],
+			chainId: chainId as SupportedChainId,
+			tradeType: "swap" as TradeType,
+			enabledTradeTypes: ["swap"] as TradeType[],
 			sell: { asset: sellAsset },
 			buy: { asset: buyAsset },
-			provider: typeof window === "undefined" ? undefined : window.ethereum,
 			standaloneMode: true,
 			tokenLists: origin ? [`${origin}/api/cow-token-list`] : undefined,
-			disableCrossChainSwap: true,
 			disablePostedOrderConfirmationModal: false,
 			disableProgressBar: false,
 			disableToastMessages: false,
@@ -55,10 +54,16 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 		container.innerHTML = "";
 
 		async function mountWidget() {
+			const widgetParams = params;
+			if (!widgetParams) return;
 			try {
-				const cowWidget = (await import("@cowprotocol/widget-lib")) as any;
+				const { createCowSwapWidget } = await import("@cowprotocol/widget-lib");
 				if (cancelled || !containerRef.current) return;
-				cowWidget.createCowSwapWidget(containerRef.current, { params });
+				const provider: EthereumProvider | undefined =
+					typeof window !== "undefined" && window.ethereum
+						? (window.ethereum as unknown as EthereumProvider)
+						: undefined;
+				createCowSwapWidget(containerRef.current, { params: widgetParams, provider });
 				setStatus("ready");
 			} catch (e) {
 				if (cancelled) return;

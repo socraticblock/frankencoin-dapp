@@ -75,8 +75,9 @@ export const CONFIG: ConfigEnv = {
 	rpc: process.env.NEXT_PUBLIC_RPC_KEY || "dhaKbi2HDlKYW1JaSHm1i_hGkE2gnA5t",
 };
 
-console.log("YOU ARE USING THIS CONFIG PROFILE:");
-console.log(CONFIG);
+if (process.env.NODE_ENV !== "production" && CONFIG.verbose) {
+	console.log("CONFIG PROFILE", CONFIG);
+}
 
 // PONDER CLIENT
 export const PONDER_CLIENT = new ApolloClient({

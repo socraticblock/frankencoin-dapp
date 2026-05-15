@@ -1,32 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { ADDRESS } from "@frankencoin/zchf";
 import { base, gnosis, mainnet } from "viem/chains";
+import { getCowDeskZchfTokenListEntries } from "../../utils/cowswap";
 
 const TOKENS = [
-	{
-		chainId: mainnet.id,
-		address: ADDRESS[mainnet.id].frankencoin,
-		name: "Frankencoin",
-		symbol: "ZCHF",
-		decimals: 18,
-		logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
-	},
-	{
-		chainId: base.id,
-		address: ADDRESS[base.id].ccipBridgedFrankencoin,
-		name: "Frankencoin",
-		symbol: "ZCHF",
-		decimals: 18,
-		logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
-	},
-	{
-		chainId: gnosis.id,
-		address: ADDRESS[gnosis.id].ccipBridgedFrankencoin,
-		name: "Frankencoin",
-		symbol: "ZCHF",
-		decimals: 18,
-		logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
-	},
+	...getCowDeskZchfTokenListEntries(),
 	{
 		chainId: mainnet.id,
 		address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",

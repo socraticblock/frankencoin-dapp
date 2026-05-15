@@ -808,6 +808,31 @@
     preact "^10.24.2"
     viem "^2.27.2"
 
+"@cowprotocol/events@^1.6.1":
+  version "1.6.1"
+  resolved "https://registry.yarnpkg.com/@cowprotocol/events/-/events-1.6.1.tgz#be9c9f761223408b366e40762f8ba3342ffec7ed"
+  integrity sha512-4ea0JYS5OE5FV58rxm5jUiwxzlMe96gpL2EaZIjov0MRincS5/RhlsfcBziWUQrPmTBTr1qxQ1Dbzw78D5eIbQ==
+  dependencies:
+    "@cowprotocol/types" "^1.2.0"
+
+"@cowprotocol/iframe-transport@^1.1.1":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@cowprotocol/iframe-transport/-/iframe-transport-1.2.0.tgz#1d5a37b2a19ed3b45ab8a475632547c52f6447a1"
+  integrity sha512-M7LfVHoiCm4I+q0pRGYW7pLf81D1XhZxno8EkYHFUOcThor/ir7R4eN2QTygw3BtFF9Ll4e7G+p6WRdO+RgbxQ==
+
+"@cowprotocol/types@^1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@cowprotocol/types/-/types-1.2.0.tgz#b036c7959122118d278e67200da2aeb88d5aed09"
+  integrity sha512-K/jOyLtffgEFs52hRKX7tyDHtIA3asnsB9So6lINCPfNetr1GhM818+kf+f3sPtOHWsBpL3pTkjJphzDVCQntQ==
+
+"@cowprotocol/widget-lib@^0.20.0":
+  version "0.20.0"
+  resolved "https://registry.yarnpkg.com/@cowprotocol/widget-lib/-/widget-lib-0.20.0.tgz#e3d3ef830a895c194a98cd0366be3fc255dd9633"
+  integrity sha512-+iRFm8YeKP0qIjK0D08yfinRRHUNc/h0A0sRopIeJCRiKsIJR2legwD02BuzhNv3EiwxwH7aRmqdYpILYJzGUw==
+  dependencies:
+    "@cowprotocol/events" "^1.6.1"
+    "@cowprotocol/iframe-transport" "^1.1.1"
+
 "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
   resolved "https://registry.yarnpkg.com/@cspotcode/source-map-support/-/source-map-support-0.8.1.tgz#00629c35a688e05a88b1cda684fb9d5e73f000a1"

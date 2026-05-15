@@ -6,8 +6,18 @@ import ZchfCowSwapWidget from "@components/PageSwap/ZchfCowSwapWidget";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useChainId, useConnection } from "wagmi";
+import { ChainId } from "@frankencoin/zchf";
 import { base } from "viem/chains";
 import { COW_SWAP_NETWORKS, CowSwapDirection, getCowRouteLabels, getCowSwapNetwork } from "../utils/cowswap";
+
+function parseCowChainId(value: string): ChainId {
+	const id = Number(value);
+	const match = COW_SWAP_NETWORKS.find((network) => network.chainId === id);
+	if (!match) {
+		return base.id as ChainId;
+	}
+	return match.chainId;
+}
 
 const DIRECTIONS: { value: CowSwapDirection; label: string; copy: string }[] = [
 	{
@@ -27,7 +37,9 @@ export default function Swap() {
 	const { isConnected } = useConnection();
 	const walletCowNetwork = getCowSwapNetwork(walletChainId);
 	const [direction, setDirection] = useState<CowSwapDirection>("buy-zchf");
-	const [selectedChainId, setSelectedChainId] = useState(walletCowNetwork?.chainId ?? (base.id as any));
+	const [selectedChainId, setSelectedChainId] = useState<ChainId>(
+		walletCowNetwork?.chainId ?? (base.id as ChainId)
+	);
 
 	useEffect(() => {
 		if (walletCowNetwork) setSelectedChainId(walletCowNetwork.chainId);
@@ -77,7 +89,7 @@ export default function Swap() {
 						<span>ZCHF network</span>
 						<select
 							value={selectedChainId}
-							onChange={(event) => setSelectedChainId(Number(event.target.value) as any)}
+							onChange={(event) => setSelectedChainId(parseCowChainId(event.target.value))}
 							className="min-h-[42px] rounded-lg border border-[#e0d4bd] bg-card-content-secondary px-3 text-sm font-semibold text-text-primary outline-none transition hover:border-[#c4a75f] focus:border-[#c4a75f] dark:border-menu-separator"
 						>
 							{COW_SWAP_NETWORKS.map((network) => (

@@ -36,7 +36,6 @@ export default function StablecoinBridge() {
 
 	const activeMinter = isMinter > 0 && isMinter * 1000n <= Date.now();
 	const fromBalance = direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
-	const toBalance = !direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
 	const fromSymbol = direction ? swapStats.otherSymbol : "ZCHF";
 	const toSymbol = !direction ? swapStats.otherSymbol : "ZCHF";
 	const swapLimit = direction ? swapStats.bridgeLimit - swapStats.otherBridgeBal : swapStats.otherBridgeBal;
