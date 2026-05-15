@@ -1,13 +1,9 @@
 import AppButton from "@components/AppButton";
-import AppLink from "@components/AppLink";
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
-import ZchfCowSwapWidget from "@components/PageSwap/ZchfCowSwapWidget";
+import DeskSwapForm from "@components/PageExchange/DeskSwapForm";
 import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
-import { useChainId, useConnection } from "wagmi";
-import type { ChainId } from "@frankencoin/zchf";
-import { base } from "viem/chains";
+import { useMemo, useState } from "react";
 import {
 	buildMtPelerinWidgetUrl,
 	getMtPelerinActivationKey,
@@ -15,7 +11,6 @@ import {
 	type MtPelerinNetwork,
 	type MtPelerinTab,
 } from "../utils/mtpelerin";
-import { COW_SWAP_NETWORKS, type CowSwapDirection, getCowRouteLabels, getCowSwapNetwork } from "../utils/cowswap";
 
 type ExchangeAction = "buy" | "sell" | "swap" | "bridge" | "transfer";
 
@@ -39,9 +34,9 @@ const ACTIONS: {
 	},
 	{
 		value: "swap",
-		title: "Swap crypto and ZCHF",
-		subtitle: "Crypto routes powered by CoW",
-		detail: "Best practical swap liquidity is on Base. Ethereum and Gnosis are also available here.",
+		title: "Swap Frankencoin assets",
+		subtitle: "Custom ZCHF Desk route form",
+		detail: "Swap meaningful tokens to ZCHF, ZCHF to meaningful tokens, and WFPS routes on Ethereum only.",
 	},
 	{
 		value: "bridge",
@@ -61,26 +56,6 @@ const FIAT_FLOW_COPY: Record<Extract<ExchangeAction, "buy" | "sell">, string> = 
 	buy: "Buy ZCHF with fiat through Mt Pelerin. Base is a good default for most retail users.",
 	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Review fees, limits, and bank details inside the widget.",
 };
-
-const SWAP_DIRECTIONS: { value: CowSwapDirection; label: string; copy: string }[] = [
-	{
-		value: "buy-zchf",
-		label: "Crypto to ZCHF",
-		copy: "Exchange supported crypto into ZCHF. The ZCHF side stays fixed for clarity.",
-	},
-	{
-		value: "sell-zchf",
-		label: "ZCHF to crypto",
-		copy: "Exchange ZCHF back into supported crypto. The ZCHF side stays fixed for clarity.",
-	},
-];
-
-function parseCowChainId(value: string): ChainId {
-	const id = Number(value);
-	const match = COW_SWAP_NETWORKS.find((network) => network.chainId === id);
-	if (!match) return base.id as ChainId;
-	return match.chainId;
-}
 
 function ActionCard({
 	action,
@@ -173,110 +148,6 @@ function FiatExchangeModule({ action }: { action: Extract<ExchangeAction, "buy" 
 	);
 }
 
-function SwapExchangeModule() {
-	const walletChainId = useChainId();
-	const { isConnected } = useConnection();
-	const walletCowNetwork = getCowSwapNetwork(walletChainId);
-	const [direction, setDirection] = useState<CowSwapDirection>("buy-zchf");
-	const [selectedChainId, setSelectedChainId] = useState<ChainId>(walletCowNetwork?.chainId ?? (base.id as ChainId));
-
-	useEffect(() => {
-		if (walletCowNetwork) setSelectedChainId(walletCowNetwork.chainId);
-	}, [walletCowNetwork]);
-
-	const selectedNetwork = getCowSwapNetwork(selectedChainId);
-	const selectedDirection = SWAP_DIRECTIONS.find((option) => option.value === direction) ?? SWAP_DIRECTIONS[0];
-	const routeLabels = selectedNetwork ? getCowRouteLabels(direction, selectedNetwork) : null;
-
-	return (
-		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
-			<div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-				<div>
-					<p className="text-xs uppercase tracking-wider text-text-secondary">CoW swap</p>
-					<h2 className="mt-1 text-xl font-semibold text-text-primary">Swap crypto and ZCHF</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-						Use direct ZCHF swap routes on Base, Ethereum, or Gnosis. Base is the recommended default for most users.
-					</p>
-				</div>
-
-				<label className="flex flex-col gap-2 text-sm font-medium text-text-secondary sm:flex-row sm:items-center">
-					<span>ZCHF network</span>
-					<select
-						value={selectedChainId}
-						onChange={(event) => setSelectedChainId(parseCowChainId(event.target.value))}
-						className="min-h-[42px] rounded-lg border border-[#e0d4bd] bg-card-content-secondary px-3 text-sm font-semibold text-text-primary outline-none transition hover:border-[#c4a75f] focus:border-[#c4a75f] dark:border-menu-separator"
-					>
-						{COW_SWAP_NETWORKS.map((network) => (
-							<option key={network.chainId} value={network.chainId}>
-								{network.suggested ? `${network.label} - recommended` : network.label}
-							</option>
-						))}
-					</select>
-				</label>
-			</div>
-
-			<div className="mt-4 flex flex-wrap gap-2">
-				{SWAP_DIRECTIONS.map((option) => (
-					<button
-						key={option.value}
-						type="button"
-						onClick={() => setDirection(option.value)}
-						className={`min-h-[42px] rounded-lg border px-4 text-sm font-semibold transition ${
-							direction === option.value
-								? "border-[#c4a75f] bg-button-default text-white"
-								: "border-[#e0d4bd] bg-card-content-secondary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
-						}`}
-					>
-						{option.label}
-					</button>
-				))}
-			</div>
-
-			<div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr,1fr,1fr]">
-				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Client flow</p>
-					<p className="mt-1 text-sm font-semibold text-text-primary">{selectedDirection.label}</p>
-					<p className="mt-2 text-xs leading-5 text-text-secondary">{selectedDirection.copy}</p>
-				</div>
-				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Route</p>
-					<p className="mt-1 text-sm font-semibold text-text-primary">
-						{routeLabels ? `${routeLabels.sell} -> ${routeLabels.buy}` : "Route unavailable"}
-					</p>
-					<p className="mt-2 text-xs leading-5 text-text-secondary">The ZCHF side is fixed for clarity.</p>
-				</div>
-				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Liquidity hint</p>
-					<p className="mt-1 text-sm font-semibold text-text-primary">
-						{selectedNetwork ? selectedNetwork.liquidityLabel : "Unsupported network"}
-					</p>
-					<p className="mt-2 text-xs leading-5 text-text-secondary">{selectedNetwork?.note ?? "Choose a supported network."}</p>
-				</div>
-			</div>
-
-			{isConnected && !walletCowNetwork ? (
-				<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
-					Your wallet is connected to a network that this swap desk does not support. Choose Base, Ethereum, or Gnosis above.
-				</p>
-			) : null}
-
-			<AppNotice
-				variant="neutral"
-				message="Other chains may have little or no direct ZCHF swap liquidity. If you want ZCHF on another chain, buy or swap on Base, Ethereum, or Gnosis first, then bridge your ZCHF."
-			/>
-
-			<ZchfCowSwapWidget direction={direction} chainId={selectedChainId} />
-
-			<div className="mx-auto mt-4 max-w-[720px] rounded-xl border border-[#e0d4bd] bg-card-content-secondary/70 p-4 text-xs leading-5 text-text-secondary dark:border-menu-separator dark:bg-card-content-secondary">
-				<p>
-					This page is intentionally limited to ZCHF routes. Need a different crypto-to-crypto pair?{" "}
-					<AppLink label="Open CoW Swap" href="https://swap.cow.fi" external className="" />.
-				</p>
-			</div>
-		</section>
-	);
-}
-
 function BridgeTransferModule({ action }: { action: Extract<ExchangeAction, "bridge" | "transfer"> }) {
 	const isBridge = action === "bridge";
 	return (
@@ -334,7 +205,7 @@ export default function ExchangePage() {
 			>
 				<AppNotice
 					variant="neutral"
-					message="ZCHF exists on several chains, but direct swap liquidity is not equal everywhere. For crypto swaps, use Base, Ethereum, or Gnosis. For other chains, bridge ZCHF after you have it."
+					message="ZCHF exists on several chains, but direct swap liquidity is not equal everywhere. For crypto swaps, use the custom Frankencoin route form. For other chains, bridge ZCHF after you have it."
 				/>
 			</AppPageHeader>
 
@@ -358,7 +229,7 @@ export default function ExchangePage() {
 
 			<div className="mt-6">
 				{activeAction === "buy" || activeAction === "sell" ? <FiatExchangeModule action={activeAction} /> : null}
-				{activeAction === "swap" ? <SwapExchangeModule /> : null}
+				{activeAction === "swap" ? <DeskSwapForm /> : null}
 				{activeAction === "bridge" || activeAction === "transfer" ? <BridgeTransferModule action={activeAction} /> : null}
 			</div>
 
