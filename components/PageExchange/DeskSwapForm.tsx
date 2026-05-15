@@ -1,12 +1,24 @@
 import AppNotice from "@components/AppNotice";
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useChainId, useReadContract } from "wagmi";
+import { useAccount, useChainId, useReadContract, useSignTypedData, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
+import type { Address, Hex } from "viem";
 import type { ChainId } from "@frankencoin/zchf";
 import { WAGMI_CHAINS } from "../../app.config";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import { requestDeskQuote, type DeskQuoteResponse } from "../../utils/cowDeskQuote";
+import {
+	COW_ORDER_TYPES,
+	COW_VAULT_RELAYER_ADDRESS,
+	buildDeskOrderSubmission,
+	buildDeskOrderToSign,
+	getCowOrderDomain,
+	getDeskExecutionLabel,
+	isBaseUsdcToZchfExecutionRoute,
+	requestDeskOrderStatus,
+	submitDeskOrder,
+} from "../../utils/cowDeskOrder";
 import {
 	FRANKENCOIN_ASSET_META,
 	getAllowedDeskChainsForMode,
@@ -23,13 +35,33 @@ import {
 	type DeskSwapSide,
 } from "../../utils/exchangeAssets";
 
-const ERC20_BALANCE_ABI = [
+const ERC20_ABI = [
 	{
 		type: "function",
 		name: "balanceOf",
 		stateMutability: "view",
 		inputs: [{ name: "account", type: "address" }],
 		outputs: [{ name: "balance", type: "uint256" }],
+	},
+	{
+		type: "function",
+		name: "allowance",
+		stateMutability: "view",
+		inputs: [
+			{ name: "owner", type: "address" },
+			{ name: "spender", type: "address" },
+		],
+		outputs: [{ name: "allowance", type: "uint256" }],
+	},
+	{
+		type: "function",
+		name: "approve",
+		stateMutability: "nonpayable",
+		inputs: [
+			{ name: "spender", type: "address" },
+			{ name: "amount", type: "uint256" },
+		],
+		outputs: [{ name: "success", type: "bool" }],
 	},
 ] as const;
 
@@ -139,6 +171,39 @@ function getQuoteExpirationLabel(value?: string) {
 	return `Expires in about ${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 
+function getOrderStatusLabel(value: any) {
+	const raw = value?.status?.status ?? value?.status ?? value?.order?.status ?? value?.order?.class ?? null;
+	return typeof raw === "string" ? raw : "submitted";
+}
+
+function isOrderComplete(value: any) {
+	const status = getOrderStatusLabel(value).toLowerCase();
+	return status === "traded" || status === "filled" || status === "fulfilled";
+}
+
+function isOrderExpiredOrCancelled(value: any) {
+	const status = getOrderStatusLabel(value).toLowerCase();
+	return status === "expired" || status === "cancelled" || status === "canceled";
+}
+
+function getFriendlyError(error: unknown, fallback: string) {
+	console.error(error);
+	const message = error instanceof Error ? error.message : String(error ?? "");
+	const lower = message.toLowerCase();
+
+	if (lower.includes("user rejected") || lower.includes("user denied") || lower.includes("rejected by user")) {
+		if (lower.includes("sign") || lower.includes("signature") || lower.includes("typed")) return "Signature rejected in wallet.";
+		return "Approval rejected in wallet.";
+	}
+	if (lower.includes("eip-712") || lower.includes("typed data") || lower.includes("1271")) {
+		return "This wallet could not sign the CoW order with EIP-712. Smart-contract wallet support will be added separately.";
+	}
+	if (lower.includes("expired")) return "Quote expired. Refresh the quote and try again.";
+	if (lower.includes("cow") || lower.includes("order submission")) return "CoW could not accept this order. Try a smaller amount or refresh the quote.";
+
+	return fallback;
+}
+
 function getRouteExplanation(mode: DeskSwapMode, assetSymbol: string) {
 	if (mode === "get-zchf") return "Buy ZCHF: you pay crypto already in your wallet and receive ZCHF.";
 	if (mode === "sell-zchf") return "Sell ZCHF: you sell ZCHF and receive the selected crypto token.";
@@ -228,8 +293,15 @@ export default function DeskSwapForm() {
 	const [quote, setQuote] = useState<DeskQuoteResponse | null>(null);
 	const [quoteError, setQuoteError] = useState<string | null>(null);
 	const [isQuoteLoading, setIsQuoteLoading] = useState(false);
+	const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
+	const [executionError, setExecutionError] = useState<string | null>(null);
+	const [submittedOrderUid, setSubmittedOrderUid] = useState<string | null>(null);
+	const [orderStatus, setOrderStatus] = useState<any | null>(null);
+	const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+	const [isCheckingOrderStatus, setIsCheckingOrderStatus] = useState(false);
 	const route = useMemo(() => getDeskRoute(mode, chainId, counterAssetId), [chainId, counterAssetId, mode]);
 	const sellAsset = route?.sellAsset ?? null;
+	const isExecutionRoute = Boolean(route && isBaseUsdcToZchfExecutionRoute(chainId, mode, counterAssetId));
 	const selectedChain = getDeskChain(chainId);
 	const allowedChains = getAllowedDeskChainsForMode(mode);
 	const selectedCounterAsset = route?.counterAsset ?? counterAssets.find((asset) => asset.id === counterAssetId) ?? null;
@@ -248,7 +320,7 @@ export default function DeskSwapForm() {
 		isLoading: isBalanceLoading,
 	} = useReadContract({
 		address: sellAsset?.address,
-		abi: ERC20_BALANCE_ABI,
+		abi: ERC20_ABI,
 		functionName: "balanceOf",
 		args: address ? [address] : undefined,
 		chainId,
@@ -256,6 +328,55 @@ export default function DeskSwapForm() {
 			enabled: Boolean(address && sellAsset?.address),
 		},
 	});
+	const orderToSign = useMemo(() => {
+		if (!quote || !address || !isExecutionRoute) return null;
+
+		return buildDeskOrderToSign({
+			quote,
+			from: address as Address,
+			receiver: address as Address,
+		});
+	}, [quote, address, isExecutionRoute]);
+	const requiredSellAmount = orderToSign ? BigInt(orderToSign.sellAmount) : null;
+	const {
+		data: sellAllowance,
+		isLoading: isAllowanceLoading,
+		refetch: refetchAllowance,
+	} = useReadContract({
+		address: sellAsset?.address,
+		abi: ERC20_ABI,
+		functionName: "allowance",
+		args: address ? [address, COW_VAULT_RELAYER_ADDRESS] : undefined,
+		chainId,
+		query: {
+			enabled: Boolean(
+				address &&
+					sellAsset?.address &&
+					isExecutionRoute &&
+					requiredSellAmount !== null
+			),
+		},
+	});
+	const {
+		writeContractAsync,
+		data: approvalHash,
+		isPending: isApprovalWalletPending,
+	} = useWriteContract();
+	const {
+		isLoading: isApprovalConfirming,
+		isSuccess: isApprovalConfirmed,
+	} = useWaitForTransactionReceipt({
+		hash: approvalHash,
+		chainId,
+	});
+	const {
+		signTypedDataAsync,
+		isPending: isSignaturePending,
+	} = useSignTypedData();
+	const hasEnoughAllowance =
+		sellAllowance !== undefined &&
+		requiredSellAmount !== null &&
+		sellAllowance >= requiredSellAmount;
 	const sellAmountBeforeFee = useMemo(() => {
 		if (!amount || !sellAsset || amountValidation) return null;
 		try {
@@ -269,6 +390,10 @@ export default function DeskSwapForm() {
 		quote?.quote?.buyAmount && quote.buyAsset
 			? `${formatTokenAmount(quote.quote.buyAmount, quote.buyAsset.decimals)} ${quote.buyAsset.symbol}`
 			: null;
+	const minimumReceive =
+		orderToSign?.buyAmount && quote?.buyAsset
+			? `${formatTokenAmount(orderToSign.buyAmount, quote.buyAsset.decimals)} ${quote.buyAsset.symbol}`
+			: null;
 	const feeAmount =
 		quote?.quote?.feeAmount && quote.sellAsset
 			? `${formatTokenAmount(quote.quote.feeAmount, quote.sellAsset.decimals)} ${quote.sellAsset.symbol}`
@@ -280,12 +405,8 @@ export default function DeskSwapForm() {
 		buyAsset: quote?.buyAsset,
 	});
 	const quoteExpirationLabel = getQuoteExpirationLabel(quote?.expiration);
-	const nextExecutionLabel = quote?.sellAsset
-		? `Next execution step: approve ${quote.sellAsset.symbol}, then review and sign the order.`
-		: route
-			? `Next execution step: approve ${route.sellAsset.symbol}, then review and sign the order.`
-			: "Next execution step: approve the sell token, then review and sign the order.";
 	const buyPreview = estimatedReceive ?? (route ? `${route.buyAsset.symbol} after quote` : "Route unavailable");
+	const isQuoteExpired = orderToSign?.validTo ? orderToSign.validTo <= Math.floor(Date.now() / 1000) : false;
 	const hasInsufficientBalance =
 		sellBalance !== undefined &&
 		sellAmountBeforeFee !== null &&
@@ -308,6 +429,96 @@ export default function DeskSwapForm() {
 		!hasInsufficientBalance &&
 		!amountValidation
 	);
+	const orderStatusLabel = orderStatus ? getOrderStatusLabel(orderStatus) : null;
+	const isOrderCompleted = orderStatus ? isOrderComplete(orderStatus) : false;
+	const isOrderExpired = orderStatus ? isOrderExpiredOrCancelled(orderStatus) : false;
+	const canSwitchRouteChain = Boolean(isConnected && route && !isConnectedToRouteChain);
+	const canRefreshExpiredQuote = Boolean(isExecutionRoute && isQuoteExpired && route && amount && !isQuoteLoading);
+	const canApprove =
+		Boolean(
+			isExecutionRoute &&
+				route &&
+				orderToSign &&
+				address &&
+				estimatedReceive &&
+				!isQuoteExpired &&
+				!hasEnoughAllowance &&
+				!hasInsufficientBalance &&
+				!isApprovalWalletPending &&
+				!isApprovalConfirming &&
+				!isAllowanceLoading
+		);
+	const canSignAndSubmit =
+		Boolean(
+			isExecutionRoute &&
+				route &&
+				quote &&
+				orderToSign &&
+				address &&
+				estimatedReceive &&
+				!isQuoteExpired &&
+				hasEnoughAllowance &&
+				!hasInsufficientBalance &&
+				!isApprovalConfirming &&
+				!isSignaturePending &&
+				!isSubmittingOrder &&
+				!submittedOrderUid
+		);
+	const canUsePrimaryAction =
+		canSwitchRouteChain || canRefreshExpiredQuote || canApprove || canSignAndSubmit || Boolean(submittedOrderUid);
+	const actionLabel = !route
+		? "Route unavailable"
+		: !isConnected || !address
+			? "Connect wallet to continue"
+			: !isConnectedToRouteChain
+				? `Switch to ${getChainLabel(chainId)}`
+				: amountValidation
+					? "Enter a valid amount"
+					: !amount || !sellAmountBeforeFee
+						? "Enter amount to continue"
+						: hasInsufficientBalance && sellAsset
+							? `Insufficient ${sellAsset.symbol} balance`
+							: isWaitingForBalance || isBalanceLoading
+								? "Loading balance"
+								: isQuoteLoading
+									? "Checking route"
+									: quoteError
+										? "Try another amount or route"
+										: !estimatedReceive
+											? "Checking route"
+											: !isExecutionRoute
+												? "Quote only for this route"
+												: isQuoteExpired
+													? "Quote expired — refresh quote"
+													: isOrderCompleted
+														? "Trade completed"
+														: isOrderExpired
+															? "Refresh quote and try again"
+															: isAllowanceLoading
+																? "Checking approval"
+																: isApprovalWalletPending
+																	? "Confirm approval in wallet"
+																	: isApprovalConfirming
+																		? `Approving ${route.sellAsset.symbol}...`
+																		: isSignaturePending
+																			? "Waiting for signature..."
+																			: isSubmittingOrder
+																				? "Submitting order..."
+																				: submittedOrderUid
+																					? "Track order"
+																					: !hasEnoughAllowance && route
+																						? getDeskExecutionLabel({
+																							sellSymbol: route.sellAsset.symbol,
+																							buySymbol: route.buyAsset.symbol,
+																						})
+																						: "Review and sign trade";
+	const actionHelp = !isExecutionRoute
+		? "This route is quote-only for now. We are enabling Base USDC → ZCHF first before expanding execution."
+		: !hasEnoughAllowance
+			? "Approve USDC only for this quoted trade amount. After approval, you will review and sign the CoW order."
+			: submittedOrderUid
+				? "Refresh the order status while CoW Protocol solvers settle the trade."
+				: "After signing, the order is submitted to CoW Protocol and settled by solvers.";
 
 	useEffect(() => {
 		const fallback = getDefaultDeskChainForMode(mode);
@@ -356,6 +567,171 @@ export default function DeskSwapForm() {
 		setAmount(trimDecimalZeros(formatUnits(sellBalance, sellAsset.decimals)));
 	};
 
+	const refreshQuote = () => {
+		setQuote(null);
+		setQuoteError(null);
+		setQuoteRefreshKey((value) => value + 1);
+	};
+
+	async function approveSellToken() {
+		if (!sellAsset || !orderToSign) return;
+
+		try {
+			setExecutionError(null);
+
+			await writeContractAsync({
+				address: sellAsset.address,
+				abi: ERC20_ABI,
+				functionName: "approve",
+				args: [COW_VAULT_RELAYER_ADDRESS, BigInt(orderToSign.sellAmount)],
+				chainId,
+			});
+		} catch (error) {
+			setExecutionError(getFriendlyError(error, "Approval failed."));
+		}
+	}
+
+	async function signAndSubmitOrder() {
+		if (!quote || !orderToSign || !address || !route) return;
+		if (isQuoteExpired) {
+			setExecutionError("Quote expired. Refresh the quote and try again.");
+			return;
+		}
+
+		try {
+			setExecutionError(null);
+			setIsSubmittingOrder(false);
+
+			const signature = await signTypedDataAsync({
+				domain: getCowOrderDomain(chainId),
+				types: COW_ORDER_TYPES,
+				primaryType: "Order",
+				message: {
+					...orderToSign,
+					sellAmount: BigInt(orderToSign.sellAmount),
+					buyAmount: BigInt(orderToSign.buyAmount),
+					feeAmount: 0n,
+				},
+			});
+
+			const submission = buildDeskOrderSubmission({
+				order: orderToSign,
+				quote,
+				from: address as Address,
+				signature: signature as Hex,
+			});
+
+			if (!submission) {
+				throw new Error("Quote is missing the order id. Refresh the quote and try again.");
+			}
+
+			setIsSubmittingOrder(true);
+
+			const result = await submitDeskOrder({
+				chainId,
+				mode,
+				counterAssetId,
+				order: submission,
+			});
+
+			if (!result.orderUid) {
+				throw new Error("CoW accepted the request but did not return an order id.");
+			}
+
+			setSubmittedOrderUid(result.orderUid);
+		} catch (error) {
+			setExecutionError(getFriendlyError(error, "Order submission failed."));
+		} finally {
+			setIsSubmittingOrder(false);
+		}
+	}
+
+	async function refreshOrderStatus() {
+		if (!submittedOrderUid) return;
+
+		try {
+			setExecutionError(null);
+			setIsCheckingOrderStatus(true);
+			const result = await requestDeskOrderStatus(chainId, submittedOrderUid);
+			setOrderStatus(result);
+		} catch (error) {
+			setExecutionError(getFriendlyError(error, "Could not refresh order status."));
+		} finally {
+			setIsCheckingOrderStatus(false);
+		}
+	}
+
+	async function onPrimaryAction() {
+		setExecutionError(null);
+
+		if (canSwitchRouteChain) {
+			switchWalletToChain(chainId);
+			return;
+		}
+
+		if (canRefreshExpiredQuote || (isOrderExpired && submittedOrderUid)) {
+			refreshQuote();
+			return;
+		}
+
+		if (canApprove) {
+			await approveSellToken();
+			return;
+		}
+
+		if (canSignAndSubmit) {
+			await signAndSubmitOrder();
+			return;
+		}
+
+		if (submittedOrderUid) {
+			await refreshOrderStatus();
+		}
+	}
+
+	useEffect(() => {
+		setExecutionError(null);
+		setSubmittedOrderUid(null);
+		setOrderStatus(null);
+	}, [chainId, mode, counterAssetId, amount, quote]);
+
+	useEffect(() => {
+		if (!isApprovalConfirmed) return;
+		refetchAllowance();
+		setQuote(null);
+		setQuoteError(null);
+		setQuoteRefreshKey((value) => value + 1);
+	}, [isApprovalConfirmed, refetchAllowance]);
+
+	useEffect(() => {
+		if (!submittedOrderUid) return;
+
+		let cancelled = false;
+		const orderUid = submittedOrderUid;
+
+		async function poll() {
+			try {
+				setIsCheckingOrderStatus(true);
+				const result = await requestDeskOrderStatus(chainId, orderUid);
+				if (!cancelled) setOrderStatus(result);
+			} catch (error) {
+				if (!cancelled) {
+					setExecutionError(getFriendlyError(error, "Could not refresh order status."));
+				}
+			} finally {
+				if (!cancelled) setIsCheckingOrderStatus(false);
+			}
+		}
+
+		poll();
+		const interval = window.setInterval(poll, 10_000);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(interval);
+		};
+	}, [chainId, submittedOrderUid]);
+
 	useEffect(() => {
 		setQuote(null);
 		setQuoteError(null);
@@ -387,7 +763,7 @@ export default function DeskSwapForm() {
 			cancelled = true;
 			window.clearTimeout(timeout);
 		};
-	}, [address, canRequestQuote, chainId, counterAssetId, mode, route, sellAmountBeforeFee]);
+	}, [address, canRequestQuote, chainId, counterAssetId, mode, quoteRefreshKey, route, sellAmountBeforeFee]);
 
 	return (
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
@@ -542,9 +918,21 @@ export default function DeskSwapForm() {
 							<span className="font-semibold text-text-primary">{formattedSellAmount ?? sellAmountPreview}</span>
 						</div>
 						<div className="flex items-center justify-between gap-3 text-sm">
-							<span className="text-text-secondary">You receive</span>
+							<span className="text-text-secondary">Estimated receive</span>
 							<span className="font-semibold text-text-primary">{buyPreview}</span>
 						</div>
+						{minimumReceive ? (
+							<div className="flex items-center justify-between gap-3 text-sm">
+								<span className="text-text-secondary">Minimum receive</span>
+								<span className="font-semibold text-text-primary">{minimumReceive}</span>
+							</div>
+						) : null}
+						{minimumReceive ? (
+							<div className="flex items-center justify-between gap-3 text-sm">
+								<span className="text-text-secondary">Slippage protection</span>
+								<span className="font-semibold text-text-primary">0.5%</span>
+							</div>
+						) : null}
 						{feeAmount ? (
 							<div className="flex items-center justify-between gap-3 text-sm">
 								<span className="text-text-secondary">CoW fee estimate</span>
@@ -574,15 +962,50 @@ export default function DeskSwapForm() {
 							) : estimatedReceive ? (
 								<div>
 									<p className="font-semibold text-text-primary">Quote found</p>
+									<p className="mt-1">
+										{isExecutionRoute
+											? "This route can execute now. First approve USDC to be sold for ZCHF, then review and sign the CoW order."
+											: "This route is quote-only for now. We are enabling Base USDC → ZCHF first, then expanding carefully."}
+									</p>
 									{quoteExpirationLabel ? <p className="mt-1">{quoteExpirationLabel}</p> : null}
-									<p className="mt-2 text-xs leading-5">{nextExecutionLabel}</p>
-									<p className="mt-1 text-xs leading-5">This screen does not request approval, signature, or a transaction yet.</p>
+									{isQuoteExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Quote expired. Refresh the quote and try again.</p> : null}
 								</div>
 							) : (
 								<p>{quoteState.message}</p>
 							)}
 						</div>
 					</div>
+
+					{executionError ? (
+						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+							{executionError}
+						</div>
+					) : null}
+
+					{submittedOrderUid ? (
+						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							<p className="font-semibold text-text-primary">{isOrderCompleted ? "Trade completed" : "Order submitted"}</p>
+							<p className="mt-1 break-all">Order id: {submittedOrderUid}</p>
+							<p className="mt-1">
+								Status: {isCheckingOrderStatus ? "checking..." : orderStatusLabel ?? "submitted"}
+							</p>
+							{isOrderExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Order expired. Refresh the quote and try again.</p> : null}
+						</div>
+					) : null}
+
+					<button
+						type="button"
+						onClick={onPrimaryAction}
+						disabled={!canUsePrimaryAction}
+						className={`mt-4 min-h-[48px] w-full rounded-xl px-4 text-sm font-semibold transition ${
+							canUsePrimaryAction
+								? "bg-button-default text-white hover:opacity-90"
+								: "cursor-not-allowed bg-card-content-primary text-text-secondary opacity-70 dark:bg-card-content-primary"
+						}`}
+					>
+						{actionLabel}
+					</button>
+					<p className="mt-2 text-xs leading-5 text-text-secondary">{actionHelp}</p>
 				</div>
 			</div>
 		</section>
