@@ -1,4 +1,3 @@
-import AppButton from "@components/AppButton";
 import AppNotice from "@components/AppNotice";
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId, useReadContract } from "wagmi";
@@ -129,6 +128,17 @@ function getApproximateRate({
 	return `1 ${sellAsset.symbol} ≈ ${formatDisplayDecimal((buy / sell).toFixed(QUOTE_DISPLAY_DECIMALS), QUOTE_DISPLAY_DECIMALS)} ${buyAsset.symbol}`;
 }
 
+function getQuoteExpirationLabel(value?: string) {
+	if (!value) return null;
+	const expiresAt = new Date(value).getTime();
+	if (!Number.isFinite(expiresAt)) return null;
+	const milliseconds = expiresAt - Date.now();
+	if (milliseconds <= 0) return "Quote expired";
+	if (milliseconds < 60_000) return "Expires in less than 1 minute";
+	const minutes = Math.ceil(milliseconds / 60_000);
+	return `Expires in about ${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
 function getRouteExplanation(mode: DeskSwapMode, assetSymbol: string) {
 	if (mode === "get-zchf") return "Buy ZCHF: you pay crypto already in your wallet and receive ZCHF.";
 	if (mode === "sell-zchf") return "Sell ZCHF: you sell ZCHF and receive the selected crypto token.";
@@ -157,7 +167,7 @@ function TokenSelectCard({
 		<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary p-4 dark:border-menu-separator">
 			<div className="flex items-center justify-between gap-2">
 				<p className="text-sm font-medium text-text-secondary">{label}</p>
-				<p className="text-xs font-semibold text-text-secondary">Tap to switch crypto</p>
+				<p className="text-xs font-semibold text-text-secondary">Choose token</p>
 			</div>
 			<div className="mt-2 flex items-center gap-3 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-3 py-3 dark:border-menu-separator">
 				{asset ? <TokenLogo asset={asset} /> : null}
@@ -269,6 +279,12 @@ export default function DeskSwapForm() {
 		sellAsset,
 		buyAsset: quote?.buyAsset,
 	});
+	const quoteExpirationLabel = getQuoteExpirationLabel(quote?.expiration);
+	const nextExecutionLabel = quote?.sellAsset
+		? `Next execution step: approve ${quote.sellAsset.symbol}, then review and sign the order.`
+		: route
+			? `Next execution step: approve ${route.sellAsset.symbol}, then review and sign the order.`
+			: "Next execution step: approve the sell token, then review and sign the order.";
 	const buyPreview = estimatedReceive ?? (route ? `${route.buyAsset.symbol} after quote` : "Route unavailable");
 	const hasInsufficientBalance =
 		sellBalance !== undefined &&
@@ -377,15 +393,15 @@ export default function DeskSwapForm() {
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 			<div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
 				<div>
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Custom CoW-backed quote form</p>
+					<p className="text-xs uppercase tracking-wider text-text-secondary">Crypto swap quote</p>
 					<h2 className="mt-1 text-xl font-semibold text-text-primary">Swap crypto and Frankencoin assets</h2>
 					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-						This desk only supports routes where one side is ZCHF or WFPS. For unrelated crypto-to-crypto swaps, use CoW Swap directly.
+						This desk only supports routes where one side is ZCHF or WFPS. Quotes are powered by CoW Protocol.
 					</p>
 				</div>
 				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-3 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="font-semibold text-text-primary">Execution status</p>
-					<p className="mt-1 max-w-sm text-xs leading-5">Quote preview only. No approval, signature, or transaction will be requested here.</p>
+					<p className="font-semibold text-text-primary">Trading path</p>
+					<p className="mt-1 max-w-sm text-xs leading-5">Live quote now. Next: approve token, sign order, submit trade, then track settlement.</p>
 				</div>
 			</div>
 
@@ -541,53 +557,32 @@ export default function DeskSwapForm() {
 								<span className="text-right font-semibold text-text-primary">{quoteRate}</span>
 							</div>
 						) : null}
+
+						<div className="border-t border-[#e0d4bd] pt-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							{amountValidation ? (
+								<p className="font-medium text-amber-700 dark:text-amber-200">{amountValidation}</p>
+							) : hasInsufficientBalance ? (
+								<p className="font-medium text-amber-700 dark:text-amber-200">This route may be available, but your wallet balance is too low.</p>
+							) : isWaitingForBalance ? (
+								<p>Loading wallet balance before checking the route…</p>
+							) : isBalanceUnavailable ? (
+								<p className="font-medium text-amber-700 dark:text-amber-200">Wallet balance is unavailable right now. Reconnect your wallet or try again in a moment.</p>
+							) : isQuoteLoading ? (
+								<p>Checking route…</p>
+							) : quoteError ? (
+								<p className="font-medium text-amber-700 dark:text-amber-200">{quoteError}</p>
+							) : estimatedReceive ? (
+								<div>
+									<p className="font-semibold text-text-primary">Quote found</p>
+									{quoteExpirationLabel ? <p className="mt-1">{quoteExpirationLabel}</p> : null}
+									<p className="mt-2 text-xs leading-5">{nextExecutionLabel}</p>
+									<p className="mt-1 text-xs leading-5">This screen does not request approval, signature, or a transaction yet.</p>
+								</div>
+							) : (
+								<p>{quoteState.message}</p>
+							)}
+						</div>
 					</div>
-
-					{amountValidation ? (
-						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
-							{amountValidation}
-						</div>
-					) : hasInsufficientBalance ? (
-						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
-							This route may be available, but your wallet balance is too low.
-						</div>
-					) : isWaitingForBalance ? (
-						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							Loading wallet balance before checking the route…
-						</div>
-					) : isBalanceUnavailable ? (
-						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
-							Wallet balance is unavailable right now. Reconnect your wallet or try again in a moment.
-						</div>
-					) : isQuoteLoading ? (
-						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							Checking route…
-						</div>
-					) : quoteError ? (
-						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
-							{quoteError}
-						</div>
-					) : estimatedReceive ? (
-						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							<p className="font-semibold text-text-primary">Quote found</p>
-							<p className="mt-1">Estimated receive: {estimatedReceive}</p>
-							{feeAmount ? <p className="mt-1">CoW fee estimate: {feeAmount}</p> : null}
-							{quoteRate ? <p className="mt-1">Rate: {quoteRate}</p> : null}
-							{quote?.expiration ? <p className="mt-1">Quote expires: {quote.expiration}</p> : null}
-							<p className="mt-3 text-xs leading-5 text-text-secondary">No approval, signature, or transaction will be requested in this preview.</p>
-						</div>
-					) : (
-						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							{quoteState.message}
-						</div>
-					)}
-
-					<AppButton disabled width="w-full" className="mt-4">
-						Quote preview only
-					</AppButton>
-					<p className="mt-3 text-xs leading-5 text-text-secondary">
-						No money moves in this step. Execution will be added later only after approval, signature, and order submission are reviewed separately.
-					</p>
 				</div>
 			</div>
 		</section>
@@ -614,11 +609,11 @@ function getQuoteState({
 	if (!route) return { status: "blocked", message: "This route is not available in ZCHF Desk." };
 	if (!isConnected || !address) return { status: "blocked", message: "Connect your wallet to preview a personalized quote." };
 	if (!isConnectedToRouteChain) return { status: "blocked", message: `Switch your wallet to ${getChainLabel(route.sellAsset.chainId)} for this route.` };
-	if (!amount || Number(amount) <= 0) return { status: "idle", message: "Enter an amount to preview the route." };
+	if (!amount || Number(amount) <= 0) return { status: "idle", message: "Enter an amount to check this route." };
 	if (amountValidation) return { status: "blocked", message: amountValidation };
 	if (isWfpsMode(mode) && !route.lockedAsset) return { status: "blocked", message: "WFPS is not configured yet." };
 	return {
 		status: "ready",
-		message: `This route is ready for quote preview: ${route.sellAsset.symbol} -> ${route.buyAsset.symbol}.`,
+		message: `This route is ready to check: ${route.sellAsset.symbol} -> ${route.buyAsset.symbol}.`,
 	};
 }
