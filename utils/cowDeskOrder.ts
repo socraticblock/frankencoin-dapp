@@ -11,7 +11,7 @@ export const DESK_SWAP_SLIPPAGE_BPS = 50n;
 export const BPS_DENOMINATOR = 10_000n;
 
 type QuoteAppDataFields = {
-	appData?: string;
+	appData?: unknown;
 	appDataHash?: Hex;
 };
 
@@ -85,7 +85,7 @@ export function getCowChainSlug(chainId: number) {
 }
 
 export function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
-	return chainId === 8453 && mode === "get-zchf" && counterAssetId === "base-usdc";
+	return chainId === 8453 && counterAssetId === "base-usdc" && (mode === "get-zchf" || mode === "sell-zchf");
 }
 
 export function getDeskExecutionLabel({ sellSymbol, buySymbol }: { sellSymbol: string; buySymbol: string }) {
@@ -138,10 +138,10 @@ export function buildDeskOrderSubmission({
 	signature: Hex;
 }): CowOrderSubmission | null {
 	if (typeof quote.id !== "number") return null;
-	const appData = quote.quote as QuoteAppDataFields | undefined;
+	const quoteAppData = quote.quote as QuoteAppDataFields | undefined;
 	return {
 		...order,
-		appData: appData?.appData ?? COW_EMPTY_APP_DATA,
+		appData: normalizeCowAppData(quoteAppData?.appData, order.appData),
 		appDataHash: order.appData,
 		signingScheme: "eip712",
 		signature,
@@ -152,7 +152,7 @@ export function buildDeskOrderSubmission({
 
 export function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
 	if (!isBaseUsdcToZchfExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
-	return getDeskRoute("get-zchf", input.chainId as ChainId, "base-usdc");
+	return getDeskRoute(input.mode ?? "get-zchf", input.chainId as ChainId, input.counterAssetId ?? "");
 }
 
 export async function submitDeskOrder(input: DeskOrderSubmitRequest): Promise<DeskOrderSubmitResponse> {
@@ -172,4 +172,13 @@ export async function requestDeskOrderStatus(chainId: number, orderUid: string) 
 	const data = await response.json().catch(() => null);
 	if (!response.ok) throw new Error(data?.error || "Order status request failed.");
 	return data;
+}
+
+function normalizeCowAppData(value: unknown, appDataHash: Hex) {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (trimmed && trimmed !== "0") return trimmed;
+	}
+	if (appDataHash.toLowerCase() === COW_EMPTY_APP_DATA_HASH.toLowerCase()) return COW_EMPTY_APP_DATA;
+	throw new Error("Quote is missing matching CoW app data. Refresh the quote and try again.");
 }
