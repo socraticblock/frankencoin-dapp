@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const order = body.order;
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order submission." });
-	if (!route) return res.status(400).json({ error: "Only Base USDC to ZCHF execution is enabled right now." });
+	if (!route) return res.status(400).json({ error: "Only Base USDC ↔ ZCHF execution is enabled right now." });
 	if (!order || typeof order !== "object") return res.status(400).json({ error: "Missing order." });
 	if (!isAddress(order.from) || !isAddress(order.receiver)) return res.status(400).json({ error: "Invalid order owner or receiver." });
 	if (!isAddress(order.sellToken) || !isAddress(order.buyToken)) return res.status(400).json({ error: "Invalid order tokens." });
@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 function getCowError(value: unknown) {
+	if (typeof value === "string") return value;
 	if (value && typeof value === "object") {
 		const data = value as Record<string, unknown>;
 		if (typeof data.description === "string") return data.description;
