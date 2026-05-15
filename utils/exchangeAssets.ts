@@ -29,7 +29,7 @@ export type DeskChain = {
 };
 
 const TOKEN_LOGOS = {
-	zchf: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
+	zchf: "/coin/zchf.png",
 	weth: "https://assets.coingecko.com/coins/images/2518/standard/weth.png",
 	usdc: "https://assets.coingecko.com/coins/images/6319/standard/usdc.png",
 	usdt: "https://assets.coingecko.com/coins/images/325/standard/Tether.png",
@@ -38,7 +38,7 @@ const TOKEN_LOGOS = {
 	cow: "https://assets.coingecko.com/coins/images/24384/standard/CoW-token_logo.png",
 	cbbtc: "https://assets.coingecko.com/coins/images/40143/standard/cbbtc.webp",
 	wxdai: "https://assets.coingecko.com/coins/images/11062/standard/Identity-Primary-DarkBG.png",
-	fps: "https://www.frankencoin.com/images/fps-logo.svg",
+	fps: "/coin/zchf.png",
 } as const;
 
 export const DESK_SWAP_CHAINS: DeskChain[] = [
@@ -68,23 +68,23 @@ export function getDeskSwapModes() {
 	return [
 		{
 			value: "get-zchf" as const,
-			label: "Get ZCHF",
-			description: "Swap a meaningful token into ZCHF. Receive token is locked to ZCHF.",
+			label: "Buy ZCHF",
+			description: "Buy ZCHF with a selected crypto token. Receive token is locked to ZCHF.",
 		},
 		{
 			value: "sell-zchf" as const,
 			label: "Sell ZCHF",
-			description: "Swap ZCHF into a meaningful token. Sell token is locked to ZCHF.",
+			description: "Sell ZCHF into a selected crypto token. Sell token is locked to ZCHF.",
 		},
 		{
 			value: "get-wfps" as const,
-			label: "Get WFPS",
-			description: "Ethereum only. Swap a meaningful token into wrapped FPS.",
+			label: "Buy WFPS",
+			description: "Ethereum only. Buy wrapped FPS with a selected crypto token.",
 		},
 		{
 			value: "sell-wfps" as const,
 			label: "Sell WFPS",
-			description: "Ethereum only. Swap wrapped FPS into a meaningful token.",
+			description: "Ethereum only. Sell wrapped FPS into a selected crypto token.",
 		},
 	];
 }
