@@ -13,12 +13,13 @@ const MAIN_ITEMS = [
 	{ to: "/savings", name: "Earn" },
 	{ to: "/equity", name: "Invest" },
 	{ to: "/mypositions", name: "Portfolio" },
+	{ to: "/exchange", name: "Exchange" },
 ];
 
 const MORE_ITEMS = [
 	{ to: "/fiat", name: "Buy / Sell ZCHF" },
 	{ to: "/swap", name: "Swap Crypto / ZCHF" },
-	{ to: "/transfer", name: "Transfer" },
+	{ to: "/transfer", name: "Transfer & Bridge" },
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
 	{ to: "/report", name: "Accounting Report" },
