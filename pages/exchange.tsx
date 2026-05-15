@@ -12,7 +12,8 @@ import {
 	type MtPelerinTab,
 } from "../utils/mtpelerin";
 
-type ExchangeAction = "buy" | "sell" | "swap" | "bridge" | "transfer";
+type ExchangeAction = "fiat" | "swap" | "bridge" | "transfer";
+type FiatFlow = "buy" | "sell";
 
 const ACTIONS: {
 	value: ExchangeAction;
@@ -21,28 +22,22 @@ const ACTIONS: {
 	detail: string;
 }[] = [
 	{
-		value: "buy",
-		title: "Buy ZCHF",
-		subtitle: "Bank or card to ZCHF",
-		detail: "Use Mt Pelerin to buy ZCHF with fiat on Base, Ethereum, or Gnosis.",
-	},
-	{
-		value: "sell",
-		title: "Sell ZCHF",
-		subtitle: "ZCHF to fiat",
-		detail: "Cash out ZCHF back to fiat through Mt Pelerin.",
+		value: "fiat",
+		title: "Buy or Sell ZCHF",
+		subtitle: "Fiat gateway",
+		detail: "Use Mt Pelerin to buy ZCHF with fiat, or sell ZCHF back to fiat.",
 	},
 	{
 		value: "swap",
-		title: "Swap Frankencoin assets",
-		subtitle: "Custom ZCHF Desk route form",
-		detail: "Swap selected crypto tokens to ZCHF, ZCHF to selected crypto tokens, and WFPS routes on Ethereum only.",
+		title: "Swap Crypto ↔ ZCHF / WFPS",
+		subtitle: "Crypto already in your wallet",
+		detail: "Use crypto to buy ZCHF or WFPS, or sell ZCHF/WFPS back to crypto.",
 	},
 	{
 		value: "bridge",
 		title: "Bridge ZCHF",
 		subtitle: "Move existing ZCHF",
-		detail: "Use CCIP to move ZCHF you already own to another supported chain.",
+		detail: "Move ZCHF you already own to another supported chain.",
 	},
 	{
 		value: "transfer",
@@ -52,7 +47,7 @@ const ACTIONS: {
 	},
 ];
 
-const FIAT_FLOW_COPY: Record<Extract<ExchangeAction, "buy" | "sell">, string> = {
+const FIAT_FLOW_COPY: Record<FiatFlow, string> = {
 	buy: "Buy ZCHF with fiat through Mt Pelerin. Base is a good default for most retail users.",
 	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Review fees, limits, and bank details inside the widget.",
 };
@@ -83,19 +78,19 @@ function ActionCard({
 	);
 }
 
-function FiatExchangeModule({ action }: { action: Extract<ExchangeAction, "buy" | "sell"> }) {
+function FiatExchangeModule() {
+	const [flow, setFlow] = useState<FiatFlow>("buy");
 	const [network, setNetwork] = useState<MtPelerinNetwork>("base_mainnet");
 	const activation = getMtPelerinActivationKey();
-	const tab = action as MtPelerinTab;
-	const widgetUrl = useMemo(() => buildMtPelerinWidgetUrl(tab, network), [network, tab]);
+	const widgetUrl = useMemo(() => buildMtPelerinWidgetUrl(flow as MtPelerinTab, network), [network, flow]);
 
 	return (
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 			<div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
 				<div>
 					<p className="text-xs uppercase tracking-wider text-text-secondary">Fiat gateway</p>
-					<h2 className="mt-1 text-xl font-semibold text-text-primary">{action === "buy" ? "Buy ZCHF" : "Sell ZCHF"}</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">{FIAT_FLOW_COPY[action]}</p>
+					<h2 className="mt-1 text-xl font-semibold text-text-primary">Buy or Sell ZCHF</h2>
+					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">{FIAT_FLOW_COPY[flow]}</p>
 				</div>
 
 				<label className="flex flex-col gap-2 text-sm font-medium text-text-secondary sm:flex-row sm:items-center">
@@ -112,6 +107,34 @@ function FiatExchangeModule({ action }: { action: Extract<ExchangeAction, "buy" 
 						))}
 					</select>
 				</label>
+			</div>
+
+			<div className="mt-5 rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-3 dark:border-menu-separator dark:bg-card-content-secondary">
+				<p className="text-xs uppercase tracking-wider text-text-secondary">I want to</p>
+				<div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+					<button
+						type="button"
+						onClick={() => setFlow("buy")}
+						className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+							flow === "buy"
+								? "border-[#c4a75f] bg-button-default text-white"
+								: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+						}`}
+					>
+						Buy ZCHF
+					</button>
+					<button
+						type="button"
+						onClick={() => setFlow("sell")}
+						className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+							flow === "sell"
+								? "border-[#c4a75f] bg-button-default text-white"
+								: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+						}`}
+					>
+						Sell ZCHF
+					</button>
+				</div>
 			</div>
 
 			<AppNotice
@@ -189,7 +212,7 @@ function BridgeTransferModule({ action }: { action: Extract<ExchangeAction, "bri
 }
 
 export default function ExchangePage() {
-	const [activeAction, setActiveAction] = useState<ExchangeAction>("buy");
+	const [activeAction, setActiveAction] = useState<ExchangeAction>("fiat");
 	const activeMeta = ACTIONS.find((item) => item.value === activeAction) ?? ACTIONS[0];
 
 	return (
@@ -205,7 +228,7 @@ export default function ExchangePage() {
 			>
 				<AppNotice
 					variant="neutral"
-					message="ZCHF exists on several chains, but direct swap liquidity is not equal everywhere. For crypto swaps, use the custom Frankencoin route form. For other chains, bridge ZCHF after you have it."
+					message="Fiat uses Mt Pelerin. Crypto swaps use the custom route form. Bridge moves ZCHF between chains. Transfer sends ZCHF to a wallet."
 				/>
 			</AppPageHeader>
 
@@ -220,7 +243,7 @@ export default function ExchangePage() {
 					</p>
 				</div>
 
-				<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+				<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
 					{ACTIONS.map((action) => (
 						<ActionCard key={action.value} action={action} active={activeAction === action.value} onClick={() => setActiveAction(action.value)} />
 					))}
@@ -228,7 +251,7 @@ export default function ExchangePage() {
 			</section>
 
 			<div className="mt-6">
-				{activeAction === "buy" || activeAction === "sell" ? <FiatExchangeModule action={activeAction} /> : null}
+				{activeAction === "fiat" ? <FiatExchangeModule /> : null}
 				{activeAction === "swap" ? <DeskSwapForm /> : null}
 				{activeAction === "bridge" || activeAction === "transfer" ? <BridgeTransferModule action={activeAction} /> : null}
 			</div>
