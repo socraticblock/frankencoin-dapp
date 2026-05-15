@@ -1,5 +1,6 @@
 import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
+import AppButton from "@components/AppButton";
 import Head from "next/head";
 import { useMemo, useState } from "react";
 import {
@@ -21,11 +22,6 @@ const FLOW_OPTIONS: { value: MtPelerinTab; label: string; copy: string }[] = [
 		label: "Cash out ZCHF",
 		copy: "Cash out ZCHF back to fiat through Mt Pelerin. Default route: ZCHF to CHF.",
 	},
-	{
-		value: "swap",
-		label: "Swap to ZCHF",
-		copy: "Swap supported crypto into ZCHF through Mt Pelerin. Default route: USDC to ZCHF.",
-	},
 ];
 
 export default function FiatPage() {
@@ -38,13 +34,13 @@ export default function FiatPage() {
 	return (
 		<>
 			<Head>
-				<title>Buy, Sell & Swap ZCHF | ZCHF Desk</title>
+				<title>Buy & Sell ZCHF | ZCHF Desk</title>
 			</Head>
 
 			<AppPageHeader
 				eyebrow="FIAT GATEWAY"
 				title="Buy & Cash Out ZCHF"
-				description="Buy ZCHF with fiat, cash out ZCHF to your bank, or swap supported assets into ZCHF."
+				description="Buy ZCHF with fiat or cash out ZCHF to your bank. Crypto swaps now live on the Swap page."
 			>
 				<AppNotice
 					variant="neutral"
@@ -87,6 +83,16 @@ export default function FiatPage() {
 					</label>
 				</div>
 				<p className="mt-4 text-sm leading-6 text-text-secondary">{selectedFlow.copy}</p>
+
+				<div className="mt-4 flex flex-col gap-3 rounded-xl border border-[#e0d4bd] bg-card-content-secondary/70 p-4 dark:border-menu-separator dark:bg-card-content-secondary md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 className="text-sm font-semibold text-text-primary">Want to exchange crypto instead?</h2>
+						<p className="mt-1 text-xs leading-5 text-text-secondary">Use the CoW Swap page for crypto to ZCHF or ZCHF to crypto.</p>
+					</div>
+					<AppButton to="/swap" width="w-auto" size="small" className="min-h-[38px] px-4">
+						Open Swap
+					</AppButton>
+				</div>
 
 				{activation.usingDevFallback ? (
 					<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
