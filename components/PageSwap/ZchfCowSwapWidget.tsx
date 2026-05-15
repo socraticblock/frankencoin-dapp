@@ -7,12 +7,6 @@ type Props = {
 	chainId: ChainId;
 };
 
-declare global {
-	interface Window {
-		ethereum?: unknown;
-	}
-}
-
 export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
