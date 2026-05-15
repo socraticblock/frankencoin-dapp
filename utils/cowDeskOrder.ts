@@ -10,6 +10,11 @@ export const COW_EMPTY_APP_DATA_HASH = "0xb48d38f93eaa084033fc5970bf96e559c33c4c
 export const DESK_SWAP_SLIPPAGE_BPS = 50n;
 export const BPS_DENOMINATOR = 10_000n;
 
+type QuoteAppDataFields = {
+	appData?: string;
+	appDataHash?: Hex;
+};
+
 export type CowOrderToSign = {
 	sellToken: Address;
 	buyToken: Address;
@@ -100,6 +105,7 @@ export function buildDeskOrderToSign({
 }): CowOrderToSign | null {
 	const raw = quote.quote;
 	if (!raw?.sellAmount || !raw?.buyAmount || !raw.validTo) return null;
+	const appData = raw as QuoteAppDataFields;
 	const sellAmount = BigInt(raw.sellAmount) + BigInt(raw.feeAmount ?? "0");
 	const buyAmount = (BigInt(raw.buyAmount) * (BPS_DENOMINATOR - slippageBps)) / BPS_DENOMINATOR;
 	if (sellAmount <= 0n || buyAmount <= 0n) return null;
@@ -111,7 +117,7 @@ export function buildDeskOrderToSign({
 		sellAmount: sellAmount.toString(),
 		buyAmount: buyAmount.toString(),
 		validTo: raw.validTo,
-		appData: (raw.appDataHash ?? COW_EMPTY_APP_DATA_HASH) as Hex,
+		appData: appData.appDataHash ?? COW_EMPTY_APP_DATA_HASH,
 		feeAmount: "0",
 		kind: "sell",
 		partiallyFillable: false,
@@ -132,9 +138,10 @@ export function buildDeskOrderSubmission({
 	signature: Hex;
 }): CowOrderSubmission | null {
 	if (typeof quote.id !== "number") return null;
+	const appData = quote.quote as QuoteAppDataFields | undefined;
 	return {
 		...order,
-		appData: quote.quote?.appData ?? COW_EMPTY_APP_DATA,
+		appData: appData?.appData ?? COW_EMPTY_APP_DATA,
 		appDataHash: order.appData,
 		signingScheme: "eip712",
 		signature,
