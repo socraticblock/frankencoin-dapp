@@ -5,6 +5,8 @@ import { base, gnosis, mainnet } from "viem/chains";
 import { getCowZchfAddress } from "./cowswap";
 
 export type DeskSwapMode = "get-zchf" | "sell-zchf" | "get-wfps" | "sell-wfps";
+export type DeskSwapSide = "buy" | "sell";
+export type DeskFrankencoinAsset = "zchf" | "wfps";
 export type DeskAssetRole = "frankencoin" | "counterAsset";
 
 export type DeskAsset = {
@@ -26,6 +28,11 @@ export type DeskChain = {
 	label: string;
 	recommended?: boolean;
 	note: string;
+};
+
+export const FRANKENCOIN_ASSET_META: Record<DeskFrankencoinAsset, { symbol: string; name: string }> = {
+	zchf: { symbol: "ZCHF", name: "Frankencoin" },
+	wfps: { symbol: "WFPS", name: "Wrapped Frankencoin Pool Shares" },
 };
 
 const TOKEN_LOGOS = {
@@ -60,33 +67,15 @@ export const DESK_SWAP_CHAINS: DeskChain[] = [
 	},
 ];
 
-export function getDeskChain(chainId: number | null | undefined) {
-	return DESK_SWAP_CHAINS.find((chain) => chain.chainId === chainId) ?? null;
+export function modeFromDeskSelection(side: DeskSwapSide, asset: DeskFrankencoinAsset): DeskSwapMode {
+	if (side === "buy" && asset === "zchf") return "get-zchf";
+	if (side === "sell" && asset === "zchf") return "sell-zchf";
+	if (side === "buy" && asset === "wfps") return "get-wfps";
+	return "sell-wfps";
 }
 
-export function getDeskSwapModes() {
-	return [
-		{
-			value: "get-zchf" as const,
-			label: "Buy ZCHF",
-			description: "Buy ZCHF with a selected crypto token. Receive token is locked to ZCHF.",
-		},
-		{
-			value: "sell-zchf" as const,
-			label: "Sell ZCHF",
-			description: "Sell ZCHF into a selected crypto token. Sell token is locked to ZCHF.",
-		},
-		{
-			value: "get-wfps" as const,
-			label: "Buy WFPS",
-			description: "Ethereum only. Buy wrapped FPS with a selected crypto token.",
-		},
-		{
-			value: "sell-wfps" as const,
-			label: "Sell WFPS",
-			description: "Ethereum only. Sell wrapped FPS into a selected crypto token.",
-		},
-	];
+export function getDeskChain(chainId: number | null | undefined) {
+	return DESK_SWAP_CHAINS.find((chain) => chain.chainId === chainId) ?? null;
 }
 
 export function getDeskAssets(chainId: ChainId): DeskAsset[] {
@@ -126,19 +115,16 @@ export function isWfpsMode(mode: DeskSwapMode) {
 	return mode === "get-wfps" || mode === "sell-wfps";
 }
 
+export function isWfpsConfigured() {
+	return Boolean(getWfpsAddress(mainnet.id as ChainId));
+}
+
 export function getDefaultDeskChainForMode(mode: DeskSwapMode): ChainId {
 	return isWfpsMode(mode) ? (mainnet.id as ChainId) : (base.id as ChainId);
 }
 
 export function getAllowedDeskChainsForMode(mode: DeskSwapMode) {
 	return isWfpsMode(mode) ? DESK_SWAP_CHAINS.filter((chain) => chain.chainId === mainnet.id) : DESK_SWAP_CHAINS;
-}
-
-export function formatDeskAssetAmount(rawAmount: string | undefined, decimals: number) {
-	if (!rawAmount) return "0";
-	const integer = rawAmount.length > decimals ? rawAmount.slice(0, -decimals) : "0";
-	const fraction = rawAmount.padStart(decimals + 1, "0").slice(-decimals).replace(/0+$/, "");
-	return fraction ? `${integer}.${fraction}` : integer;
 }
 
 function getFrankencoinAssets(chainId: ChainId): DeskAsset[] {
