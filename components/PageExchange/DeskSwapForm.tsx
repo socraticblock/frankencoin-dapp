@@ -25,6 +25,11 @@ type QuoteState = {
 	message: string;
 };
 
+const FRANKENCOIN_ASSET_META: Record<FrankencoinAssetChoice, { symbol: string; name: string }> = {
+	zchf: { symbol: "ZCHF", name: "Frankencoin" },
+	wfps: { symbol: "WFPS", name: "Wrapped Frankencoin Pool Shares" },
+};
+
 function modeFromSelection(side: SwapSide, asset: FrankencoinAssetChoice): DeskSwapMode {
 	if (side === "buy" && asset === "zchf") return "get-zchf";
 	if (side === "sell" && asset === "zchf") return "sell-zchf";
@@ -65,19 +70,21 @@ function TokenSelectCard({
 			</div>
 			<div className="mt-2 flex items-center gap-3 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-3 py-3 dark:border-menu-separator">
 				{asset ? <TokenLogo asset={asset} /> : null}
-				<select
-					value={asset?.id ?? ""}
-					onChange={(event) => onChange(event.target.value)}
-					className="min-h-[42px] flex-1 bg-transparent text-base font-semibold text-text-primary outline-none"
-				>
-					{assets.map((option) => (
-						<option key={option.id} value={option.id}>
-							{option.recommended ? `${option.symbol} - suggested` : option.symbol}
-						</option>
-					))}
-				</select>
+				<div className="min-w-0 flex-1">
+					<select
+						value={asset?.id ?? ""}
+						onChange={(event) => onChange(event.target.value)}
+						className="w-full bg-transparent text-base font-semibold leading-5 text-text-primary outline-none"
+					>
+						{assets.map((option) => (
+							<option key={option.id} value={option.id}>
+								{option.recommended ? `${option.symbol} - suggested` : option.symbol}
+							</option>
+						))}
+					</select>
+					{asset ? <p className="mt-0.5 truncate text-xs leading-4 text-text-secondary">{asset.name}</p> : null}
+				</div>
 			</div>
-			{asset ? <p className="mt-2 text-xs text-text-secondary">{asset.name}</p> : null}
 		</div>
 	);
 }
@@ -92,9 +99,9 @@ function LockedAssetCard({ asset, label }: { asset: DeskAsset | null; label: str
 			{asset ? (
 				<div className="mt-2 flex items-center gap-3 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-3 py-3 dark:border-menu-separator">
 					<TokenLogo asset={asset} />
-					<div>
-						<p className="text-base font-semibold text-text-primary">{asset.symbol}</p>
-						<p className="text-xs text-text-secondary">{asset.name}</p>
+					<div className="min-w-0">
+						<p className="text-base font-semibold leading-5 text-text-primary">{asset.symbol}</p>
+						<p className="mt-0.5 truncate text-xs leading-4 text-text-secondary">{asset.name}</p>
 					</div>
 				</div>
 			) : (
@@ -126,6 +133,9 @@ export default function DeskSwapForm() {
 	const sellAmountPreview = route && amount ? `${amount} ${route.sellAsset.symbol}` : "Enter amount";
 	const buyPreview = route ? `${route.buyAsset.symbol} locked` : "Route unavailable";
 	const openSideIsSell = side === "buy";
+	const assetMeta = FRANKENCOIN_ASSET_META[frankencoinAsset];
+	const amountLabel = side === "buy" ? "Amount to pay" : "Amount to sell";
+	const assetChoiceLabel = side === "buy" ? "What do you want to buy?" : "What do you want to sell?";
 
 	useEffect(() => {
 		const fallback = getDefaultDeskChainForMode(mode);
@@ -186,9 +196,9 @@ export default function DeskSwapForm() {
 				</div>
 			</div>
 
-			<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[0.85fr,1fr,1.15fr]">
+			<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[0.9fr,1.1fr,1.1fr]">
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-3 dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="text-xs uppercase tracking-wider text-text-secondary">I want to</p>
+					<p className="text-xs uppercase tracking-wider text-text-secondary">Buy or sell ZCHF or WFPS?</p>
 					<div className="mt-2 grid grid-cols-2 gap-2">
 						{(["buy", "sell"] as SwapSide[]).map((item) => (
 							<button
@@ -208,22 +218,26 @@ export default function DeskSwapForm() {
 				</div>
 
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-3 dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Frankencoin asset</p>
+					<p className="text-xs uppercase tracking-wider text-text-secondary">{assetChoiceLabel}</p>
 					<div className="mt-2 grid grid-cols-2 gap-2">
-						{(["zchf", "wfps"] as FrankencoinAssetChoice[]).map((asset) => (
-							<button
-								key={asset}
-								type="button"
-								onClick={() => onAssetChoiceChange(asset)}
-								className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
-									frankencoinAsset === asset
-										? "border-[#c4a75f] bg-button-default text-white"
-										: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
-								}`}
-							>
-								{asset === "zchf" ? "ZCHF" : "WFPS"}
-							</button>
-						))}
+						{(["zchf", "wfps"] as FrankencoinAssetChoice[]).map((asset) => {
+							const meta = FRANKENCOIN_ASSET_META[asset];
+							return (
+								<button
+									key={asset}
+									type="button"
+									onClick={() => onAssetChoiceChange(asset)}
+									className={`rounded-xl border px-3 py-2.5 text-left transition ${
+										frankencoinAsset === asset
+											? "border-[#c4a75f] bg-button-default text-white"
+											: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+									}`}
+								>
+									<p className="text-sm font-semibold leading-5">{meta.symbol}</p>
+									<p className={`mt-0.5 truncate text-xs leading-4 ${frankencoinAsset === asset ? "text-white/75" : "text-text-secondary"}`}>{meta.name}</p>
+								</button>
+							);
+						})}
 					</div>
 				</div>
 
@@ -259,7 +273,7 @@ export default function DeskSwapForm() {
 					</div>
 
 					<label className="mt-4 block">
-						<span className="mb-1 block text-sm font-medium text-text-secondary">Amount to sell</span>
+						<span className="mb-1 block text-sm font-medium text-text-secondary">{amountLabel}</span>
 						<div className="flex min-h-[48px] overflow-hidden rounded-xl border border-[#e0d4bd] bg-white transition hover:border-[#c4a75f] focus-within:border-[#c4a75f] dark:border-menu-separator dark:bg-card-content-primary">
 							<input
 								value={amount}
@@ -292,12 +306,12 @@ export default function DeskSwapForm() {
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
 					<p className="text-xs uppercase tracking-wider text-text-secondary">Route preview</p>
 					<h3 className="mt-1 text-lg font-semibold text-text-primary">
-						{side === "buy" ? "Buy" : "Sell"} {frankencoinAsset === "zchf" ? "ZCHF" : "WFPS"}
+						{side === "buy" ? "Buy" : "Sell"} {assetMeta.symbol}
 					</h3>
 					<p className="mt-2 text-sm leading-6 text-text-secondary">
 						{side === "buy"
-							? `Swap selected crypto into ${frankencoinAsset === "zchf" ? "ZCHF" : "WFPS"}. Receive token is locked.`
-							: `Sell ${frankencoinAsset === "zchf" ? "ZCHF" : "WFPS"} into the selected crypto token.`}
+							? `Swap selected crypto into ${assetMeta.symbol}. Receive token is locked.`
+							: `Sell ${assetMeta.symbol} into the selected crypto token.`}
 					</p>
 
 					<div className="mt-4 space-y-3 rounded-xl border border-[#e0d4bd] bg-card-content-primary p-4 dark:border-menu-separator">
