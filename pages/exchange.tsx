@@ -257,11 +257,18 @@ export default function ExchangePage() {
 			</div>
 
 			<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
-				<h2 className="text-lg font-semibold text-text-primary">Why some chains are shown only for bridge</h2>
-				<p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-					ZCHF can exist on more chains than the chains with strong direct swap liquidity. This page keeps normal swap routes limited to the paths most likely to work for clients. If you want ZCHF somewhere else, first get ZCHF on a liquid route, then move it with the bridge.
-				</p>
-				<p className="mt-3 text-sm font-semibold text-text-primary">Selected route: {activeMeta.title}</p>
+				<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 className="text-lg font-semibold text-text-primary">Why don’t we show every chain ZCHF lives on for trading?</h2>
+						<p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
+							ZCHF can live on more chains than the chains with reliable direct swap liquidity. ZCHF Desk shows trading routes that are likely to work well for Frankencoin Protocol users. Other supported chains may be better reached by first getting ZCHF on a liquid route, then moving it with the bridge.
+						</p>
+						<p className="mt-3 text-sm font-semibold text-text-primary">Selected route: {activeMeta.title}</p>
+					</div>
+					<AppButton to="/transfer" width="w-auto" className="min-h-[42px] shrink-0 px-4">
+						Open Bridge
+					</AppButton>
+				</div>
 			</section>
 		</>
 	);
