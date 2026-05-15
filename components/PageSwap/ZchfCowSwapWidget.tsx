@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TradeType, type CowSwapWidgetParams, type SupportedChainId } from "@cowprotocol/widget-lib";
+import type { CowSwapWidgetParams, SupportedChainId } from "@cowprotocol/widget-lib";
 import { CowSwapDirection, getCowRouteLabels, getCowSwapNetwork, getCowZchfAddress } from "../../utils/cowswap";
 import type { ChainId } from "@frankencoin/zchf";
 
@@ -7,6 +7,8 @@ type Props = {
 	direction: CowSwapDirection;
 	chainId: ChainId;
 };
+
+const SWAP_TRADE_TYPE = "swap" as CowSwapWidgetParams["tradeType"];
 
 export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -28,8 +30,8 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			height: "640px",
 			maxHeight: 760,
 			chainId: chainId as SupportedChainId,
-			tradeType: TradeType.SWAP,
-			enabledTradeTypes: [TradeType.SWAP],
+			tradeType: SWAP_TRADE_TYPE,
+			enabledTradeTypes: [SWAP_TRADE_TYPE],
 			sell: { asset: sellAsset },
 			buy: { asset: buyAsset },
 			standaloneMode: true,
