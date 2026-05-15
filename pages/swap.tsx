@@ -1,316 +1,170 @@
-import Head from "next/head";
-import TokenInput from "@components/Input/TokenInput";
-import { useEffect, useState } from "react";
-import { useContractUrl, useSwapVCHFStats } from "@hooks";
-import { erc20Abi, maxUint256 } from "viem";
 import AppButton from "@components/AppButton";
-import { useChainId } from "wagmi";
-import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { toast } from "react-toastify";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDown } from "@fortawesome/free-solid-svg-icons";
-import { formatBigInt, shortenAddress } from "@utils";
-import { TxToast, renderErrorTxToast } from "@components/TxToast";
-import GuardToAllowedChainBtn from "@components/Guards/GuardToAllowedChainBtn";
-import { WAGMI_CONFIG } from "../app.config";
-import AppCard from "@components/AppCard";
-import { ADDRESS, FrankencoinABI, StablecoinBridgeABI } from "@frankencoin/zchf";
 import AppLink from "@components/AppLink";
-import { mainnet } from "viem/chains";
-import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
-import { track } from "@hooks";
+import AppNotice from "@components/AppNotice";
+import AppPageHeader from "@components/AppPageHeader";
+import Head from "next/head";
+import { useEffect, useMemo, useState } from "react";
+import { useChainId, useConnection } from "wagmi";
+import { base } from "viem/chains";
+import {
+	buildCowSwapWidgetUrl,
+	COW_SWAP_NETWORKS,
+	CowSwapDirection,
+	getCowRouteLabels,
+	getCowSwapNetwork,
+} from "../utils/cowswap";
+
+const DIRECTIONS: { value: CowSwapDirection; label: string; copy: string }[] = [
+	{
+		value: "buy-zchf",
+		label: "Crypto to ZCHF",
+		copy: "Exchange ETH, WXDAI, or another supported token into ZCHF through CoW Swap.",
+	},
+	{
+		value: "sell-zchf",
+		label: "ZCHF to crypto",
+		copy: "Exchange ZCHF back into crypto through CoW Swap.",
+	},
+];
 
 export default function Swap() {
-	const [amount, setAmount] = useState(0n);
-	const [error, setError] = useState("");
-	const [errorBridge, setErrorBridge] = useState("");
-	const [direction, setDirection] = useState(true);
-	const [isApproving, setApproving] = useState(false);
-	const [isMinting, setMinting] = useState(false);
-	const [isBurning, setBurning] = useState(false);
-	const [isMinter, setMinter] = useState<bigint>(0n);
-
-	const chainId = mainnet.id;
-	const swapStats = useSwapVCHFStats();
-
-	const other = ADDRESS[chainId].vchfToken;
-	const bridge = ADDRESS[chainId].stablecoinBridgeVCHF;
-	const bridgeUrl = useContractUrl(bridge);
-
-	const activeMinter = isMinter > 0 && isMinter * 1000n <= Date.now();
-	const fromBalance = direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
-	const toBalance = !direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
-	const fromSymbol = direction ? swapStats.otherSymbol : "ZCHF";
-	const toSymbol = !direction ? swapStats.otherSymbol : "ZCHF";
-	const swapLimit = direction ? swapStats.bridgeLimit - swapStats.otherBridgeBal : swapStats.otherBridgeBal;
+	const walletChainId = useChainId();
+	const { isConnected } = useConnection();
+	const walletCowNetwork = getCowSwapNetwork(walletChainId);
+	const [direction, setDirection] = useState<CowSwapDirection>("buy-zchf");
+	const [selectedChainId, setSelectedChainId] = useState(walletCowNetwork?.chainId ?? (base.id as any));
 
 	useEffect(() => {
-		const fetcher = async () => {
-			const active = await readContract(WAGMI_CONFIG, {
-				address: ADDRESS[chainId].frankencoin,
-				chainId,
-				abi: FrankencoinABI,
-				functionName: "minters",
-				args: [bridge],
-			});
+		if (walletCowNetwork) setSelectedChainId(walletCowNetwork.chainId);
+	}, [walletCowNetwork]);
 
-			if (active != isMinter) setMinter(active);
-		};
-
-		fetcher();
-	}, [bridge, chainId, isMinter]);
-
-	useEffect(() => {
-		const horizon = new Date(Number(swapStats.bridgeHorizon * 1000n));
-		const now = Date.now();
-		const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-		const timeRemaining = horizon.getTime() - now;
-
-		if (!activeMinter) {
-			setErrorBridge("The swap module has not yet completed the governance process.");
-		} else if (horizon.getTime() < now && direction) {
-			setErrorBridge(`Swap module has expired on ${horizon.toDateString()}`);
-		} else if (timeRemaining < thirtyDaysMs && timeRemaining > 0 && direction) {
-			const daysRemaining = Math.ceil(timeRemaining / (24 * 60 * 60 * 1000));
-			setErrorBridge(
-				`Warning: Swap module expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"} (${horizon.toDateString()})`
-			);
-		} else {
-			setErrorBridge("");
-		}
-	}, [activeMinter, swapStats, direction]);
-
-	useEffect(() => {
-		if (amount > fromBalance) {
-			setError(`Not enough ${fromSymbol} in your wallet.`);
-		} else if (amount > swapLimit) {
-			setError(`Not enough ${toSymbol} available to swap.`);
-		} else {
-			setError("");
-		}
-	}, [amount, direction, fromBalance, fromSymbol, swapLimit, toSymbol]);
-
-	const handleApprove = async () => {
-		try {
-			setApproving(true);
-			const approveWriteHash = await writeContract(WAGMI_CONFIG, {
-				address: other,
-				chainId,
-				abi: erc20Abi,
-				functionName: "approve",
-				args: [bridge, maxUint256],
-			});
-
-			const toastContent = [
-				{
-					title: "Amount:",
-					value: "infinite",
-				},
-				{
-					title: "Spender: ",
-					value: shortenAddress(bridge),
-				},
-				{
-					title: "Transaction:",
-					hash: approveWriteHash,
-				},
-			];
-
-			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: approveWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Approving ${fromSymbol}`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title={`Successfully Approved ${fromSymbol}`} rows={toastContent} />,
-				},
-			});
-		} catch (error) {
-			toast.error(renderErrorTxToast(error));
-		} finally {
-			setApproving(false);
-		}
-	};
-	const handleMint = async () => {
-		try {
-			setMinting(true);
-			const mintWriteHash = await writeContract(WAGMI_CONFIG, {
-				address: bridge,
-				chainId,
-				abi: StablecoinBridgeABI,
-				functionName: "mint",
-				args: [amount],
-			});
-
-			const toastContent = [
-				{
-					title: `${fromSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + fromSymbol,
-				},
-				{
-					title: `${toSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + toSymbol,
-				},
-				{
-					title: "Transaction:",
-					hash: mintWriteHash,
-				},
-			];
-
-			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: mintWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Swapping ${fromSymbol} to ${toSymbol}`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title={`Successfully Swapped ${fromSymbol} to ${toSymbol}`} rows={toastContent} />,
-				},
-			});
-		} catch (error) {
-			toast.error(renderErrorTxToast(error));
-		} finally {
-			setMinting(false);
-		}
-	};
-	const handleBurn = async () => {
-		try {
-			setBurning(true);
-
-			const burnWriteHash = await writeContract(WAGMI_CONFIG, {
-				address: bridge,
-				chainId,
-				abi: StablecoinBridgeABI,
-				functionName: "burn",
-				args: [amount],
-			});
-
-			const toastContent = [
-				{
-					title: `${fromSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + fromSymbol,
-				},
-				{
-					title: `${toSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + toSymbol,
-				},
-				{
-					title: "Transaction:",
-					hash: burnWriteHash,
-				},
-			];
-
-			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: burnWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Swapping ${fromSymbol} to ${toSymbol}`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title={`Successfully Swapped ${fromSymbol} to ${toSymbol}`} rows={toastContent} />,
-				},
-			});
-		} catch (error) {
-			toast.error(renderErrorTxToast(error));
-		} finally {
-			setBurning(false);
-		}
-	};
-
-	const onChangeDirection = () => {
-		setDirection(!direction);
-	};
-
-	const onChangeAmount = (value: string) => {
-		const valueBigInt = BigInt(value);
-		setAmount(valueBigInt);
-	};
+	const selectedNetwork = getCowSwapNetwork(selectedChainId);
+	const widgetUrl = useMemo(() => buildCowSwapWidgetUrl(direction, selectedChainId), [direction, selectedChainId]);
+	const selectedDirection = DIRECTIONS.find((option) => option.value === direction) ?? DIRECTIONS[0];
+	const routeLabels = selectedNetwork ? getCowRouteLabels(direction, selectedNetwork) : null;
 
 	return (
 		<>
 			<Head>
-				<title>Frankencoin - Swap</title>
+				<title>Swap Crypto & ZCHF | ZCHF Desk</title>
 			</Head>
 
-			<div className="md:mt-8">
-				<section className="mx-auto max-w-2xl sm:px-8">
-					<AppCard>
-						<div className="mt-4 text-lg font-bold text-center">Swap {swapStats.otherSymbol} and ZCHF</div>
+			<AppPageHeader
+				eyebrow="DEX SWAP"
+				title="Swap Crypto & ZCHF"
+				description="Exchange supported crypto into ZCHF, or convert ZCHF back into crypto, using CoW Swap."
+			>
+				<AppNotice
+					variant="neutral"
+					message="Swaps are powered by CoW Swap. Quotes, token availability, slippage, settlement, approvals, and execution are handled by CoW Swap and its solvers. Always review the final quote before signing."
+				/>
+			</AppPageHeader>
 
-						<div className="mt-8">
-							The <AppLink className="" label="swap module" href={bridgeUrl} external={true} /> enables 1:1 conversion between
-							other Swiss Franc stablecoins and back, up to certain limits. Currently,{" "}
-							<AppLink className="" label="VNX Swiss Franc (VCHF)" href="https://vnx.li/vchf/" external={true} /> is
-							supported.
-						</div>
+			<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
+				<div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+					<div className="flex flex-wrap gap-2">
+						{DIRECTIONS.map((option) => (
+							<button
+								key={option.value}
+								type="button"
+								onClick={() => setDirection(option.value)}
+								className={`min-h-[42px] rounded-lg border px-4 text-sm font-semibold transition ${
+									direction === option.value
+										? "border-[#c4a75f] bg-button-default text-white"
+										: "border-[#e0d4bd] bg-card-content-secondary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+								}`}
+							>
+								{option.label}
+							</button>
+						))}
+					</div>
 
-						<div className="mt-8">
-							<TokenInput
-								max={fromBalance}
-								reset={0n}
-								symbol={fromSymbol}
-								limit={fromBalance}
-								limitLabel="Balance"
-								placeholder={"Swap Amount"}
-								onChange={onChangeAmount}
-								value={amount.toString()}
-								error={error}
-							/>
-						</div>
+					<label className="flex flex-col gap-2 text-sm font-medium text-text-secondary sm:flex-row sm:items-center">
+						<span>Network</span>
+						<select
+							value={selectedChainId}
+							onChange={(event) => setSelectedChainId(Number(event.target.value) as any)}
+							className="min-h-[42px] rounded-lg border border-[#e0d4bd] bg-card-content-secondary px-3 text-sm font-semibold text-text-primary outline-none transition hover:border-[#c4a75f] focus:border-[#c4a75f] dark:border-menu-separator"
+						>
+							{COW_SWAP_NETWORKS.map((network) => (
+								<option key={network.chainId} value={network.chainId}>
+									{network.label}
+								</option>
+							))}
+						</select>
+					</label>
+				</div>
 
-						<div className="py-4 text-center z-0">
-							<AppButton className={`h-10 rounded-full`} width="w-10" onClick={onChangeDirection}>
-								<FontAwesomeIcon icon={faArrowDown} className="w-6 h-6" />
-							</AppButton>
-						</div>
+				<div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr,1fr,1fr]">
+					<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<p className="text-xs uppercase tracking-wider text-text-secondary">Flow</p>
+						<p className="mt-1 text-sm font-semibold text-text-primary">{selectedDirection.label}</p>
+						<p className="mt-2 text-xs leading-5 text-text-secondary">{selectedDirection.copy}</p>
+					</div>
+					<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<p className="text-xs uppercase tracking-wider text-text-secondary">Route preview</p>
+						<p className="mt-1 text-sm font-semibold text-text-primary">
+							{routeLabels ? `${routeLabels.sell} -> ${routeLabels.buy}` : "Route unavailable"}
+						</p>
+						<p className="mt-2 text-xs leading-5 text-text-secondary">
+							The default token can be changed inside the CoW Swap widget before signing.
+						</p>
+					</div>
+					<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
+						<p className="text-xs uppercase tracking-wider text-text-secondary">Liquidity hint</p>
+						<p className="mt-1 text-sm font-semibold text-text-primary">
+							{selectedNetwork ? selectedNetwork.liquidityLabel : "Unsupported network"}
+						</p>
+						<p className="mt-2 text-xs leading-5 text-text-secondary">{selectedNetwork?.note ?? "Choose a supported network."}</p>
+					</div>
+				</div>
 
-						<TokenInput
-							symbol={toSymbol}
-							limit={swapLimit}
-							limitLabel="Available"
-							value={amount.toString()}
-							note={`1 ${fromSymbol} = 1 ${toSymbol}`}
-							label="Receive"
-							disabled={true}
-							error={errorBridge}
+				{isConnected && !walletCowNetwork ? (
+					<p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+						Your wallet is connected to a network that CoW Swap is not configured for here. Choose Base, Ethereum, or Gnosis in
+						the selector above.
+					</p>
+				) : null}
+
+				{widgetUrl ? (
+					<div className="mx-auto mt-5 max-w-[1040px] overflow-hidden rounded-xl border border-[#e0d4bd] bg-white shadow-sm dark:border-menu-separator dark:bg-card-content-secondary">
+						<iframe
+							key={widgetUrl}
+							allow="clipboard-write; ethereum"
+							className="h-[760px] w-full bg-white"
+							loading="lazy"
+							src={widgetUrl}
+							title="CoW Swap ZCHF widget"
 						/>
+					</div>
+				) : (
+					<div className="mt-5 rounded-xl border border-amber-200 bg-[#fffaf0] p-5 text-slate-800 shadow-sm dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
+						<h2 className="text-lg font-semibold">CoW Swap route unavailable</h2>
+						<p className="mt-2 max-w-2xl text-sm leading-6">
+							Choose a supported network with a configured ZCHF token address.
+						</p>
+					</div>
+				)}
+			</section>
 
-						<div className="mx-auto mt-8 w-full flex-col">
-							<GuardSupportedChain chain={mainnet}>
-								{direction ? (
-									amount > swapStats.otherUserAllowance ? (
-										<AppButton
-											disabled={!activeMinter || !!error}
-											isLoading={isApproving}
-											onClick={() => handleApprove()}
-										>
-											Approve
-										</AppButton>
-									) : (
-										<AppButton
-											disabled={amount == 0n || !activeMinter || !!error}
-											isLoading={isMinting}
-											onClick={() => handleMint()}
-										>
-											Swap
-										</AppButton>
-									)
-								) : (
-									<AppButton isLoading={isBurning} disabled={amount == 0n || !!error} onClick={() => handleBurn()}>
-										Swap
-									</AppButton>
-								)}
-							</GuardSupportedChain>
-						</div>
-
-						<div className="mt-6">
-							You can also use the{" "}
-							<AppLink
-								className=""
-								label="Uniswap App"
-								href="https://app.uniswap.org/explore/tokens/ethereum/0xb58e61c3098d85632df34eecfb899a1ed80921cb"
-								external={true}
-							/>{" "}
-							to swap other tokens for ZCHF.
-						</div>
-					</AppCard>
-				</section>
-			</div>
+			<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
+				<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 className="text-lg font-semibold text-text-primary">Swiss franc stablecoin bridge</h2>
+						<p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">
+							Need the old 1:1 VCHF to ZCHF conversion module instead of a DEX swap? It is still available as a separate advanced
+							tool.
+						</p>
+					</div>
+					<AppButton to="/stablecoin-bridge" width="w-auto" className="min-h-[42px] px-4">
+						Open bridge
+					</AppButton>
+				</div>
+				<p className="mt-4 text-xs text-text-secondary">
+					CoW widget integration follows CoW's widget/library model. For deeper technical setup, see{" "}
+					<AppLink label="CoW widget documentation" href="https://docs.cow.fi/cow-protocol/tutorials/widget" external className="" />.
+				</p>
+			</section>
 		</>
 	);
 }
