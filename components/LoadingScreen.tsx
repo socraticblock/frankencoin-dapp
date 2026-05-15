@@ -1,9 +1,10 @@
 import { IconProp } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import Image from "next/image";
 import Link from "next/link";
 import { SOCIAL } from "../utils/constant";
 import AppLink from "./AppLink";
-import { version } from "../package.json";
+import packageJson from "../package.json";
 import { faCodeCommit } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { useEffect, useState } from "react";
@@ -19,6 +20,8 @@ interface LoadingScreenProps {
 	loading?: Loading[];
 	breakerMs?: number;
 }
+
+const { version } = packageJson;
 
 export default function LoadingScreen({ title = "Frankencoin is loading...", loading = [], breakerMs }: LoadingScreenProps) {
 	const [elapsed, setElapsed] = useState(0);
@@ -37,9 +40,7 @@ export default function LoadingScreen({ title = "Frankencoin is loading...", loa
 			<div className="flex items-center justify-center gap-4 h-screen">
 				<div className="flex flex-col items-center gap-8">
 					<div className="flex flex-row items-center -mt-20">
-						<picture>
-							<img className="h-10 mr-4" src="/coin/zchf.png" alt="Logo" />
-						</picture>
+						<Image className="h-10 w-10 mr-4" src="/coin/zchf.png" alt="Logo" width={40} height={40} priority />
 						<h1>{title}</h1>
 					</div>
 
