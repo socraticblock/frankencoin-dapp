@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CowSwapWidgetParams, SupportedChainId } from "@cowprotocol/widget-lib";
 import { CowSwapDirection, getCowRouteLabels, getCowSwapNetwork, getCowZchfAddress } from "../../utils/cowswap";
 import type { ChainId } from "@frankencoin/zchf";
 
@@ -8,7 +7,34 @@ type Props = {
 	chainId: ChainId;
 };
 
-const SWAP_TRADE_TYPE = "swap" as CowSwapWidgetParams["tradeType"];
+type CowWidgetAsset = {
+	asset: string;
+};
+
+type ZchfCowWidgetParams = {
+	appCode: string;
+	width: string;
+	height: string;
+	maxHeight: number;
+	chainId: number;
+	tradeType: "swap";
+	enabledTradeTypes: ["swap"];
+	sell: CowWidgetAsset;
+	buy: CowWidgetAsset;
+	standaloneMode: boolean;
+	tokenLists?: string[];
+	disablePostedOrderConfirmationModal: boolean;
+	disableProgressBar: boolean;
+	disableToastMessages: boolean;
+	hideBridgeInfo: boolean;
+	hideLogo: boolean;
+	hideNetworkSelector: boolean;
+	hideOrdersTable: boolean;
+};
+
+type CowWidgetModule = {
+	createCowSwapWidget: (container: HTMLElement, options: { params: ZchfCowWidgetParams }) => void;
+};
 
 export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -18,7 +44,7 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 	const zchfAddress = getCowZchfAddress(chainId);
 	const routeLabels = network ? getCowRouteLabels(direction, network) : null;
 
-	const params = useMemo((): CowSwapWidgetParams | null => {
+	const params = useMemo((): ZchfCowWidgetParams | null => {
 		if (!network || !zchfAddress) return null;
 		const sellAsset = direction === "buy-zchf" ? network.counterAsset : zchfAddress;
 		const buyAsset = direction === "buy-zchf" ? zchfAddress : network.counterAsset;
@@ -29,9 +55,9 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			width: "100%",
 			height: "640px",
 			maxHeight: 760,
-			chainId: chainId as SupportedChainId,
-			tradeType: SWAP_TRADE_TYPE,
-			enabledTradeTypes: [SWAP_TRADE_TYPE],
+			chainId,
+			tradeType: "swap",
+			enabledTradeTypes: ["swap"],
 			sell: { asset: sellAsset },
 			buy: { asset: buyAsset },
 			standaloneMode: true,
@@ -59,9 +85,9 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			const widgetParams = params;
 			if (!widgetParams) return;
 			try {
-				const { createCowSwapWidget } = await import("@cowprotocol/widget-lib");
+				const cowWidget = (await import("@cowprotocol/widget-lib")) as CowWidgetModule;
 				if (cancelled || !containerRef.current) return;
-				createCowSwapWidget(containerRef.current, { params: widgetParams });
+				cowWidget.createCowSwapWidget(containerRef.current, { params: widgetParams });
 				setStatus("ready");
 			} catch (e) {
 				if (cancelled) return;
