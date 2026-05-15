@@ -34,6 +34,9 @@ const ERC20_BALANCE_ABI = [
 	},
 ] as const;
 
+const BALANCE_DISPLAY_DECIMALS = 6;
+const QUOTE_DISPLAY_DECIMALS = 6;
+
 type QuoteState = {
 	status: "idle" | "ready" | "blocked";
 	message: string;
@@ -47,6 +50,90 @@ function parseChainId(value: string, mode: DeskSwapMode): ChainId {
 
 function getChainLabel(chainId: number) {
 	return chainId === 1 ? "Ethereum" : chainId === 8453 ? "Base" : chainId === 100 ? "Gnosis" : "the selected network";
+}
+
+function normalizeDecimalInput(value: string, decimals: number) {
+	const normalized = value.replace(/,/g, ".");
+	const [integerPart, ...fractionParts] = normalized.split(".");
+	const integer = integerPart.replace(/\D/g, "");
+	const fraction = fractionParts.join("").replace(/\D/g, "").slice(0, decimals);
+	const hasDecimal = normalized.includes(".");
+
+	if (!hasDecimal) return integer;
+	return `${integer || "0"}.${fraction}`;
+}
+
+function getAmountValidation(amount: string, asset: DeskAsset | null) {
+	if (!amount) return null;
+	if (!asset) return "This route is not available in ZCHF Desk.";
+	if (!/^\d+(\.\d+)?$/.test(amount)) return "Enter a valid amount.";
+
+	const fraction = amount.split(".")[1] ?? "";
+	if (fraction.length > asset.decimals) return `${asset.symbol} supports up to ${asset.decimals} decimals.`;
+
+	try {
+		const parsed = parseUnits(amount, asset.decimals);
+		if (parsed <= 0n) return "Enter an amount greater than zero.";
+	} catch {
+		return "Enter a valid amount.";
+	}
+
+	return null;
+}
+
+function trimDecimalZeros(value: string) {
+	if (!value.includes(".")) return value;
+	return value.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0*$/, "");
+}
+
+function formatDisplayDecimal(value: string, maxFractionDigits: number) {
+	const isNegative = value.startsWith("-");
+	const unsigned = isNegative ? value.slice(1) : value;
+	const [integerRaw, fractionRaw = ""] = unsigned.split(".");
+	const integer = integerRaw || "0";
+	const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+	const fraction = fractionRaw.slice(0, maxFractionDigits).replace(/0+$/, "");
+
+	if (!fraction) {
+		if (fractionRaw && /[1-9]/.test(fractionRaw)) {
+			return `${isNegative ? "-" : ""}<0.${"0".repeat(Math.max(0, maxFractionDigits - 1))}1`;
+		}
+		return `${isNegative ? "-" : ""}${groupedInteger}`;
+	}
+
+	return `${isNegative ? "-" : ""}${groupedInteger}.${fraction}`;
+}
+
+function formatTokenAmount(value: bigint | string, decimals: number, maxFractionDigits = QUOTE_DISPLAY_DECIMALS) {
+	const raw = typeof value === "bigint" ? value : BigInt(value);
+	return formatDisplayDecimal(formatUnits(raw, decimals), maxFractionDigits);
+}
+
+function getApproximateRate({
+	sellAmountBeforeFee,
+	buyAmount,
+	sellAsset,
+	buyAsset,
+}: {
+	sellAmountBeforeFee: string | null;
+	buyAmount?: string;
+	sellAsset: DeskAsset | null;
+	buyAsset?: DeskAsset;
+}) {
+	if (!sellAmountBeforeFee || !buyAmount || !sellAsset || !buyAsset) return null;
+
+	const sell = Number(formatUnits(BigInt(sellAmountBeforeFee), sellAsset.decimals));
+	const buy = Number(formatUnits(BigInt(buyAmount), buyAsset.decimals));
+	if (!Number.isFinite(sell) || !Number.isFinite(buy) || sell <= 0 || buy <= 0) return null;
+
+	return `1 ${sellAsset.symbol} ≈ ${formatDisplayDecimal((buy / sell).toFixed(QUOTE_DISPLAY_DECIMALS), QUOTE_DISPLAY_DECIMALS)} ${buyAsset.symbol}`;
+}
+
+function getRouteExplanation(mode: DeskSwapMode, assetSymbol: string) {
+	if (mode === "get-zchf") return "Buy ZCHF: you pay crypto already in your wallet and receive ZCHF.";
+	if (mode === "sell-zchf") return "Sell ZCHF: you sell ZCHF and receive the selected crypto token.";
+	if (mode === "get-wfps") return "Buy WFPS: you pay crypto already in your wallet and receive WFPS.";
+	return `Sell ${assetSymbol}: you sell WFPS and receive the selected crypto token.`;
 }
 
 function TokenLogo({ asset }: { asset: DeskAsset }) {
@@ -137,13 +224,14 @@ export default function DeskSwapForm() {
 	const allowedChains = getAllowedDeskChainsForMode(mode);
 	const selectedCounterAsset = route?.counterAsset ?? counterAssets.find((asset) => asset.id === counterAssetId) ?? null;
 	const isConnectedToRouteChain = connectedChainId === chainId;
-	const quoteState = getQuoteState({ isConnected, isConnectedToRouteChain, address, amount, route, mode });
+	const amountValidation = useMemo(() => getAmountValidation(amount, sellAsset), [amount, sellAsset]);
+	const quoteState = getQuoteState({ isConnected, isConnectedToRouteChain, address, amount, amountValidation, route, mode });
 	const sellAmountPreview = route && amount ? `${amount} ${route.sellAsset.symbol}` : "Enter amount";
-	const buyPreview = route ? `${route.buyAsset.symbol} locked` : "Route unavailable";
 	const openSideIsSell = side === "buy";
 	const assetMeta = FRANKENCOIN_ASSET_META[frankencoinAsset];
 	const amountLabel = side === "buy" ? "Amount to pay" : "Amount to sell";
 	const assetChoiceLabel = side === "buy" ? "What do you want to buy?" : "What do you want to sell?";
+	const routeExplanation = getRouteExplanation(mode, assetMeta.symbol);
 	const wfpsConfigured = isWfpsConfigured();
 	const {
 		data: sellBalance,
@@ -159,25 +247,51 @@ export default function DeskSwapForm() {
 		},
 	});
 	const sellAmountBeforeFee = useMemo(() => {
-		if (!amount || !sellAsset) return null;
+		if (!amount || !sellAsset || amountValidation) return null;
 		try {
 			return parseUnits(amount, sellAsset.decimals).toString();
 		} catch {
 			return null;
 		}
-	}, [amount, sellAsset]);
+	}, [amount, amountValidation, sellAsset]);
+	const formattedSellAmount = sellAmountBeforeFee && sellAsset ? `${formatTokenAmount(sellAmountBeforeFee, sellAsset.decimals)} ${sellAsset.symbol}` : null;
 	const estimatedReceive =
 		quote?.quote?.buyAmount && quote.buyAsset
-			? `${formatUnits(BigInt(quote.quote.buyAmount), quote.buyAsset.decimals)} ${quote.buyAsset.symbol}`
+			? `${formatTokenAmount(quote.quote.buyAmount, quote.buyAsset.decimals)} ${quote.buyAsset.symbol}`
 			: null;
 	const feeAmount =
 		quote?.quote?.feeAmount && quote.sellAsset
-			? `${formatUnits(BigInt(quote.quote.feeAmount), quote.sellAsset.decimals)} ${quote.sellAsset.symbol}`
+			? `${formatTokenAmount(quote.quote.feeAmount, quote.sellAsset.decimals)} ${quote.sellAsset.symbol}`
 			: null;
+	const quoteRate = getApproximateRate({
+		sellAmountBeforeFee,
+		buyAmount: quote?.quote?.buyAmount,
+		sellAsset,
+		buyAsset: quote?.buyAsset,
+	});
+	const buyPreview = estimatedReceive ?? (route ? `${route.buyAsset.symbol} after quote` : "Route unavailable");
 	const hasInsufficientBalance =
 		sellBalance !== undefined &&
 		sellAmountBeforeFee !== null &&
 		BigInt(sellAmountBeforeFee) > sellBalance;
+	const isWaitingForBalance = Boolean(address && route && sellAmountBeforeFee && isConnectedToRouteChain && isBalanceLoading);
+	const isBalanceUnavailable = Boolean(
+		address &&
+		route &&
+		sellAmountBeforeFee &&
+		isConnectedToRouteChain &&
+		!isBalanceLoading &&
+		sellBalance === undefined
+	);
+	const canRequestQuote = Boolean(
+		address &&
+		route &&
+		sellAmountBeforeFee &&
+		isConnectedToRouteChain &&
+		sellBalance !== undefined &&
+		!hasInsufficientBalance &&
+		!amountValidation
+	);
 
 	useEffect(() => {
 		const fallback = getDefaultDeskChainForMode(mode);
@@ -223,7 +337,7 @@ export default function DeskSwapForm() {
 
 	const onMaxClick = () => {
 		if (!sellAsset || sellBalance === undefined) return;
-		setAmount(formatUnits(sellBalance, sellAsset.decimals));
+		setAmount(trimDecimalZeros(formatUnits(sellBalance, sellAsset.decimals)));
 	};
 
 	useEffect(() => {
@@ -231,7 +345,7 @@ export default function DeskSwapForm() {
 		setQuoteError(null);
 		setIsQuoteLoading(false);
 
-		if (!address || !route || !sellAmountBeforeFee || !isConnectedToRouteChain) return;
+		if (!canRequestQuote || !address || !route || !sellAmountBeforeFee) return;
 
 		let cancelled = false;
 		const timeout = window.setTimeout(async () => {
@@ -257,7 +371,7 @@ export default function DeskSwapForm() {
 			cancelled = true;
 			window.clearTimeout(timeout);
 		};
-	}, [address, route, sellAmountBeforeFee, isConnectedToRouteChain, chainId, mode, counterAssetId]);
+	}, [address, canRequestQuote, chainId, counterAssetId, mode, route, sellAmountBeforeFee]);
 
 	return (
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
@@ -271,7 +385,7 @@ export default function DeskSwapForm() {
 				</div>
 				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-3 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-content-secondary">
 					<p className="font-semibold text-text-primary">Execution status</p>
-					<p className="mt-1 max-w-sm text-xs leading-5">Quote-only preview is being introduced first. Order signing comes after route testing with tiny amounts.</p>
+					<p className="mt-1 max-w-sm text-xs leading-5">Quote preview only. No approval, signature, or transaction will be requested here.</p>
 				</div>
 			</div>
 
@@ -360,16 +474,17 @@ export default function DeskSwapForm() {
 						<div className="flex min-h-[48px] overflow-hidden rounded-xl border border-[#e0d4bd] bg-white transition hover:border-[#c4a75f] focus-within:border-[#c4a75f] dark:border-menu-separator dark:bg-card-content-primary">
 							<input
 								value={amount}
-								onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))}
+								onChange={(event) => setAmount(normalizeDecimalInput(event.target.value, sellAsset?.decimals ?? 18))}
 								placeholder="0.00"
 								inputMode="decimal"
+								aria-invalid={Boolean(amountValidation)}
 								className="min-w-0 flex-1 bg-transparent px-4 text-lg font-semibold text-text-primary outline-none placeholder:text-text-secondary/50"
 							/>
 							<button
 								type="button"
 								onClick={onMaxClick}
 								disabled={!sellAsset || sellBalance === undefined}
-								className="border-l border-[#e0d4bd] px-4 text-sm font-semibold text-text-secondary hover:text-text-primary dark:border-menu-separator"
+								className="border-l border-[#e0d4bd] px-4 text-sm font-semibold text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-menu-separator"
 							>
 								Max
 							</button>
@@ -378,9 +493,10 @@ export default function DeskSwapForm() {
 							{isBalanceLoading
 								? "Loading balance…"
 								: sellAsset && sellBalance !== undefined
-									? `Balance: ${formatUnits(sellBalance, sellAsset.decimals)} ${sellAsset.symbol}`
+									? `Balance: ${formatTokenAmount(sellBalance, sellAsset.decimals, BALANCE_DISPLAY_DECIMALS)} ${sellAsset.symbol}`
 									: "Connect your wallet to see balance."}
 						</p>
+						{amountValidation ? <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-200">{amountValidation}</p> : null}
 					</label>
 
 					<AppNotice
@@ -398,11 +514,7 @@ export default function DeskSwapForm() {
 					<h3 className="mt-1 text-lg font-semibold text-text-primary">
 						{side === "buy" ? "Buy" : "Sell"} {assetMeta.symbol}
 					</h3>
-					<p className="mt-2 text-sm leading-6 text-text-secondary">
-						{side === "buy"
-							? `Swap selected crypto into ${assetMeta.symbol}. Receive token is locked.`
-							: `Sell ${assetMeta.symbol} into the selected crypto token.`}
-					</p>
+					<p className="mt-2 text-sm leading-6 text-text-secondary">{routeExplanation}</p>
 
 					<div className="mt-4 space-y-3 rounded-xl border border-[#e0d4bd] bg-card-content-primary p-4 dark:border-menu-separator">
 						<div className="flex items-center justify-between gap-3 text-sm">
@@ -410,18 +522,42 @@ export default function DeskSwapForm() {
 							<span className="font-semibold text-text-primary">{selectedChain?.label ?? "Unsupported"}</span>
 						</div>
 						<div className="flex items-center justify-between gap-3 text-sm">
-							<span className="text-text-secondary">Sell</span>
-							<span className="font-semibold text-text-primary">{sellAmountPreview}</span>
+							<span className="text-text-secondary">You pay</span>
+							<span className="font-semibold text-text-primary">{formattedSellAmount ?? sellAmountPreview}</span>
 						</div>
 						<div className="flex items-center justify-between gap-3 text-sm">
-							<span className="text-text-secondary">Receive</span>
+							<span className="text-text-secondary">You receive</span>
 							<span className="font-semibold text-text-primary">{buyPreview}</span>
 						</div>
+						{feeAmount ? (
+							<div className="flex items-center justify-between gap-3 text-sm">
+								<span className="text-text-secondary">CoW fee estimate</span>
+								<span className="font-semibold text-text-primary">{feeAmount}</span>
+							</div>
+						) : null}
+						{quoteRate ? (
+							<div className="flex items-center justify-between gap-3 text-sm">
+								<span className="text-text-secondary">Rate</span>
+								<span className="text-right font-semibold text-text-primary">{quoteRate}</span>
+							</div>
+						) : null}
 					</div>
 
-					{hasInsufficientBalance ? (
+					{amountValidation ? (
+						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+							{amountValidation}
+						</div>
+					) : hasInsufficientBalance ? (
 						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
 							This route may be available, but your wallet balance is too low.
+						</div>
+					) : isWaitingForBalance ? (
+						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
+							Loading wallet balance before checking the route…
+						</div>
+					) : isBalanceUnavailable ? (
+						<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200">
+							Wallet balance is unavailable right now. Reconnect your wallet or try again in a moment.
 						</div>
 					) : isQuoteLoading ? (
 						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
@@ -436,7 +572,9 @@ export default function DeskSwapForm() {
 							<p className="font-semibold text-text-primary">Quote found</p>
 							<p className="mt-1">Estimated receive: {estimatedReceive}</p>
 							{feeAmount ? <p className="mt-1">CoW fee estimate: {feeAmount}</p> : null}
+							{quoteRate ? <p className="mt-1">Rate: {quoteRate}</p> : null}
 							{quote?.expiration ? <p className="mt-1">Quote expires: {quote.expiration}</p> : null}
+							<p className="mt-3 text-xs leading-5 text-text-secondary">No approval, signature, or transaction will be requested in this preview.</p>
 						</div>
 					) : (
 						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
@@ -448,7 +586,7 @@ export default function DeskSwapForm() {
 						Quote preview only
 					</AppButton>
 					<p className="mt-3 text-xs leading-5 text-text-secondary">
-						Next step: add approval and order signing after small-route testing.
+						No money moves in this step. Execution will be added later only after approval, signature, and order submission are reviewed separately.
 					</p>
 				</div>
 			</div>
@@ -461,6 +599,7 @@ function getQuoteState({
 	isConnectedToRouteChain,
 	address,
 	amount,
+	amountValidation,
 	route,
 	mode,
 }: {
@@ -468,6 +607,7 @@ function getQuoteState({
 	isConnectedToRouteChain: boolean;
 	address?: string;
 	amount: string;
+	amountValidation: string | null;
 	route: ReturnType<typeof getDeskRoute>;
 	mode: DeskSwapMode;
 }): QuoteState {
@@ -475,9 +615,10 @@ function getQuoteState({
 	if (!isConnected || !address) return { status: "blocked", message: "Connect your wallet to preview a personalized quote." };
 	if (!isConnectedToRouteChain) return { status: "blocked", message: `Switch your wallet to ${getChainLabel(route.sellAsset.chainId)} for this route.` };
 	if (!amount || Number(amount) <= 0) return { status: "idle", message: "Enter an amount to preview the route." };
+	if (amountValidation) return { status: "blocked", message: amountValidation };
 	if (isWfpsMode(mode) && !route.lockedAsset) return { status: "blocked", message: "WFPS is not configured yet." };
 	return {
 		status: "ready",
-		message: `Route is locked to ${route.sellAsset.symbol} -> ${route.buyAsset.symbol}. Quote fetching is the next implementation step before enabling signatures.`,
+		message: `This route is ready for quote preview: ${route.sellAsset.symbol} -> ${route.buyAsset.symbol}.`,
 	};
 }
