@@ -9,8 +9,6 @@ import { Address, formatUnits } from "viem";
 import { normalizeAddress } from "../../utils/format";
 import { useEffect, useState } from "react";
 import PositionRollerRow from "./PositionRollerRow";
-import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
-import { mainnet } from "viem/chains";
 import AppButton from "@components/AppButton";
 import { useRouter as useNavigation } from "next/navigation";
 
