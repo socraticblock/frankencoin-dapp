@@ -23,6 +23,8 @@ interface Props {
 export default function PositionRollerRow({ headers, tab, source, target }: Props) {
 	const [userCollAllowance, setUserCollAllowance] = useState<bigint>(0n);
 	const [missingFunds, setMissingFunds] = useState<bigint>(0n);
+	const [mintAmount, setMintAmount] = useState<bigint>(0n);
+	const [maxMintByCollateral, setMaxMintByCollateral] = useState<bigint>(0n);
 	const { data } = useBlockNumber({ watch: true });
 	const { address } = useConnection();
 	const account = address || zeroAddress;
@@ -49,7 +51,7 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 	useEffect(() => {
 		const fetcher = async function () {
 			const debtAmount = (BigInt(source.minted) * BigInt(1000000 - source.reserveContribution)) / BigInt(1000000);
-			const mintAmount = await readContract(WAGMI_CONFIG, {
+			const targetMintAmount = await readContract(WAGMI_CONFIG, {
 				address: target.position,
 				chainId: mainnet.id,
 				abi: PositionV2ABI,
@@ -57,12 +59,15 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 				args: [debtAmount],
 			});
 
-			const maxMintByCollateral = (BigInt(source.collateralBalance) * BigInt(target.price)) / BigInt(10 ** 18);
+			const targetMaxMintByCollateral = (BigInt(source.collateralBalance) * BigInt(target.price)) / 10n ** 18n;
 
-			if (mintAmount <= maxMintByCollateral) {
+			setMintAmount(targetMintAmount);
+			setMaxMintByCollateral(targetMaxMintByCollateral);
+
+			if (targetMintAmount <= targetMaxMintByCollateral) {
 				setMissingFunds(0n);
 			} else {
-				setMissingFunds(mintAmount - maxMintByCollateral);
+				setMissingFunds(targetMintAmount - targetMaxMintByCollateral);
 			}
 		};
 
@@ -75,6 +80,9 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 	const cooldownText = formatCurrency(timeLeft, 1, 1, FormatType.us) + "h Cooldown";
 
 	const isTargetOwned = normalizeAddress(target.owner) === normalizeAddress(source.owner);
+	const walletBalance = userBalance[mainnet.id].frankencoin;
+	const hasWalletShortfall = missingFunds > 0n;
+	const hasEnoughWalletZchf = missingFunds <= walletBalance;
 
 	const dateArr: string[] = new Date(target.expiration * 1000).toDateString().split(" ");
 	const dateStr: string = `${dateArr[2]} ${dateArr[1]} ${dateArr[3]}`;
@@ -90,7 +98,7 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 				) : (
 					<PositionRollerFullRollAction
 						label={isCooldown ? cooldownText : isTargetOwned ? "Merge" : "Roll"}
-						disabled={isCooldown || missingFunds > userBalance[mainnet.id].frankencoin}
+						disabled={isCooldown || !hasEnoughWalletZchf}
 						source={source}
 						target={target}
 					/>
@@ -116,8 +124,27 @@ export default function PositionRollerRow({ headers, tab, source, target }: Prop
 			{/* Maturity */}
 			<div className="flex flex-col">{dateStr}</div>
 
-			{/* Missing Funds */}
-			<div className="flex flex-col">{formatCurrency(formatUnits(missingFunds, 18), 2)} ZCHF</div>
+			{/* Wallet ZCHF needed */}
+			<div className="flex flex-col gap-1">
+				<span className={hasWalletShortfall && !hasEnoughWalletZchf ? "font-semibold text-text-warning" : "font-semibold text-text-primary"}>
+					{formatCurrency(formatUnits(missingFunds, 18), 2)} ZCHF
+				</span>
+				{isCooldown ? (
+					<span className="text-xs text-text-warning">
+						Target is in cooldown. Extra minting becomes available after cooldown ends.
+					</span>
+				) : hasWalletShortfall ? (
+					<span className="text-xs text-text-secondary">
+						Target can mint {formatCurrency(formatUnits(maxMintByCollateral, 18), 2)} ZCHF from the moved collateral, but this roll
+						 needs about {formatCurrency(formatUnits(mintAmount, 18), 2)} ZCHF. Keep the difference in your wallet or choose a target
+						 with more room.
+					</span>
+				) : (
+					<span className="text-xs text-text-secondary">
+						No extra wallet ZCHF needed. Interest is included in the new loan because this target has enough borrowing room.
+					</span>
+				)}
+			</div>
 		</TableRow>
 	);
 }
