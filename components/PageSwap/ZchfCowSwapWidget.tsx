@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CowSwapWidgetParams, EthereumProvider, SupportedChainId, TradeType } from "@cowprotocol/widget-lib";
+import { TradeType, type CowSwapWidgetParams, type SupportedChainId } from "@cowprotocol/widget-lib";
 import { CowSwapDirection, getCowRouteLabels, getCowSwapNetwork, getCowZchfAddress } from "../../utils/cowswap";
 import type { ChainId } from "@frankencoin/zchf";
 
@@ -28,19 +28,15 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			height: "640px",
 			maxHeight: 760,
 			chainId: chainId as SupportedChainId,
-			tradeType: "swap" as TradeType,
-			enabledTradeTypes: ["swap"] as TradeType[],
+			tradeType: TradeType.SWAP,
 			sell: { asset: sellAsset },
 			buy: { asset: buyAsset },
 			standaloneMode: true,
 			tokenLists: origin ? [`${origin}/api/cow-token-list`] : undefined,
+			disableCrossChainSwap: true,
 			disablePostedOrderConfirmationModal: false,
 			disableProgressBar: false,
 			disableToastMessages: false,
-			hideBridgeInfo: true,
-			hideLogo: true,
-			hideNetworkSelector: true,
-			hideOrdersTable: true,
 		};
 	}, [chainId, direction, network, zchfAddress]);
 
@@ -59,11 +55,7 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			try {
 				const { createCowSwapWidget } = await import("@cowprotocol/widget-lib");
 				if (cancelled || !containerRef.current) return;
-				const provider: EthereumProvider | undefined =
-					typeof window !== "undefined" && window.ethereum
-						? (window.ethereum as unknown as EthereumProvider)
-						: undefined;
-				createCowSwapWidget(containerRef.current, { params: widgetParams, provider });
+				createCowSwapWidget(containerRef.current, { params: widgetParams });
 				setStatus("ready");
 			} catch (e) {
 				if (cancelled) return;
