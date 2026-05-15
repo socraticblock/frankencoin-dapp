@@ -46,13 +46,24 @@ const TOKENS = [
 	},
 ];
 
-export default function handler(_req: NextApiRequest, res: NextApiResponse) {
+const TOKEN_LIST = {
+	name: "ZCHF Desk CoW Swap Tokens",
+	logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
+	timestamp: new Date(0).toISOString(),
+	version: { major: 1, minor: 0, patch: 0 },
+	tokens: TOKENS,
+};
+
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+	res.setHeader("Access-Control-Allow-Origin", "https://swap.cow.fi");
 	res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
-	res.status(200).json({
-		name: "ZCHF Desk CoW Swap Tokens",
-		logoURI: "https://assets.coingecko.com/coins/images/29592/standard/zchf_logo.png",
-		timestamp: new Date(0).toISOString(),
-		version: { major: 1, minor: 0, patch: 0 },
-		tokens: TOKENS,
-	});
+	res.setHeader("Content-Type", "application/json; charset=utf-8");
+
+	if (req.method !== "GET") {
+		res.setHeader("Allow", "GET");
+		res.status(405).json({ error: "Method not allowed" });
+		return;
+	}
+
+	res.status(200).json(TOKEN_LIST);
 }
