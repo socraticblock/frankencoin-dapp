@@ -161,7 +161,7 @@ export default function Swap() {
 					</AppButton>
 				</div>
 				<p className="mt-4 text-xs text-text-secondary">
-					CoW widget integration follows CoW's widget/library model. For deeper technical setup, see{" "}
+					CoW widget integration follows the CoW widget/library model. For deeper technical setup, see{" "}
 					<AppLink label="CoW widget documentation" href="https://docs.cow.fi/cow-protocol/tutorials/widget" external className="" />.
 				</p>
 			</section>
