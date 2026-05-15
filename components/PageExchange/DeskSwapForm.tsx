@@ -1,5 +1,6 @@
 import AppButton from "@components/AppButton";
 import AppNotice from "@components/AppNotice";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId } from "wagmi";
 import type { ChainId } from "@frankencoin/zchf";
@@ -38,7 +39,7 @@ function getChainLabel(chainId: number) {
 }
 
 function TokenLogo({ asset }: { asset: DeskAsset }) {
-	return <img src={asset.logoURI} alt="" className="h-8 w-8 rounded-full bg-white object-contain" />;
+	return <Image src={asset.logoURI} alt="" width={32} height={32} className="h-8 w-8 rounded-full bg-white object-contain" />;
 }
 
 function TokenSelectCard({
