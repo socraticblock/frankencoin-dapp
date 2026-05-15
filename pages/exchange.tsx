@@ -36,7 +36,7 @@ const ACTIONS: {
 		value: "swap",
 		title: "Swap Frankencoin assets",
 		subtitle: "Custom ZCHF Desk route form",
-		detail: "Swap meaningful tokens to ZCHF, ZCHF to meaningful tokens, and WFPS routes on Ethereum only.",
+		detail: "Swap selected crypto tokens to ZCHF, ZCHF to selected crypto tokens, and WFPS routes on Ethereum only.",
 	},
 	{
 		value: "bridge",
