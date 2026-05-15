@@ -30,7 +30,7 @@ export type CowOrderToSign = {
 	buyTokenBalance: "erc20";
 };
 
-export type CowOrderSubmission = CowOrderToSign & {
+export type CowOrderSubmission = Omit<CowOrderToSign, "appData"> & {
 	appData: string;
 	appDataHash: Hex;
 	signingScheme: "eip712";
