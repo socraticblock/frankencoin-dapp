@@ -29,14 +29,18 @@ export default function ZchfCowSwapWidget({ direction, chainId }: Props) {
 			maxHeight: 760,
 			chainId: chainId as SupportedChainId,
 			tradeType: TradeType.SWAP,
+			enabledTradeTypes: [TradeType.SWAP],
 			sell: { asset: sellAsset },
 			buy: { asset: buyAsset },
 			standaloneMode: true,
 			tokenLists: origin ? [`${origin}/api/cow-token-list`] : undefined,
-			disableCrossChainSwap: true,
 			disablePostedOrderConfirmationModal: false,
 			disableProgressBar: false,
 			disableToastMessages: false,
+			hideBridgeInfo: true,
+			hideLogo: true,
+			hideNetworkSelector: true,
+			hideOrdersTable: true,
 		};
 	}, [chainId, direction, network, zchfAddress]);
 
