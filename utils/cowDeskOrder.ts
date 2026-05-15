@@ -152,7 +152,7 @@ export function buildDeskOrderSubmission({
 
 export function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
 	if (!isBaseUsdcToZchfExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
-	return getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId ?? "");
+	return getDeskRoute("get-zchf", input.chainId as ChainId, "base-usdc");
 }
 
 export async function submitDeskOrder(input: DeskOrderSubmitRequest): Promise<DeskOrderSubmitResponse> {
