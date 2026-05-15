@@ -71,6 +71,16 @@ export default function RenewalPreview() {
 						by itself. You need that much ZCHF in your wallet, or you need to choose a position with more borrowing room.
 					</p>
 					<p className="mt-1">Your collateral is not sold during a normal Roll / Merge.</p>
+					<div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+						<div className="font-semibold">Rolling early can cost extra.</div>
+						<p className="mt-1">
+							The upfront fee for your current position is not refunded. If this position still has time left before maturity,
+							that time is already paid.
+						</p>
+						<p className="mt-1">
+							Rolling now starts a new upfront-fee period today, so waiting closer to maturity is usually cheaper.
+						</p>
+					</div>
 					<p className="mt-1 text-xs">
 						Cooldown only matters if more borrowing room must be created by raising the liquidation / challenge price, or if
 						the selected new position is already in cooldown.
