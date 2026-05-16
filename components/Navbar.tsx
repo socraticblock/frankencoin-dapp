@@ -14,15 +14,15 @@ const MAIN_ITEMS = [
 	{ to: "/equity", name: "Invest" },
 	{ to: "/mypositions", name: "Portfolio" },
 	{ to: "/exchange", name: "Exchange" },
+	{ to: "/bridge", name: "Bridge" },
+	{ to: "/transfer", name: "Transfer" },
 ];
 
 const MORE_ITEMS = [
-	{ to: "/fiat", name: "Buy / Sell ZCHF" },
-	{ to: "/swap", name: "Swap Crypto / ZCHF" },
-	{ to: "/transfer", name: "Transfer & Bridge" },
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
 	{ to: "/report", name: "Accounting Report" },
+	{ to: "/stablecoin-bridge", name: "Stablecoin Bridge" },
 ];
 
 function MoreDropdown() {
@@ -48,17 +48,8 @@ function MoreDropdown() {
 				}`}
 			>
 				Advanced
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
-				>
-					<path
-						fillRule="evenodd"
-						d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
-						clipRule="evenodd"
-					/>
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}>
+					<path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
 				</svg>
 			</button>
 			{open && (
@@ -91,28 +82,18 @@ export default function Navbar() {
 	const [isHidden, setIsHidden] = useState(false);
 	const lastScrollY = useRef(0);
 	const { theme, toggleTheme } = useThemeMode();
-
-	let mainItems = MAIN_ITEMS;
-
-	let allItems = [...mainItems, ...MORE_ITEMS];
+	const allItems = [...MAIN_ITEMS, ...MORE_ITEMS];
 
 	useEffect(() => {
 		const handleScroll = () => {
 			const currentScrollY = window.scrollY;
 			const scrollingDown = currentScrollY > lastScrollY.current;
 			const scrollingUp = currentScrollY < lastScrollY.current;
-
-			if (currentScrollY < 12 || isNavBarOpen) {
-				setIsHidden(false);
-			} else if (scrollingDown && currentScrollY > 80) {
-				setIsHidden(true);
-			} else if (scrollingUp) {
-				setIsHidden(false);
-			}
-
+			if (currentScrollY < 12 || isNavBarOpen) setIsHidden(false);
+			else if (scrollingDown && currentScrollY > 80) setIsHidden(true);
+			else if (scrollingUp) setIsHidden(false);
 			lastScrollY.current = currentScrollY;
 		};
-
 		lastScrollY.current = window.scrollY;
 		window.addEventListener("scroll", handleScroll, { passive: true });
 		return () => window.removeEventListener("scroll", handleScroll);
@@ -120,85 +101,42 @@ export default function Navbar() {
 
 	return (
 		<>
-			<div
-				className={`fixed top-0 left-0 right-0 z-10 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${
-					isHidden ? "-translate-y-full" : "translate-y-0"
-				}`}
-			>
+			<div className={`fixed top-0 left-0 right-0 z-10 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${isHidden ? "-translate-y-full" : "translate-y-0"}`}>
 				<header className="grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
-					{/* Left: logo */}
 					<div className="flex items-center md:pl-4">
 						<Link href={CONFIG.landing} data-umami-event="nav_home">
-							<picture>
-								<img className="h-9 transition" src="/coin/zchf.png" alt="Logo" />
-							</picture>
+							<picture><img className="h-9 transition" src="/coin/zchf.png" alt="Logo" /></picture>
 						</Link>
 					</div>
 
-					{/* Center: desktop nav / mobile wallet */}
 					<div className="flex justify-center">
-						<ul className="hidden md:flex gap-2 lg:gap-3">
-							{mainItems.map((item) => (
-								<li key={item.to}>
-									<NavButton to={item.to} name={item.name} />
-								</li>
+						<ul className="hidden md:flex gap-1 lg:gap-2">
+							{MAIN_ITEMS.map((item) => (
+								<li key={item.to}><NavButton to={item.to} name={item.name} /></li>
 							))}
-							<li>
-								<MoreDropdown />
-							</li>
+							<li><MoreDropdown /></li>
 						</ul>
-						<div className="md:hidden">
-							<WalletConnect />
-						</div>
+						<div className="md:hidden"><WalletConnect /></div>
 					</div>
 
-					{/* Right: desktop wallet / mobile hamburger */}
 					<div className="flex justify-end items-center gap-2">
-						<div className="hidden md:flex">
-							<ThemeToggle theme={theme} onToggle={toggleTheme} />
-						</div>
-						<div className="hidden md:flex">
-							<WalletConnect />
-						</div>
+						<div className="hidden md:flex"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+						<div className="hidden md:flex"><WalletConnect /></div>
 						<button onClick={() => setIsNavBarOpen(true)} className="md:hidden p-2 cursor-pointer flex items-center">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								className="w-7 h-7"
-							>
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-							</svg>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-7 h-7"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
 						</button>
 					</div>
 				</header>
 			</div>
 
-			{/* Mobile sidebar */}
-			<div
-				className={`md:hidden fixed inset-0 z-20 h-screen w-full bg-black/70 backdrop-blur-sm transition-opacity ${
-					isNavBarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-				}`}
-				onClick={() => setIsNavBarOpen(false)}
-			/>
-			<div
-				className={`md:hidden fixed top-0 right-0 z-30 h-screen w-64 overflow-y-auto transition-transform duration-200 ${
-					isNavBarOpen ? "translate-x-0" : "translate-x-full"
-				}`}
-			>
+			<div className={`md:hidden fixed inset-0 z-20 h-screen w-full bg-black/70 backdrop-blur-sm transition-opacity ${isNavBarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setIsNavBarOpen(false)} />
+			<div className={`md:hidden fixed top-0 right-0 z-30 h-screen w-64 overflow-y-auto transition-transform duration-200 ${isNavBarOpen ? "translate-x-0" : "translate-x-full"}`}>
 				<div className="min-h-full w-full bg-menu-back backdrop-blur px-[16px] pt-[20px] relative">
 					<button className="absolute top-0 right-0 p-6" onClick={() => setIsNavBarOpen(false)}>
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-8 h-8">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-						</svg>
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 					</button>
-					<div className="mt-12 mb-3">
-						<ThemeToggle theme={theme} onToggle={toggleTheme} />
-					</div>
-					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}>
-						<NavItems items={allItems} />
-					</menu>
+					<div className="mt-12 mb-3"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}><NavItems items={allItems} /></menu>
 				</div>
 			</div>
 		</>
