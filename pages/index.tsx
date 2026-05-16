@@ -1,8 +1,7 @@
 import Head from "next/head";
 import AppButton from "@components/AppButton";
 import AppLink from "@components/AppLink";
-import AppNotice from "@components/AppNotice";
-import AppPageHeader from "@components/AppPageHeader";
+import LandingPage from "@components/PageLanding/LandingPage";
 import DetectedAcrossChainsPanel, { ChainAction, ChainRow } from "@components/PageHome/DetectedAcrossChainsPanel";
 import { useLiveSavingsInterestByChain } from "@components/PageHome/useLiveSavingsInterestByChain";
 import WalletConnect from "@components/WalletConnect";
@@ -428,9 +427,7 @@ export default function MainPage() {
 				<title>Frankencoin Desk</title>
 			</Head>
 
-			<AppPageHeader eyebrow="FRANKENCOIN DESK" title="Frankencoin Desk" description="A simpler way to use the Frankencoin Protocol.">
-				<AppNotice variant="neutral" message="Borrow, earn, exchange, bridge, transfer, and invest with Frankencoin from one clear place." />
-			</AppPageHeader>
+			<LandingPage />
 
 			{isConnected && address && !borrowingOverview.isLoading && borrowingOverview.hasActiveChallenge ? (
 				<section className="rounded-2xl border border-amber-200 bg-[#fffaf0] p-5 text-slate-800 shadow-sm dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
@@ -444,7 +441,7 @@ export default function MainPage() {
 				</section>
 			) : null}
 
-			<section className="relative overflow-hidden rounded-2xl border border-[#dfd2bb] bg-[#fffaf0] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
+			<section id="desk" className="relative scroll-mt-24 overflow-hidden rounded-2xl border border-[#dfd2bb] bg-[#fffdf8] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 				<div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:radial-gradient(#0b1f3a_0.7px,transparent_0.7px)] [background-size:6px_6px] dark:opacity-[0.04]" />
 				<div className="relative space-y-5">
 					<div className="rounded-xl border border-[#e0d4bd] bg-[#fffdf8]/90 px-4 py-3 dark:border-menu-separator dark:bg-card-content-secondary">
