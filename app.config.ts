@@ -22,11 +22,21 @@ export type ConfigEnv = {
 	wagmiId: string;
 };
 
-// DEV: Loaded with defaults, not needed for now.
-// if (!process.env.NEXT_PUBLIC_WAGMI_ID) throw new Error("Project ID is not available");
-// if (!process.env.NEXT_PUBLIC_RPC_KEY) throw new Error("RPC KEY is not available");
-
 const CANONICAL_PONDER_URL = "https://ponder.frankencoin.com";
+
+const DEV_FALLBACKS = {
+	wagmiId: "3321ad5a4f22083fe6fe82208a4c9ddc",
+	rpc: "dhaKbi2HDlKYW1JaSHm1i_hGkE2gnA5t",
+} as const;
+
+function requirePublicEnv(name: "NEXT_PUBLIC_WAGMI_ID" | "NEXT_PUBLIC_RPC_KEY", devFallback: string): string {
+	const value = process.env[name]?.trim();
+	if (value) return value;
+	if (process.env.NODE_ENV === "production") {
+		throw new Error(`Missing required environment variable: ${name}`);
+	}
+	return devFallback;
+}
 
 const normalizeUrl = (url: string): string => url.replace(/\/+$/, "");
 
@@ -71,8 +81,8 @@ export const CONFIG: ConfigEnv = {
 	ponder: normalizeUrl(process.env.NEXT_PUBLIC_PONDER_URL || CANONICAL_PONDER_URL),
 	canonicalPonder: normalizeUrl(process.env.NEXT_PUBLIC_CANONICAL_PONDER_URL || CANONICAL_PONDER_URL),
 	morphoGraph: process.env.NEXT_PUBLIC_MORPHOGRAPH_URL || "https://blue-api.morpho.org/graphql",
-	wagmiId: process.env.NEXT_PUBLIC_WAGMI_ID || "3321ad5a4f22083fe6fe82208a4c9ddc",
-	rpc: process.env.NEXT_PUBLIC_RPC_KEY || "dhaKbi2HDlKYW1JaSHm1i_hGkE2gnA5t",
+	wagmiId: requirePublicEnv("NEXT_PUBLIC_WAGMI_ID", DEV_FALLBACKS.wagmiId),
+	rpc: requirePublicEnv("NEXT_PUBLIC_RPC_KEY", DEV_FALLBACKS.rpc),
 };
 
 if (process.env.NODE_ENV !== "production" && CONFIG.verbose) {

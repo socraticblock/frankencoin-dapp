@@ -6,7 +6,7 @@ import { arbitrum, avalanche, base, gnosis, mainnet, optimism, polygon, sonic } 
 import { getChainByChainSelector, normalizeAddress } from "@utils";
 
 /** Chains where we show ZCHF balance cards and history chain filter (matches app-supported ZCHF deployments). */
-export const ZCHF_BALANCE_CHAIN_IDS: readonly ChainId[] = [
+export const BALANCE_DISPLAY_CHAIN_IDS: readonly ChainId[] = [
 	mainnet.id as ChainId,
 	base.id as ChainId,
 	polygon.id as ChainId,
@@ -17,12 +17,26 @@ export const ZCHF_BALANCE_CHAIN_IDS: readonly ChainId[] = [
 	sonic.id as ChainId,
 ];
 
+/** @deprecated Use BALANCE_DISPLAY_CHAIN_IDS */
+export const ZCHF_BALANCE_CHAIN_IDS = BALANCE_DISPLAY_CHAIN_IDS;
+
+/** Chains where same-chain ZCHF transfer is offered (token must exist on-chain). */
+export const TRANSFER_SUPPORTED_CHAIN_IDS = BALANCE_DISPLAY_CHAIN_IDS;
+
+/** Chains with tested CCIP bridge lanes for ZCHF (selector + bridge contract). */
+export const BRIDGE_SUPPORTED_CHAIN_IDS = BALANCE_DISPLAY_CHAIN_IDS;
+
 export const MIN_ZCHF_FUNDED_THRESHOLD = parseUnits("0.1", 18);
 export const TRANSFER_REFERENCE_MAX_LENGTH = 120;
 
 export function orderedZchfBalanceChainNames(chains: readonly AppKitNetwork[]): string[] {
 	const byId = new Map(chains.map((c) => [c.id, c.name]));
-	return ZCHF_BALANCE_CHAIN_IDS.map((id) => byId.get(id)).filter((name): name is string => Boolean(name));
+	return BALANCE_DISPLAY_CHAIN_IDS.map((id) => byId.get(id)).filter((name): name is string => Boolean(name));
+}
+
+export function orderedChainNamesForIds(chains: readonly AppKitNetwork[], chainIds: readonly ChainId[]): string[] {
+	const byId = new Map(chains.map((c) => [c.id, c.name]));
+	return chainIds.map((id) => byId.get(id)).filter((name): name is string => Boolean(name));
 }
 
 export function transferIsBridge(item: TransferReferenceQuery): boolean {

@@ -1,6 +1,7 @@
 import AppNotice from "@components/AppNotice";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { needsEthereumUsdtResetApproval } from "./deskSwapApproval";
 import { useAccount, useChainId, useReadContract, useSignTypedData, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
 import type { Address, Hex } from "viem";
@@ -235,6 +236,8 @@ export default function DeskSwapForm() {
 	const [orderStatus, setOrderStatus] = useState<any | null>(null);
 	const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 	const [isCheckingOrderStatus, setIsCheckingOrderStatus] = useState(false);
+	const pendingUsdtExactApproval = useRef(false);
+	const skipPostApprovalRefresh = useRef(false);
 
 	const route = useMemo(() => getDeskRoute(mode, chainId, counterAssetId), [chainId, counterAssetId, mode]);
 	const sellAsset = route?.sellAsset ?? null;
@@ -376,10 +379,19 @@ export default function DeskSwapForm() {
 
 	async function approveSellToken() {
 		if (!sellAsset || !orderToSign) return;
+		const requiredAmount = BigInt(orderToSign.sellAmount);
 		try {
 			setExecutionError(null);
-			await writeContractAsync({ address: sellAsset.address, abi: ERC20_ABI, functionName: "approve", args: [COW_VAULT_RELAYER_ADDRESS, BigInt(orderToSign.sellAmount)], chainId });
+			if (needsEthereumUsdtResetApproval(chainId, sellAsset.address, sellAllowance, requiredAmount)) {
+				pendingUsdtExactApproval.current = true;
+				skipPostApprovalRefresh.current = true;
+				await writeContractAsync({ address: sellAsset.address, abi: ERC20_ABI, functionName: "approve", args: [COW_VAULT_RELAYER_ADDRESS, 0n], chainId });
+				return;
+			}
+			await writeContractAsync({ address: sellAsset.address, abi: ERC20_ABI, functionName: "approve", args: [COW_VAULT_RELAYER_ADDRESS, requiredAmount], chainId });
 		} catch (error) {
+			pendingUsdtExactApproval.current = false;
+			skipPostApprovalRefresh.current = false;
 			setExecutionError(getFriendlyError(error, "Approval failed."));
 		}
 	}
@@ -438,10 +450,27 @@ export default function DeskSwapForm() {
 
 	useEffect(() => {
 		if (!isApprovalConfirmed) return;
+		if (pendingUsdtExactApproval.current) {
+			pendingUsdtExactApproval.current = false;
+			if (!sellAsset || !orderToSign) return;
+			const requiredAmount = BigInt(orderToSign.sellAmount);
+			void writeContractAsync({ address: sellAsset.address, abi: ERC20_ABI, functionName: "approve", args: [COW_VAULT_RELAYER_ADDRESS, requiredAmount], chainId })
+				.catch((error) => setExecutionError(getFriendlyError(error, "Approval failed.")))
+				.finally(() => {
+					skipPostApprovalRefresh.current = false;
+					refetchAllowance();
+				});
+			return;
+		}
+		if (skipPostApprovalRefresh.current) {
+			skipPostApprovalRefresh.current = false;
+			refetchAllowance();
+			return;
+		}
 		setIsRefreshingAfterApproval(true);
 		refetchAllowance();
 		refreshQuote();
-	}, [isApprovalConfirmed, refetchAllowance]);
+	}, [chainId, isApprovalConfirmed, orderToSign, refetchAllowance, sellAsset, writeContractAsync]);
 
 	useEffect(() => {
 		if (!submittedOrderUid || (orderStatus && isOrderTerminal(orderStatus))) return;

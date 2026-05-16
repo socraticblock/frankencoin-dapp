@@ -4,6 +4,7 @@ import type { ChainId } from "@frankencoin/zchf";
 import { COW_EMPTY_APP_DATA, COW_EMPTY_APP_DATA_HASH, getDeskCowChainSlug } from "../../utils/cowDeskOrder";
 import { getDeskRoute, type DeskSwapMode } from "../../utils/exchangeAssets";
 import { fetchWithTimeout, isAbortError, parsePositiveUint256, withOptionalDetails } from "../../utils/apiSecurity";
+import { applyRateLimit, COW_DESK_RATE_LIMITS } from "../../utils/apiRateLimit";
 
 type QuoteBody = {
 	chainId?: number;
@@ -22,6 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		res.status(405).json({ error: "Method not allowed" });
 		return;
 	}
+
+	if (!(await applyRateLimit(req, res, COW_DESK_RATE_LIMITS.quote))) return;
 
 	const body = req.body as QuoteBody;
 	const chainId = Number(body.chainId) as ChainId;

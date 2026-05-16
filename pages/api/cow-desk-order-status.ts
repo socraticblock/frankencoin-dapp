@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDeskCowChainSlug } from "../../utils/cowDeskOrder";
 import { fetchWithTimeout, isAbortError, isCowOrderUid, withOptionalDetails } from "../../utils/apiSecurity";
+import { applyRateLimit, COW_DESK_RATE_LIMITS } from "../../utils/apiRateLimit";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 	res.setHeader("Cache-Control", "no-store");
@@ -10,6 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		res.status(405).json({ error: "Method not allowed" });
 		return;
 	}
+
+	if (!(await applyRateLimit(req, res, COW_DESK_RATE_LIMITS.orderStatus))) return;
 
 	const chainId = Number(req.query.chainId);
 	const orderUid = typeof req.query.orderUid === "string" ? req.query.orderUid : "";

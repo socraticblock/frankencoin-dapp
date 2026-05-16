@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
 import { getDeskCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
 import { fetchWithTimeout, isAbortError, isSafeQuoteId, parsePositiveUint256, withOptionalDetails } from "../../utils/apiSecurity";
+import { applyRateLimit, COW_DESK_RATE_LIMITS } from "../../utils/apiRateLimit";
 
 const ZERO_FEE = "0";
 const MAX_ORDER_VALIDITY_SECONDS = 10 * 60;
@@ -14,6 +15,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		res.status(405).json({ error: "Method not allowed" });
 		return;
 	}
+
+	if (!(await applyRateLimit(req, res, COW_DESK_RATE_LIMITS.order))) return;
 
 	const body = req.body as DeskOrderSubmitRequest;
 	const chainId = Number(body.chainId);

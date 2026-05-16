@@ -1,7 +1,5 @@
 export type MtPelerinTab = "buy" | "sell" | "swap";
 
-export const MTP_DEV_ACTIVATION_KEY = "bec6626e-8913-497d-9835-6e6ae9edb144";
-
 export const MTP_NETWORKS = [
 	{ value: "base_mainnet", label: "Base" },
 	{ value: "mainnet", label: "Ethereum" },
@@ -39,10 +37,8 @@ const MTP_FLOW_DEFAULTS: Record<MtPelerinTab, (network: MtPelerinNetwork) => Rec
 };
 
 export function getMtPelerinActivationKey() {
-	const configuredKey = process.env.NEXT_PUBLIC_MTP_ACTIVATION_KEY?.trim();
-	if (configuredKey) return { key: configuredKey, usingDevFallback: false };
-	if (process.env.NODE_ENV !== "production") return { key: MTP_DEV_ACTIVATION_KEY, usingDevFallback: true };
-	return { key: null, usingDevFallback: false };
+	const key = process.env.NEXT_PUBLIC_MTP_ACTIVATION_KEY?.trim() || null;
+	return { key };
 }
 
 export function buildMtPelerinWidgetUrl(tab: MtPelerinTab, network: MtPelerinNetwork) {

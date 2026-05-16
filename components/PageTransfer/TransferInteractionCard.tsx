@@ -25,9 +25,12 @@ import {
 	getRecipientSafetyNote,
 	getTransferReferenceError,
 	MIN_ZCHF_FUNDED_THRESHOLD,
+	BRIDGE_SUPPORTED_CHAIN_IDS,
+	orderedChainNamesForIds,
 	orderedZchfBalanceChainNames,
 	sanitizeTransferReference,
 	TRANSFER_REFERENCE_MAX_LENGTH,
+	TRANSFER_SUPPORTED_CHAIN_IDS,
 } from "./transferShared";
 
 type TransferMode = "transfer" | "bridge";
@@ -176,8 +179,13 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 	const detailsTitle = isBridge ? "Bridge details" : "Transfer details";
 	const previewTitleMode = isBridge ? "bridge" : "transfer";
 	const amountLabel = isBridge ? `Amount to bridge to ${toChain.name}` : "Amount";
-	const chainSelectNames = useMemo(() => WAGMI_CHAINS.map((c) => c.name), []);
-	const destinationChainNames = useMemo(() => WAGMI_CHAINS.filter((c) => c.id !== fromChainId).map((c) => c.name), [fromChainId]);
+	const transferChainNames = useMemo(() => orderedChainNamesForIds(WAGMI_CHAINS, TRANSFER_SUPPORTED_CHAIN_IDS), []);
+	const bridgeFromChainNames = useMemo(() => orderedChainNamesForIds(WAGMI_CHAINS, BRIDGE_SUPPORTED_CHAIN_IDS), []);
+	const chainSelectNames = useMemo(() => (isBridge ? bridgeFromChainNames : transferChainNames), [bridgeFromChainNames, isBridge, transferChainNames]);
+	const destinationChainNames = useMemo(
+		() => bridgeFromChainNames.filter((name) => WAGMI_CHAINS.find((c) => c.name === name)?.id !== fromChainId),
+		[bridgeFromChainNames, fromChainId]
+	);
 	const useMainnetAction = fromChainId === mainnet.id;
 
 	const handleUseChainAsSource = (chainItemId: ChainId) => {
