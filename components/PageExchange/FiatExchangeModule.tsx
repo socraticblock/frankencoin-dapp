@@ -1,12 +1,12 @@
 import AppNotice from "@components/AppNotice";
 import { useMemo, useState } from "react";
-import { buildMtPelerinWidgetUrl, getMtPelerinActivationKey, MTP_NETWORKS, type MtPelerinNetwork, type MtPelerinTab } from "../../utils/mtpelerin";
+import { buildMtPelerinWidgetUrl, MTP_NETWORKS, type MtPelerinNetwork, type MtPelerinTab } from "../../utils/mtpelerin";
 
 type FiatFlow = "buy" | "sell";
 
 const FIAT_FLOW_COPY: Record<FiatFlow, string> = {
-	buy: "Buy ZCHF with fiat through Mt Pelerin. Base is a good default for most retail users.",
-	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Review fees, limits, and bank details inside the widget.",
+	buy: "Buy ZCHF with fiat through Mt Pelerin.",
+	sell: "Sell ZCHF for fiat through Mt Pelerin.",
 };
 
 export default function FiatExchangeModule() {
