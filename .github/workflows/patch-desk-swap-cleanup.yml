@@ -1,5 +1,6 @@
 name: Patch desk swap cleanup
 
+# Triggered once to apply exact cleanup replacements, then deletes itself.
 on:
   push:
     branches:
