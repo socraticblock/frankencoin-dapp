@@ -3,7 +3,8 @@ import AppNotice from "@components/AppNotice";
 import AppPageHeader from "@components/AppPageHeader";
 import DeskSwapForm from "@components/PageExchange/DeskSwapForm";
 import Head from "next/head";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 import {
 	buildMtPelerinWidgetUrl,
 	getMtPelerinActivationKey,
@@ -35,13 +36,13 @@ const FIAT_FLOW_COPY: Record<FiatFlow, string> = {
 	sell: "Cash out ZCHF back to fiat through Mt Pelerin. Review fees, limits, and bank details inside the widget.",
 };
 
+function parseRoute(value: unknown): ExchangeAction | null {
+	return value === "fiat" || value === "swap" ? value : null;
+}
+
 function ActionCard({ action, active, onClick }: { action: (typeof ACTIONS)[number]; active: boolean; onClick: () => void }) {
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`rounded-2xl border p-4 text-left transition ${active ? "border-[#c4a75f] bg-button-default text-white shadow-sm" : "border-[#e0d4bd] bg-[#fffdf9] text-text-primary hover:border-[#c4a75f] dark:border-menu-separator dark:bg-card-body-primary"}`}
-		>
+		<button type="button" onClick={onClick} className={`rounded-2xl border p-4 text-left transition ${active ? "border-[#c4a75f] bg-button-default text-white shadow-sm" : "border-[#e0d4bd] bg-[#fffdf9] text-text-primary hover:border-[#c4a75f] dark:border-menu-separator dark:bg-card-body-primary"}`}>
 			<p className={`text-xs uppercase tracking-wider ${active ? "text-white/75" : "text-text-secondary"}`}>{action.subtitle}</p>
 			<h2 className="mt-2 text-lg font-semibold">{action.title}</h2>
 			<p className={`mt-2 text-sm leading-6 ${active ? "text-white/85" : "text-text-secondary"}`}>{action.detail}</p>
@@ -121,7 +122,13 @@ function HelperPanel() {
 }
 
 export default function ExchangePage() {
+	const router = useRouter();
 	const [activeAction, setActiveAction] = useState<ExchangeAction>("fiat");
+
+	useEffect(() => {
+		const route = parseRoute(router.query.route);
+		if (route) setActiveAction(route);
+	}, [router.query.route]);
 
 	return (
 		<>
