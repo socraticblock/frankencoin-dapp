@@ -1,24 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
 import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
+import { fetchWithTimeout, isAbortError, isSafeQuoteId, parsePositiveUint256, withOptionalDetails } from "../../utils/apiSecurity";
 
 const ZERO_FEE = "0";
 const MAX_ORDER_VALIDITY_SECONDS = 10 * 60;
-const COW_API_TIMEOUT_MS = 10_000;
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		return await fetch(url, { ...init, signal: controller.signal });
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-function withOptionalDetails(error: string, details: unknown) {
-	return process.env.NODE_ENV === "production" ? { error } : { error, details };
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 	res.setHeader("Cache-Control", "no-store");
@@ -49,9 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	if (order.sellTokenBalance !== "erc20" || order.buyTokenBalance !== "erc20") return res.status(400).json({ error: "Only ERC-20 balance orders are supported." });
 	if (order.signingScheme !== "eip712") return res.status(400).json({ error: "Only EIP-712 signing is supported." });
 	if (order.feeAmount !== ZERO_FEE) return res.status(400).json({ error: "CoW order submissions must use feeAmount 0." });
-	if (typeof order.quoteId !== "number") return res.status(400).json({ error: "Missing quote id." });
-	if (!/^\d+$/.test(order.sellAmount) || BigInt(order.sellAmount) <= 0n) return res.status(400).json({ error: "Invalid sell amount." });
-	if (!/^\d+$/.test(order.buyAmount) || BigInt(order.buyAmount) <= 0n) return res.status(400).json({ error: "Invalid buy amount." });
+	if (!isSafeQuoteId(order.quoteId)) return res.status(400).json({ error: "Invalid quote id." });
+	if (parsePositiveUint256(order.sellAmount) === null) return res.status(400).json({ error: "Invalid sell amount." });
+	if (parsePositiveUint256(order.buyAmount) === null) return res.status(400).json({ error: "Invalid buy amount." });
 	if (!Number.isInteger(order.validTo) || order.validTo <= now) return res.status(400).json({ error: "Quote has expired. Refresh the quote and try again." });
 	if (order.validTo > now + MAX_ORDER_VALIDITY_SECONDS) return res.status(400).json({ error: "Quote expiry is too far in the future. Refresh the quote and try again." });
 	if (typeof order.signature !== "string" || !/^0x[a-fA-F0-9]+$/.test(order.signature)) return res.status(400).json({ error: "Missing or invalid signature." });
@@ -66,8 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		if (!response.ok) return res.status(response.status).json(withOptionalDetails(getCowError(data), data));
 		res.status(200).json({ orderUid: typeof data === "string" ? data : data?.uid ?? data?.orderUid, order: data });
 	} catch (error) {
-		const aborted = error instanceof Error && error.name === "AbortError";
-		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW order submission timed out. Try again." : "Order submission failed." });
+		res.status(isAbortError(error) ? 504 : 500).json({ error: isAbortError(error) ? "CoW order submission timed out. Try again." : "Order submission failed." });
 	}
 }
 
