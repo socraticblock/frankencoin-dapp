@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
 
 const ZERO_FEE = "0";
+const MAX_ORDER_VALIDITY_SECONDS = 10 * 60;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 	if (req.method !== "POST") {
@@ -16,11 +17,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const cowChain = getCowChainSlug(chainId);
 	const route = validateDeskOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });
 	const order = body.order;
+	const now = Math.floor(Date.now() / 1000);
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order submission." });
 	if (!route) return res.status(400).json({ error: "This ZCHF Desk route is not enabled for order submission." });
 	if (!order || typeof order !== "object") return res.status(400).json({ error: "Missing order." });
 	if (!isAddress(order.from) || !isAddress(order.receiver)) return res.status(400).json({ error: "Invalid order owner or receiver." });
+	if (order.receiver.toLowerCase() !== order.from.toLowerCase()) return res.status(400).json({ error: "Receiver must match the connected wallet." });
 	if (!isAddress(order.sellToken) || !isAddress(order.buyToken)) return res.status(400).json({ error: "Invalid order tokens." });
 	if (order.sellToken.toLowerCase() !== route.sellAsset.address.toLowerCase()) return res.status(400).json({ error: "Sell token does not match the selected route." });
 	if (order.buyToken.toLowerCase() !== route.buyAsset.address.toLowerCase()) return res.status(400).json({ error: "Buy token does not match the selected route." });
@@ -32,7 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	if (typeof order.quoteId !== "number") return res.status(400).json({ error: "Missing quote id." });
 	if (!/^\d+$/.test(order.sellAmount) || BigInt(order.sellAmount) <= 0n) return res.status(400).json({ error: "Invalid sell amount." });
 	if (!/^\d+$/.test(order.buyAmount) || BigInt(order.buyAmount) <= 0n) return res.status(400).json({ error: "Invalid buy amount." });
-	if (!Number.isInteger(order.validTo) || order.validTo <= Math.floor(Date.now() / 1000)) return res.status(400).json({ error: "Quote has expired. Refresh the quote and try again." });
+	if (!Number.isInteger(order.validTo) || order.validTo <= now) return res.status(400).json({ error: "Quote has expired. Refresh the quote and try again." });
+	if (order.validTo > now + MAX_ORDER_VALIDITY_SECONDS) return res.status(400).json({ error: "Quote expiry is too far in the future. Refresh the quote and try again." });
 	if (typeof order.signature !== "string" || !order.signature.startsWith("0x")) return res.status(400).json({ error: "Missing signature." });
 
 	try {
