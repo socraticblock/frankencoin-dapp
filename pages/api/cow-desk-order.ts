@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
-import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
+import { getDeskCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
 import { fetchWithTimeout, isAbortError, isSafeQuoteId, parsePositiveUint256, withOptionalDetails } from "../../utils/apiSecurity";
 
 const ZERO_FEE = "0";
@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 	const body = req.body as DeskOrderSubmitRequest;
 	const chainId = Number(body.chainId);
-	const cowChain = getCowChainSlug(chainId);
+	const cowChain = getDeskCowChainSlug(chainId);
 	const route = validateDeskOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });
 	const order = body.order;
 	const now = Math.floor(Date.now() / 1000);

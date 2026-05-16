@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getCowChainSlug } from "../../utils/cowDeskOrder";
+import { getDeskCowChainSlug } from "../../utils/cowDeskOrder";
 import { fetchWithTimeout, isAbortError, isCowOrderUid, withOptionalDetails } from "../../utils/apiSecurity";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 	const chainId = Number(req.query.chainId);
 	const orderUid = typeof req.query.orderUid === "string" ? req.query.orderUid : "";
-	const cowChain = getCowChainSlug(chainId);
+	const cowChain = getDeskCowChainSlug(chainId);
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order tracking." });
 	if (!isCowOrderUid(orderUid)) return res.status(400).json({ error: "Invalid CoW order id." });
