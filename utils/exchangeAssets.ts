@@ -1,6 +1,7 @@
 import { ADDRESS } from "@frankencoin/zchf";
 import type { ChainId } from "@frankencoin/zchf";
 import type { Address } from "viem";
+import { isAddress } from "viem";
 import { base, gnosis, mainnet } from "viem/chains";
 import { getCowZchfAddress } from "./cowswap";
 
@@ -229,7 +230,7 @@ function getWfpsAddress(chainId: ChainId): Address | null {
 	const candidates = ["wfps", "wFPS", "wrappedFPS", "wrappedFps", "fpsWrapper", "FPSWrapper"];
 	for (const key of candidates) {
 		const value = addresses[key];
-		if (typeof value === "string" && value.startsWith("0x")) return value as Address;
+		if (typeof value === "string" && isAddress(value)) return value;
 	}
 	return null;
 }
