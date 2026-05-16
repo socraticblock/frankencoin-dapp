@@ -11,16 +11,12 @@ export default function BridgePage() {
 				<title>Bridge ZCHF | ZCHF Desk</title>
 			</Head>
 
-			<AppPageHeader
-				eyebrow="BRIDGE"
-				title="Bridge ZCHF"
-				description="Move ZCHF you already own from one chain to another."
-			>
+			<AppPageHeader eyebrow="BRIDGE" title="Bridge ZCHF" description="Move ZCHF you already own from one chain to another.">
 				<p className="text-sm text-text-secondary">
 					Bridge does not buy, sell, or exchange ZCHF. It moves existing ZCHF between supported chains using CCIP and may take longer to arrive.
 				</p>
 				<p className="mt-1 text-sm text-text-secondary">
-					Track bridge delivery in <AppLink label="CCIP Explorer" href="https://ccip.chain.link" external={true} className="" />.
+					Track delivery in <AppLink label="CCIP Explorer" href="https://ccip.chain.link" external={true} className="" />.
 				</p>
 			</AppPageHeader>
 
@@ -28,13 +24,13 @@ export default function BridgePage() {
 				<div className="px-2 py-1">
 					<h2 className="text-lg font-semibold text-text-primary">Bridge flow</h2>
 					<p className="mt-1 text-sm leading-6 text-text-secondary">
-						Choose <span className="font-semibold text-text-primary">Bridge</span> below, then select the source chain, destination chain, recipient wallet, and amount.
+						Select the source chain, destination chain, recipient wallet, and amount. The recipient defaults to your connected wallet when possible.
 					</p>
 				</div>
 			</AppCard>
 
 			<div className="md:mt-8">
-				<TransferInteractionCard />
+				<TransferInteractionCard initialMode="bridge" lockedMode="bridge" />
 			</div>
 		</>
 	);
