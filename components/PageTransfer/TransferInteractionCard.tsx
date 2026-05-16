@@ -21,8 +21,13 @@ import ChainLogo from "@components/ChainLogo";
 import ChainBySelect from "@components/Input/ChainBySelect";
 import {
 	bridgeRecipientNote,
+	getRecipientSafetyError,
+	getRecipientSafetyNote,
+	getTransferReferenceError,
 	MIN_ZCHF_FUNDED_THRESHOLD,
 	orderedZchfBalanceChainNames,
+	sanitizeTransferReference,
+	TRANSFER_REFERENCE_MAX_LENGTH,
 } from "./transferShared";
 
 type TransferMode = "transfer" | "bridge";
@@ -62,7 +67,7 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 	const [recipientChain, setRecipientChain] = useState<SupportedChain>(WAGMI_CHAIN);
 
 	const [refToggle, setRefToggle] = useState<boolean>(((router.query.reference as string) ?? "").length > 0);
-	const [reference, setReference] = useState<string>((router.query.reference as string) ?? "");
+	const [reference, setReference] = useState<string>(sanitizeTransferReference((router.query.reference as string) ?? ""));
 	const [amount, setAmount] = useState<bigint>(() => parseAmountQuery(router.query.amount));
 	const [isLoaded, setLoaded] = useState<boolean>(false);
 	const [lastTxHash, setLastTxHash] = useState<Hash | undefined>(undefined);
@@ -70,6 +75,8 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 
 	const ccipFeeState = useTransferCcipFee({ fromChainId, toChainId, recipient, amount });
 	const balanceChainNames = useMemo(() => orderedZchfBalanceChainNames(WAGMI_CHAINS), []);
+	const recipientSafetyError = getRecipientSafetyError(recipient);
+	const referenceError = getTransferReferenceError(reference);
 
 	useEffect(() => {
 		if (!lockedMode) return;
@@ -102,10 +109,7 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 	const fundedBalanceRows = balanceRows.filter((entry) => entry.isLoading || entry.balance >= MIN_ZCHF_FUNDED_THRESHOLD);
 	const displayBalanceRows = showAllChains ? balanceRows : fundedBalanceRows;
 
-	const errorRecipient = () => {
-		if (recipient !== "" && !isAddress(recipient)) return "Invalid recipient address";
-		return "";
-	};
+	const errorRecipient = () => recipientSafetyError ?? "";
 
 	const errorAmount = () => {
 		if (amount > fromBalance) return `No ZCHF available on ${fromChain.name}.`;
@@ -157,7 +161,8 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 		if (wrongChain) return `Switch your wallet to ${fromChain.name}.`;
 		if (!amount || amount <= 0n) return "Enter an amount.";
 		if (!recipient) return "Enter a recipient wallet.";
-		if (!isAddress(recipient)) return "Enter a valid recipient wallet.";
+		if (recipientSafetyError) return recipientSafetyError;
+		if (referenceError) return referenceError;
 		if (fromBalance < amount) return `No ZCHF available on ${fromChain.name}.`;
 		if (isBridge && fromChainId === toChainId) return "Choose a different destination chain to bridge.";
 		if (isBridge && ccipFeeState.isLoading) return "Loading bridge fee.";
@@ -247,12 +252,12 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 
 					<AddressInputChain label="From wallet" disabled={true} value={address} chain={fromChain.name} onChangeChain={onChangeFromChain} />
 
-					<AddressInput label="Recipient wallet" placeholder="0x1a2b3c..." value={recipient} onChange={setRecipient} own={mode === "bridge" ? address : undefined} ownLabel={mode === "bridge" ? "Use connected wallet" : "Own"} error={errorRecipient()} isTextLeft={true} note={isBridge ? bridgeRecipientNote(address, recipient) : undefined} />
+					<AddressInput label="Recipient wallet" placeholder="0x1a2b3c..." value={recipient} onChange={setRecipient} own={mode === "bridge" ? address : undefined} ownLabel={mode === "bridge" ? "Use connected wallet" : "Own"} error={errorRecipient()} isTextLeft={true} note={(isBridge ? bridgeRecipientNote(address, recipient) : undefined) ?? getRecipientSafetyNote(address, recipient)} />
 
 					<TokenInput symbol="ZCHF" label={amountLabel} chain={fromChain.name} value={amount.toString()} digit={18} onChange={onChangeAmount} max={fromBalance} reset={0n} limit={fromBalance} limitDigit={18} limitLabel={`Available on ${fromChain.name}:`} limitCurrency="ZCHF" error={errorAmount()} />
 
 					{refToggle ? (
-						<AddressInput label="Reference / note optional" placeholder="Invoice 123" value={reference} onChange={setReference} isTextLeft={true} reset="" note="Optional note for your transfer history." />
+						<AddressInput label="Reference / note optional" placeholder="Invoice 123" value={reference} onChange={(value) => setReference(sanitizeTransferReference(value))} isTextLeft={true} reset="" note={`${reference.length}/${TRANSFER_REFERENCE_MAX_LENGTH} characters`} />
 					) : (
 						<button type="button" className="text-sm text-text-secondary underline underline-offset-2" onClick={() => setRefToggle(true)}>Add reference / note optional</button>
 					)}
