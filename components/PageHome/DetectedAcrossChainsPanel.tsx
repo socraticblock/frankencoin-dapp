@@ -41,7 +41,9 @@ interface Props {
 	onAction: (action: ChainAction) => void;
 }
 
-type SavingsSort = "interest" | "balance";
+type EarningSort = "interest" | "balance";
+
+const WALLET_ZCHF_DUST_THRESHOLD = 0.01;
 
 export default function DetectedAcrossChainsPanel({
 	rows,
@@ -52,31 +54,31 @@ export default function DetectedAcrossChainsPanel({
 	walletZchfComplete,
 	onAction,
 }: Props) {
-	const [savingsSort, setSavingsSort] = useState<SavingsSort>("interest");
+	const [earningSort, setEarningSort] = useState<EarningSort>("interest");
 
-	const savingsRows = useMemo(() => {
+	const earningRows = useMemo(() => {
 		const active = rows.filter((row) => hasPositive(row.savingsZchf) || hasPositive(row.claimableInterestZchf));
 		const interestDesc = (a: ChainRow, b: ChainRow) => (b.claimableInterestZchf ?? 0) - (a.claimableInterestZchf ?? 0);
 		return [...active].sort((a, b) => {
-			if (savingsSort === "balance") return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0) || interestDesc(a, b);
+			if (earningSort === "balance") return (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0) || interestDesc(a, b);
 			return interestDesc(a, b) || (b.savingsZchf ?? 0) - (a.savingsZchf ?? 0);
 		});
-	}, [rows, savingsSort]);
+	}, [rows, earningSort]);
 
 	const fpsRow = useMemo(() => rows.find((row) => row.chainId === mainnet.id && hasPositive(row.fpsHoldings)), [rows]);
-	const walletRows = useMemo(() => rows.filter((row) => row.walletZchfStatus === "loaded" && hasPositive(row.walletZchf)), [rows]);
+	const walletRows = useMemo(() => rows.filter((row) => row.walletZchfStatus === "loaded" && hasMeaningfulWalletZchf(row.walletZchf)), [rows]);
 	const walletReadFailures = useMemo(() => rows.filter((row) => row.walletZchfStatus === "error"), [rows]);
 	const walletReadsLoading = useMemo(() => rows.some((row) => row.walletZchfStatus === "loading"), [rows]);
-	const totalSavings = savingsRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
+	const totalEarning = earningRows.reduce((acc, row) => acc + (row.savingsZchf ?? 0), 0);
 	const interestSummary = useMemo(() => {
-		if (savingsRows.length === 0) return { label: "Claimable interest", value: "-", positive: false };
-		const values = savingsRows.map((r) => r.claimableInterestZchf ?? 0);
+		if (earningRows.length === 0) return { label: "Ready interest", value: "-", positive: false };
+		const values = earningRows.map((r) => r.claimableInterestZchf ?? 0);
 		const sum = values.reduce<number>((acc, v) => acc + v, 0);
-		return { label: "Claimable interest", value: `${formatCurrency(sum, 2, 2)} ZCHF`, positive: sum > 0 };
-	}, [savingsRows]);
+		return { label: "Ready interest", value: `${formatCurrency(sum, 2, 2)} ZCHF`, positive: sum > 0 };
+	}, [earningRows]);
 	const hasBorrowing = typeof borrowedZchf === "number" && borrowedZchf > 0;
-	const hasActiveAllocations = savingsRows.length > 0 || walletRows.length > 0 || Boolean(fpsRow) || hasBorrowing;
-	const useLedgerLayout = savingsRows.length >= 3;
+	const hasActiveAllocations = earningRows.length > 0 || walletRows.length > 0 || Boolean(fpsRow) || hasBorrowing;
+	const useLedgerLayout = earningRows.length >= 3;
 
 	if (!isConnected) return null;
 
@@ -87,10 +89,10 @@ export default function DetectedAcrossChainsPanel({
 					<h3 className="text-xl font-semibold text-text-primary">Active Allocations</h3>
 					<p className="mt-1 text-sm text-text-secondary">Only active wallet, earning, protocol investment, and borrowing positions are shown here.</p>
 				</div>
-				{savingsRows.length >= 3 ? (
+				{earningRows.length >= 3 ? (
 					<div className="flex rounded-lg border border-[#e0d4bd] bg-card-content-secondary p-1 dark:border-menu-separator">
-						<SortButton active={savingsSort === "interest"} onClick={() => setSavingsSort("interest")}>Sort by interest</SortButton>
-						<SortButton active={savingsSort === "balance"} onClick={() => setSavingsSort("balance")}>Sort by balance</SortButton>
+						<SortButton active={earningSort === "interest"} onClick={() => setEarningSort("interest")}>Sort by interest</SortButton>
+						<SortButton active={earningSort === "balance"} onClick={() => setEarningSort("balance")}>Sort by earning</SortButton>
 					</div>
 				) : null}
 			</div>
@@ -103,7 +105,7 @@ export default function DetectedAcrossChainsPanel({
 			) : useLedgerLayout ? (
 				<div className="mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
 					<div className="self-start">
-						<SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
+						<EarningGroup earningRows={earningRows} totalEarning={totalEarning} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} />
 					</div>
 					<div className="space-y-4">
 						{walletRows.length > 0 || walletReadsLoading || walletReadFailures.length > 0 ? (
@@ -115,7 +117,7 @@ export default function DetectedAcrossChainsPanel({
 				</div>
 			) : (
 				<div className="mt-5 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-					{savingsRows.length > 0 ? <SavingsGroup savingsRows={savingsRows} totalSavings={totalSavings} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} /> : null}
+					{earningRows.length > 0 ? <EarningGroup earningRows={earningRows} totalEarning={totalEarning} interestSummary={interestSummary} dataUnavailable={dataUnavailable} onAction={onAction} /> : null}
 					{walletRows.length > 0 || walletReadsLoading || walletReadFailures.length > 0 ? (
 						<WalletGroup walletRows={walletRows} walletReadsLoading={walletReadsLoading} walletReadFailures={walletReadFailures.length} walletZchfComplete={walletZchfComplete} onAction={onAction} />
 					) : null}
@@ -127,35 +129,35 @@ export default function DetectedAcrossChainsPanel({
 	);
 }
 
-function SavingsGroup({
-	savingsRows,
-	totalSavings,
+function EarningGroup({
+	earningRows,
+	totalEarning,
 	interestSummary,
 	dataUnavailable,
 	onAction,
 }: {
-	savingsRows: ChainRow[];
-	totalSavings: number;
+	earningRows: ChainRow[];
+	totalEarning: number;
 	interestSummary: { label: string; value: string; positive: boolean };
 	dataUnavailable?: boolean;
 	onAction: (action: ChainAction) => void;
 }) {
-	const title = savingsRows.length <= 1 ? "Savings" : `Savings across ${savingsRows.length} chains`;
+	const title = earningRows.length <= 1 ? "Earning" : `Earning across ${earningRows.length} chains`;
 	return (
 		<AllocationGroup
 			title={title}
 			summary={[
-				{ label: "Total savings", value: savingsRows.length > 0 ? `${formatCurrency(totalSavings, 2, 2)} ZCHF` : "-" },
-				{ label: interestSummary.label, value: savingsRows.length > 0 ? interestSummary.value : "-", positive: interestSummary.positive },
+				{ label: "Total earning", value: earningRows.length > 0 ? `${formatCurrency(totalEarning, 2, 2)} ZCHF` : "-" },
+				{ label: interestSummary.label, value: earningRows.length > 0 ? interestSummary.value : "-", positive: interestSummary.positive },
 			]}
 		>
-			{savingsRows.length === 1 ? <p className="mb-2 text-xs text-text-secondary">1 active chain</p> : null}
-			{savingsRows.length > 0 ? (
+			{earningRows.length === 1 ? <p className="mb-2 text-xs text-text-secondary">1 active chain</p> : null}
+			{earningRows.length > 0 ? (
 				<div className="divide-y divide-[#eadfcd] dark:divide-menu-separator">
-					{savingsRows.map((row) => <SavingsAllocationRow key={row.chainId} row={row} onAction={onAction} />)}
+					{earningRows.map((row) => <EarningAllocationRow key={row.chainId} row={row} onAction={onAction} />)}
 				</div>
 			) : (
-				<EmptyAllocation copy={dataUnavailable ? "Savings data is unavailable." : "No active savings positions loaded."} />
+				<EmptyAllocation copy={dataUnavailable ? "Earning data is unavailable." : "No active earning positions loaded."} />
 			)}
 		</AllocationGroup>
 	);
@@ -261,18 +263,18 @@ function AllocationGroup({
 	);
 }
 
-function SavingsAllocationRow({ row, onAction }: { row: ChainRow; onAction: (action: ChainAction) => void }) {
+function EarningAllocationRow({ row, onAction }: { row: ChainRow; onAction: (action: ChainAction) => void }) {
 	const interestDisplay = row.claimableInterestZchf == null ? "—" : `${formatCurrency(row.claimableInterestZchf, 2, 2)} ZCHF`;
-	const savingsDisplay = row.savingsZchf == null ? "—" : `${formatCurrency(row.savingsZchf, 2, 2)} ZCHF`;
+	const earningDisplay = row.savingsZchf == null ? "—" : `${formatCurrency(row.savingsZchf, 2, 2)} ZCHF`;
 	return (
 		<div className="grid grid-cols-1 gap-3 py-3 text-sm md:grid-cols-[1.1fr_1fr_1fr_auto] md:items-center">
 			<ChainCell name={row.name} />
 			<div>
-				<div className="text-xs text-text-secondary">Savings</div>
-				<div className="font-semibold text-text-primary">{savingsDisplay}</div>
+				<div className="text-xs text-text-secondary">Earning balance</div>
+				<div className="font-semibold text-text-primary">{earningDisplay}</div>
 			</div>
 			<div>
-				<div className="text-xs text-text-secondary">Interest</div>
+				<div className="text-xs text-text-secondary">Ready interest</div>
 				<div className={`font-semibold ${row.claimableInterestZchf != null && row.claimableInterestZchf > 0 ? "text-text-success" : "text-text-primary"}`}>{interestDisplay}</div>
 			</div>
 			<RowAction action={{ label: "Manage earning", targetChainId: row.chainId, href: `/savings?chainId=${row.chainId}`, skipNetworkSwitch: true }} onAction={onAction} />
@@ -346,4 +348,8 @@ function EmptyAllocation({ copy }: { copy: string }) {
 
 function hasPositive(value?: number | null) {
 	return typeof value === "number" && value > 0;
+}
+
+function hasMeaningfulWalletZchf(value?: number | null) {
+	return typeof value === "number" && value >= WALLET_ZCHF_DUST_THRESHOLD;
 }
