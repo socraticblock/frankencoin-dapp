@@ -1,4 +1,3 @@
-import AppNotice from "@components/AppNotice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { needsEthereumUsdtResetApproval } from "./deskSwapApproval";
 import { useAccount, useChainId, useReadContract, useSignTypedData, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
@@ -550,6 +549,7 @@ export default function DeskSwapForm() {
 							<option key={chain.chainId} value={chain.chainId}>{chain.label}</option>
 						))}
 					</select>
+					{side === "buy" ? <p className="mt-2 text-xs leading-5 text-text-secondary">Need ZCHF on another chain? Buy here, then use Bridge to move it.</p> : null}
 				</label>
 			</div>
 
@@ -569,8 +569,6 @@ export default function DeskSwapForm() {
 						<p className="mt-2 text-xs text-text-secondary">{isBalanceLoading ? "Loading balance…" : sellAsset && sellBalance !== undefined ? `Balance: ${formatTokenAmount(sellBalance, sellAsset.decimals, BALANCE_DISPLAY_DECIMALS)} ${sellAsset.symbol}` : "Connect your wallet to see balance."}</p>
 						{amountValidation ? <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-200">{amountValidation}</p> : null}
 					</label>
-
-					<AppNotice variant="neutral" message="Need ZCHF on another chain? Buy or swap into ZCHF here, then use Bridge to move it." />
 				</div>
 
 				<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary/70 p-4 dark:border-menu-separator dark:bg-card-content-secondary">
