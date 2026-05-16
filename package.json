@@ -14,6 +14,7 @@
 		"lint": "next lint",
 		"lint:check": "prettier --check .",
 		"lint:fix": "prettier --write .",
+		"check:desk-routes": "node scripts/check-desk-routes.mjs",
 		"test:ankr-rpc": "node scripts/ankr-indexing-rpc-test.mjs",
 		"test:ankr-rpc:local": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test.mjs",
 		"test:ankr-rpc:local:all": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test-all.mjs",
