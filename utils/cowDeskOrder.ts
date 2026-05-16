@@ -89,6 +89,11 @@ export function isDeskExecutionRoute(chainId: number, mode?: DeskSwapMode, count
 	return Boolean(getDeskRoute(mode, chainId as ChainId, counterAssetId));
 }
 
+/** @deprecated Use isDeskExecutionRoute. Kept until DeskSwapForm is split/refactored. */
+export function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
+	return isDeskExecutionRoute(chainId, mode, counterAssetId);
+}
+
 export function validateDeskOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
 	if (!input.mode || !input.counterAssetId || !isDeskExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
 	return getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId);
