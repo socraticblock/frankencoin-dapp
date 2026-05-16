@@ -23,7 +23,7 @@ export const useUserAllowance = (spenderChain: SpenderChain[], account?: Address
 			abi: spender.chainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
 			functionName: "allowance",
 			args: [owner, spender.spender],
-		})),
+		})) as any,
 		query: { enabled: owner !== zeroAddress },
 	});
 
