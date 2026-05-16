@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
-import { getCowChainSlug, validateBaseUsdcZchfOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
+import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";
 
 const ZERO_FEE = "0";
 
@@ -14,11 +14,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const body = req.body as DeskOrderSubmitRequest;
 	const chainId = Number(body.chainId);
 	const cowChain = getCowChainSlug(chainId);
-	const route = validateBaseUsdcZchfOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });
+	const route = validateDeskOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });
 	const order = body.order;
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order submission." });
-	if (!route) return res.status(400).json({ error: "Only Base USDC ↔ ZCHF execution is enabled right now." });
+	if (!route) return res.status(400).json({ error: "This ZCHF Desk route is not enabled for order submission." });
 	if (!order || typeof order !== "object") return res.status(400).json({ error: "Missing order." });
 	if (!isAddress(order.from) || !isAddress(order.receiver)) return res.status(400).json({ error: "Invalid order owner or receiver." });
 	if (!isAddress(order.sellToken) || !isAddress(order.buyToken)) return res.status(400).json({ error: "Invalid order tokens." });
