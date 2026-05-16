@@ -44,6 +44,7 @@ type WalletZchfByChain = {
 };
 
 const PENDING_CHAIN_SWITCH_MS = 90_000;
+const WALLET_ZCHF_DISPLAY_THRESHOLD = 0.01;
 
 export default function MainPage() {
 	const { address, isConnected } = useConnection();
@@ -123,7 +124,8 @@ export default function MainPage() {
 			if (walletZchfReadError || !result || result.status !== "success" || typeof result.result !== "bigint") {
 				return { chainId: chainKey, status: "error", balance: null };
 			}
-			return { chainId: chainKey, status: "loaded", balance: Number(formatUnits(result.result, 18)) };
+			const balance = Number(formatUnits(result.result, 18));
+			return { chainId: chainKey, status: "loaded", balance: balance >= WALLET_ZCHF_DISPLAY_THRESHOLD ? balance : 0 };
 		});
 	}, [address, isConnected, supportedChains, walletZchfLoading, walletZchfReadError, walletZchfResults]);
 
@@ -136,7 +138,8 @@ export default function MainPage() {
 
 	const totalWalletZchf = useMemo(() => {
 		if (!allReadableWalletZchfLoaded) return null;
-		return walletZchfByChain.reduce((acc, entry) => acc + (entry.balance ?? 0), 0);
+		const total = walletZchfByChain.reduce((acc, entry) => acc + (entry.balance ?? 0), 0);
+		return total >= WALLET_ZCHF_DISPLAY_THRESHOLD ? total : 0;
 	}, [allReadableWalletZchfLoaded, walletZchfByChain]);
 
 	const fpsHoldings = useMemo(() => {
@@ -268,7 +271,7 @@ export default function MainPage() {
 			const badges = [
 				...(isCurrent ? ["Current"] : []),
 				...(hasPositive(knownWallet) ? ["Wallet ZCHF"] : []),
-				...(hasPositive(knownSavings) ? ["Savings"] : []),
+				...(hasPositive(knownSavings) ? ["Earning"] : []),
 				...(hasPositive(knownInterest) ? ["Interest"] : []),
 				...(hasPositive(knownFps) ? ["FPS"] : []),
 			];
@@ -332,12 +335,14 @@ export default function MainPage() {
 		const walletCopy = !hasWallet
 			? "Connect wallet to check ZCHF balances."
 			: totalWalletZchf !== null
-			? `You have ${formatCurrency(totalWalletZchf, 2, 2)} ZCHF in your wallet.`
+			? totalWalletZchf > 0
+				? "Combined ZCHF in your wallet across supported chains."
+				: "No wallet ZCHF found across supported chains."
 			: hasWalletZchfErrors
 			? "Loaded wallet ZCHF is partial because some balances could not be loaded."
 			: "Wallet ZCHF is loading.";
 		const earningCopy = !hasWallet
-			? "Connect wallet to view savings."
+			? "Connect wallet to view earning."
 			: totalSavings === null
 			? "Earning data is loading."
 			: totalSavings > 0
@@ -476,7 +481,7 @@ export default function MainPage() {
 						<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
 							{cards.map((card) => <CockpitCard key={card.title} {...card} />)}
 						</div>
-						<p className="mt-3 text-xs text-text-secondary">Totals are based on loaded wallet and protocol data.</p>
+						<p className="mt-3 text-xs text-text-secondary">Overview totals are combined across supported chains. Active Allocations shows the chain details.</p>
 					</div>
 
 					<DetectedAcrossChainsPanel rows={chainRows} currentChainId={currentChainId as ChainId} isConnected={Boolean(isConnected && address)} dataUnavailable={dataUnavailable} borrowedZchf={myBorrowedZchf} walletZchfComplete={allReadableWalletZchfLoaded} onAction={runChainAction} />
