@@ -1,0 +1,67 @@
+name: Apply desk swap polish patch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-desk-swap-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply small DeskSwapForm polish patch
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'components/PageExchange/DeskSwapForm.tsx';
+          let text = fs.readFileSync(path, 'utf8');
+
+          function replaceOnce(from, to) {
+            if (!text.includes(from)) {
+              throw new Error(`Missing expected text:\n${from}`);
+            }
+            text = text.replace(from, to);
+          }
+
+          replaceOnce(
+            'function formatTokenAmount(value: bigint | string, decimals: number, maxFractionDigits = QUOTE_DISPLAY_DECIMALS) {\n\tconst raw = typeof value === "bigint" ? value : BigInt(value);\n\treturn formatDisplayDecimal(formatUnits(raw, decimals), maxFractionDigits);\n}\n',
+            'function formatTokenAmount(value: bigint | string, decimals: number, maxFractionDigits = QUOTE_DISPLAY_DECIMALS) {\n\tconst raw = typeof value === "bigint" ? value : BigInt(value);\n\treturn formatDisplayDecimal(formatUnits(raw, decimals), maxFractionDigits);\n}\n\nfunction shortenIdentifier(value: string, head = 8, tail = 6) {\n\tif (value.length <= head + tail + 3) return value;\n\treturn `${value.slice(0, head)}...${value.slice(-tail)}`;\n}\n\nfunction getCowExplorerUrl(orderUid: string) {\n\treturn `https://explorer.cow.fi/search/${orderUid}`;\n}\n'
+          );
+
+          replaceOnce(
+            'if (lower.includes("sign") || lower.includes("signature") || lower.includes("typed")) return "Signature rejected in wallet.";\n\t\treturn "Approval rejected in wallet.";',
+            'if (lower.includes("sign") || lower.includes("signature") || lower.includes("typed")) return "Trade confirmation was cancelled. No trade was submitted.";\n\t\treturn "Token permission was cancelled. You can try again when ready.";'
+          );
+
+          replaceOnce(
+            'if (!canRequestQuote || !address || !route || !sellAmountBeforeFee) return;',
+            'if (!canRequestQuote || !address || !route || !sellAmountBeforeFee) {\n\t\t\tsetIsRefreshingAfterApproval(false);\n\t\t\treturn;\n\t\t}'
+          );
+
+          replaceOnce(
+            '<p className="font-semibold text-text-primary">{isOrderCompleted ? "Trade completed" : "Order submitted"}</p>\n\t\t\t\t\t\t\t<p className="mt-1 break-all">Order id: {submittedOrderUid}</p>\n\t\t\t\t\t\t\t<p className="mt-1">\n\t\t\t\t\t\t\t\tStatus: {isCheckingOrderStatus ? "checking..." : orderStatusLabel ?? "submitted"}\n\t\t\t\t\t\t\t</p>\n\t\t\t\t\t\t\t{isOrderExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Order expired. Refresh the quote and try again.</p> : null}',
+            '<p className="font-semibold text-text-primary">{isOrderCompleted ? "Trade completed" : "Waiting for settlement"}</p>\n\t\t\t\t\t\t\t<p className="mt-1">\n\t\t\t\t\t\t\t\t{isOrderCompleted ? `You can find your ${route?.buyAsset.symbol ?? "tokens"} in your wallet.` : "CoW solvers are working on your trade."}\n\t\t\t\t\t\t\t</p>\n\t\t\t\t\t\t\t<p className="mt-1" title={submittedOrderUid}>Order ID: {shortenIdentifier(submittedOrderUid)}</p>\n\t\t\t\t\t\t\t<p className="mt-1">\n\t\t\t\t\t\t\t\tStatus: {isCheckingOrderStatus ? "checking..." : orderStatusLabel ?? "submitted"}\n\t\t\t\t\t\t\t</p>\n\t\t\t\t\t\t\t<a\n\t\t\t\t\t\t\t\thref={getCowExplorerUrl(submittedOrderUid)}\n\t\t\t\t\t\t\t\ttarget="_blank"\n\t\t\t\t\t\t\t\trel="noreferrer"\n\t\t\t\t\t\t\t\tclassName="mt-2 inline-flex text-sm font-semibold text-text-primary underline decoration-[#c4a75f] underline-offset-4 hover:opacity-80"\n\t\t\t\t\t\t\t>\n\t\t\t\t\t\t\t\tOpen in CoW Explorer\n\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t{isOrderExpired ? <p className="mt-2 font-medium text-amber-700 dark:text-amber-200">Order expired. Refresh the quote and try again.</p> : null}'
+          );
+
+          fs.writeFileSync(path, text);
+          fs.rmSync('.github/workflows/apply-desk-swap-polish.yml', { force: true });
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add components/PageExchange/DeskSwapForm.tsx .github/workflows/apply-desk-swap-polish.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Polish desk swap settlement states"
+            git push
+          fi
