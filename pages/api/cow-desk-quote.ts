@@ -3,6 +3,7 @@ import { isAddress } from "viem";
 import type { ChainId } from "@frankencoin/zchf";
 import { COW_EMPTY_APP_DATA, COW_EMPTY_APP_DATA_HASH, getCowChainSlug } from "../../utils/cowDeskOrder";
 import { getDeskRoute, type DeskSwapMode } from "../../utils/exchangeAssets";
+import { fetchWithTimeout, isAbortError, parsePositiveUint256, withOptionalDetails } from "../../utils/apiSecurity";
 
 type QuoteBody = {
 	chainId?: number;
@@ -12,22 +13,6 @@ type QuoteBody = {
 	from?: string;
 	receiver?: string;
 };
-
-const COW_API_TIMEOUT_MS = 10_000;
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		return await fetch(url, { ...init, signal: controller.signal });
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-function withOptionalDetails(error: string, details: unknown) {
-	return process.env.NODE_ENV === "production" ? { error } : { error, details };
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 	res.setHeader("Cache-Control", "no-store");
@@ -49,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk quotes." });
 	if (!mode || !counterAssetId) return res.status(400).json({ error: "Missing route selection." });
-	if (!sellAmountBeforeFee || !/^\d+$/.test(sellAmountBeforeFee) || BigInt(sellAmountBeforeFee) <= 0n) return res.status(400).json({ error: "Enter a valid amount." });
+	if (parsePositiveUint256(sellAmountBeforeFee) === null) return res.status(400).json({ error: "Enter a valid amount." });
 	if (!from || !receiver || !isAddress(from) || !isAddress(receiver)) return res.status(400).json({ error: "Connect a valid wallet before requesting a quote." });
 	if (receiver.toLowerCase() !== from.toLowerCase()) return res.status(400).json({ error: "Receiver must match the connected wallet." });
 
@@ -90,8 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 			id: data?.id,
 		});
 	} catch (error) {
-		const aborted = error instanceof Error && error.name === "AbortError";
-		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW quote request timed out. Try again." : "Quote request failed." });
+		res.status(isAbortError(error) ? 504 : 500).json({ error: isAbortError(error) ? "CoW quote request timed out. Try again." : "Quote request failed." });
 	}
 }
 
