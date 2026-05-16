@@ -13,7 +13,25 @@ type QuoteBody = {
 	receiver?: string;
 };
 
+const COW_API_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetch(url, { ...init, signal: controller.signal });
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function withOptionalDetails(error: string, details: unknown) {
+	return process.env.NODE_ENV === "production" ? { error } : { error, details };
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+	res.setHeader("Cache-Control", "no-store");
+
 	if (req.method !== "POST") {
 		res.setHeader("Allow", "POST");
 		res.status(405).json({ error: "Method not allowed" });
@@ -31,21 +49,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk quotes." });
 	if (!mode || !counterAssetId) return res.status(400).json({ error: "Missing route selection." });
-	if (!sellAmountBeforeFee || !/^\d+$/.test(sellAmountBeforeFee) || BigInt(sellAmountBeforeFee) <= 0n) {
-		return res.status(400).json({ error: "Enter a valid amount." });
-	}
-	if (!from || !receiver || !isAddress(from) || !isAddress(receiver)) {
-		return res.status(400).json({ error: "Connect a valid wallet before requesting a quote." });
-	}
-	if (receiver.toLowerCase() !== from.toLowerCase()) {
-		return res.status(400).json({ error: "Receiver must match the connected wallet." });
-	}
+	if (!sellAmountBeforeFee || !/^\d+$/.test(sellAmountBeforeFee) || BigInt(sellAmountBeforeFee) <= 0n) return res.status(400).json({ error: "Enter a valid amount." });
+	if (!from || !receiver || !isAddress(from) || !isAddress(receiver)) return res.status(400).json({ error: "Connect a valid wallet before requesting a quote." });
+	if (receiver.toLowerCase() !== from.toLowerCase()) return res.status(400).json({ error: "Receiver must match the connected wallet." });
 
 	const route = getDeskRoute(mode, chainId, counterAssetId);
 	if (!route) return res.status(400).json({ error: "This route is not allowed in ZCHF Desk." });
 
 	try {
-		const quote = await fetch(`https://api.cow.fi/${cowChain}/api/v1/quote`, {
+		const quote = await fetchWithTimeout(`https://api.cow.fi/${cowChain}/api/v1/quote`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json", Accept: "application/json" },
 			body: JSON.stringify({
@@ -66,15 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		});
 
 		const data = await quote.json().catch(() => null);
+		if (!quote.ok) return res.status(quote.status).json(withOptionalDetails(getCowError(data), data));
 
-		if (!quote.ok) {
-			return res.status(quote.status).json({
-				error: getCowError(data),
-				details: data,
-			});
-		}
-
-		res.setHeader("Cache-Control", "no-store");
 		res.status(200).json({
 			chainId,
 			mode,
@@ -85,9 +90,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 			id: data?.id,
 		});
 	} catch (error) {
-		res.status(500).json({
-			error: error instanceof Error ? error.message : "Quote request failed.",
-		});
+		const aborted = error instanceof Error && error.name === "AbortError";
+		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW quote request timed out. Try again." : "Quote request failed." });
 	}
 }
 
