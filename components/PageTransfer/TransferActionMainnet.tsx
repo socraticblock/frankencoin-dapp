@@ -1,12 +1,12 @@
 import { Dispatch, SetStateAction, useState } from "react";
 import { waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { WAGMI_CHAINS, WAGMI_CONFIG } from "../../app.config";
+import { WAGMI_CONFIG } from "../../app.config";
 import { toast } from "react-toastify";
 import { formatCurrency, shortenAddress } from "@utils";
 import { renderErrorTxToast, TxToast } from "@components/TxToast";
 import { useConnection } from "wagmi";
 import AppButton from "@components/AppButton";
-import { Address, formatUnits, Hash, maxUint256 } from "viem";
+import { Address, formatUnits, Hash } from "viem";
 import { ADDRESS, ChainIdSide, FrankencoinABI, TransferReferenceABI } from "@frankencoin/zchf";
 import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 import { track } from "@hooks";
@@ -46,12 +46,13 @@ export default function TransferActionMainnet({
 
 	const userAllowance = useUserAllowance([{ spender: ADDRESS[mainnet.id].transferReference, chainId: mainnet.id }]);
 	const allowance = userAllowance[0].allowance;
-
 	const isSameChain = recipientChain.name.toLowerCase() == mainnet.name.toLowerCase();
+	const needsReferenceContract = !isSameChain || addReference;
+	const needsApproval = needsReferenceContract && allowance < amount;
 
 	const handleApprove = async (e: any) => {
 		e.preventDefault();
-		if (!address) return;
+		if (!address || amount <= 0n) return;
 
 		try {
 			setApproving(true);
@@ -61,13 +62,13 @@ export default function TransferActionMainnet({
 				chainId: mainnet.id,
 				abi: FrankencoinABI,
 				functionName: "approve",
-				args: [ADDRESS[mainnet.id].transferReference, maxUint256],
+				args: [ADDRESS[mainnet.id].transferReference, amount],
 			});
 
 			const toastContent = [
 				{
 					title: "Amount:",
-					value: "infinite ZCHF",
+					value: `${formatCurrency(formatUnits(amount, 18))} ZCHF`,
 				},
 				{
 					title: "Spender: ",
@@ -81,10 +82,10 @@ export default function TransferActionMainnet({
 
 			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: approveWriteHash, confirmations: 1 }), {
 				pending: {
-					render: <TxToast title={`Approving ZCHF`} rows={toastContent} />,
+					render: <TxToast title={`Approving exact ZCHF amount`} rows={toastContent} />,
 				},
 				success: {
-					render: <TxToast title={`Successfully Approved ZCHF`} rows={toastContent} />,
+					render: <TxToast title={`Successfully approved exact ZCHF amount`} rows={toastContent} />,
 				},
 			});
 		} catch (error) {
@@ -104,7 +105,6 @@ export default function TransferActionMainnet({
 			let writeHash: Hash;
 
 			if (isSameChain && addReference) {
-				// transfer with reference
 				writeHash = await writeContract(WAGMI_CONFIG, {
 					address: ADDRESS[mainnet.id].transferReference,
 					chainId: mainnet.id,
@@ -113,7 +113,6 @@ export default function TransferActionMainnet({
 					args: [recipient, amount, reference],
 				});
 			} else if (isSameChain && !addReference) {
-				// normal frankencoin transfer
 				writeHash = await writeContract(WAGMI_CONFIG, {
 					address: ADDRESS[mainnet.id].frankencoin,
 					chainId: mainnet.id,
@@ -122,7 +121,6 @@ export default function TransferActionMainnet({
 					args: [recipient, amount],
 				});
 			} else {
-				// from mainnet to sidechain with reference
 				writeHash = await writeContract(WAGMI_CONFIG, {
 					address: ADDRESS[mainnet.id].transferReference,
 					chainId: mainnet.id,
@@ -134,7 +132,7 @@ export default function TransferActionMainnet({
 						amount,
 						addReference ? reference : "",
 					],
-					value: (ccipFee * 12n) / 10n, // @dev add 20% more. Low level call will return unused amount.
+					value: (ccipFee * 12n) / 10n,
 				});
 			}
 
@@ -178,9 +176,9 @@ export default function TransferActionMainnet({
 
 	return (
 		<GuardSupportedChain chain={mainnet}>
-			{allowance < amount ? (
+			{needsApproval ? (
 				<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isApproving} onClick={(e) => handleApprove(e)}>
-					Approve
+					Approve exact amount
 				</AppButton>
 			) : (
 				<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
