@@ -1,7 +1,6 @@
 import Link from "next/link";
 import WalletConnect from "./WalletConnect";
 import NavButton from "./NavButton";
-import { CONFIG } from "../app.config";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import ThemeToggle from "./ThemeToggle";
@@ -16,6 +15,7 @@ type NavDropdownProps = {
 
 const MAIN_ITEMS: NavItem[] = [
 	{ to: "/", name: "Home" },
+	{ to: "/desk", name: "Desk" },
 	{ to: "/mint", name: "Borrow" },
 	{ to: "/equity", name: "Invest" },
 	{ to: "/mypositions", name: "Portfolio" },
@@ -125,16 +125,18 @@ export default function Navbar() {
 			<div className={`fixed top-0 left-0 right-0 z-20 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${isHidden ? "-translate-y-full" : "translate-y-0"}`}>
 				<header className="relative grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
 					<div className="relative z-20 flex items-center md:pl-4">
-						<Link href={CONFIG.landing} data-umami-event="nav_home">
+						<Link href="/" data-umami-event="nav_home" className="flex items-center gap-3">
 							<picture><img className="h-9 transition" src="/coin/zchf.png" alt="Logo" /></picture>
+							<span className="hidden text-xl font-black tracking-tight text-menu-text md:inline">FRANKENCOIN</span>
 						</Link>
 					</div>
 
 					<div className="relative z-10 flex min-w-0 justify-center">
 						<ul className="hidden md:flex flex-wrap justify-center gap-1 lg:gap-2">
 							<li><NavButton to="/" name="Home" /></li>
+							<li><NavButton to="/desk" name="Desk" /></li>
 							<li><NavDropdown label="ZCHF" items={ZCHF_ITEMS} /></li>
-							{MAIN_ITEMS.slice(1).map((item) => (
+							{MAIN_ITEMS.slice(2).map((item) => (
 								<li key={item.to}><NavButton to={item.to} name={item.name} /></li>
 							))}
 							<li><NavDropdown label="Advanced" items={ADVANCED_ITEMS} /></li>
@@ -160,9 +162,9 @@ export default function Navbar() {
 					</button>
 					<div className="mt-12 mb-5"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
 					<div className="grid gap-5" onClick={() => setIsNavBarOpen(false)}>
-						<MobileNavSection items={[MAIN_ITEMS[0]]} />
+						<MobileNavSection items={MAIN_ITEMS.slice(0, 2)} />
 						<MobileNavSection title="ZCHF" items={ZCHF_ITEMS} />
-						<MobileNavSection title="Protocol" items={MAIN_ITEMS.slice(1)} />
+						<MobileNavSection title="Protocol" items={MAIN_ITEMS.slice(2)} />
 						<MobileNavSection title="Advanced" items={ADVANCED_ITEMS} />
 					</div>
 				</div>
