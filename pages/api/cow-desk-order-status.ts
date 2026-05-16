@@ -1,7 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getCowChainSlug } from "../../utils/cowDeskOrder";
 
+const COW_ORDER_UID_RE = /^0x[a-fA-F0-9]{112}$/;
+const COW_API_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetch(url, { ...init, signal: controller.signal });
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function withOptionalDetails(error: string, details: unknown) {
+	return process.env.NODE_ENV === "production" ? { error } : { error, details };
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+	res.setHeader("Cache-Control", "no-store");
+
 	if (req.method !== "GET") {
 		res.setHeader("Allow", "GET");
 		res.status(405).json({ error: "Method not allowed" });
@@ -13,14 +32,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const cowChain = getCowChainSlug(chainId);
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order tracking." });
-	if (!orderUid || !orderUid.startsWith("0x")) return res.status(400).json({ error: "Missing order uid." });
+	if (!COW_ORDER_UID_RE.test(orderUid)) return res.status(400).json({ error: "Invalid CoW order id." });
 
 	try {
 		const [orderResponse, statusResponse] = await Promise.all([
-			fetch(`https://api.cow.fi/${cowChain}/api/v1/orders/${orderUid}`, {
+			fetchWithTimeout(`https://api.cow.fi/${cowChain}/api/v1/orders/${orderUid}`, {
 				headers: { Accept: "application/json" },
 			}),
-			fetch(`https://api.cow.fi/${cowChain}/api/v1/orders/${orderUid}/status`, {
+			fetchWithTimeout(`https://api.cow.fi/${cowChain}/api/v1/orders/${orderUid}/status`, {
 				headers: { Accept: "application/json" },
 			}),
 		]);
@@ -28,14 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 		const order = await orderResponse.json().catch(() => null);
 		const status = await statusResponse.json().catch(() => null);
 
-		if (!orderResponse.ok) {
-			return res.status(orderResponse.status).json({
-				error: getCowError(order),
-				details: order,
-			});
-		}
+		if (!orderResponse.ok) return res.status(orderResponse.status).json(withOptionalDetails(getCowError(order), order));
 
-		res.setHeader("Cache-Control", "no-store");
 		res.status(200).json({
 			orderUid,
 			order,
@@ -43,7 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 			statusError: statusResponse.ok ? null : getCowError(status),
 		});
 	} catch (error) {
-		res.status(500).json({ error: error instanceof Error ? error.message : "Order status request failed." });
+		const aborted = error instanceof Error && error.name === "AbortError";
+		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW order status request timed out. Try again." : "Order status request failed." });
 	}
 }
 
