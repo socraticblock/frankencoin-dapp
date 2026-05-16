@@ -103,16 +103,16 @@ export default function Navbar() {
 
 	return (
 		<>
-			<div className={`fixed top-0 left-0 right-0 z-10 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${isHidden ? "-translate-y-full" : "translate-y-0"}`}>
-				<header className="grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
-					<div className="flex items-center md:pl-4">
+			<div className={`fixed top-0 left-0 right-0 z-20 backdrop-blur border-b-2 border-menu-separator/80 bg-menu-back/80 transition-transform duration-300 ${isHidden ? "-translate-y-full" : "translate-y-0"}`}>
+				<header className="relative grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
+					<div className="relative z-20 flex items-center md:pl-4">
 						<Link href={CONFIG.landing} data-umami-event="nav_home">
 							<picture><img className="h-9 transition" src="/coin/zchf.png" alt="Logo" /></picture>
 						</Link>
 					</div>
 
-					<div className="flex justify-center">
-						<ul className="hidden md:flex gap-1 lg:gap-2">
+					<div className="relative z-10 flex min-w-0 justify-center">
+						<ul className="hidden md:flex flex-wrap justify-center gap-1 lg:gap-2">
 							{MAIN_ITEMS.map((item) => (
 								<li key={item.to}><NavButton to={item.to} name={item.name} /></li>
 							))}
@@ -121,9 +121,9 @@ export default function Navbar() {
 						<div className="md:hidden"><WalletConnect /></div>
 					</div>
 
-					<div className="flex justify-end items-center gap-2">
-						<div className="hidden md:flex"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
-						<div className="hidden md:flex"><WalletConnect /></div>
+					<div className="relative z-30 flex justify-end items-center gap-2 pointer-events-auto">
+						<div className="hidden md:flex pointer-events-auto"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+						<div className="hidden md:flex pointer-events-auto"><WalletConnect /></div>
 						<button onClick={() => setIsNavBarOpen(true)} className="md:hidden p-2 cursor-pointer flex items-center">
 							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-7 h-7"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
 						</button>
