@@ -35,6 +35,10 @@ function fallbackDestination(source: ChainId): ChainId {
 	return (WAGMI_CHAINS.find((chain) => chain.id !== source)?.id ?? source) as ChainId;
 }
 
+function parseAmountQuery(value: unknown): bigint {
+	return typeof value === "string" && /^\d+$/.test(value) ? BigInt(value) : 0n;
+}
+
 function ModeTabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
 	return (
 		<button type="button" onClick={onClick} className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${active ? MODE_TAB_ACTIVE : MODE_TAB_INACTIVE}`}>
@@ -59,12 +63,12 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 
 	const [refToggle, setRefToggle] = useState<boolean>(((router.query.reference as string) ?? "").length > 0);
 	const [reference, setReference] = useState<string>((router.query.reference as string) ?? "");
-	const [amount, setAmount] = useState<bigint>(BigInt((router.query.amount as string) ?? "0"));
+	const [amount, setAmount] = useState<bigint>(() => parseAmountQuery(router.query.amount));
 	const [isLoaded, setLoaded] = useState<boolean>(false);
 	const [lastTxHash, setLastTxHash] = useState<Hash | undefined>(undefined);
 	const [showAllChains, setShowAllChains] = useState<boolean>(false);
 
-	const ccipFee = useTransferCcipFee({ fromChainId, toChainId, recipient, amount });
+	const ccipFeeState = useTransferCcipFee({ fromChainId, toChainId, recipient, amount });
 	const balanceChainNames = useMemo(() => orderedZchfBalanceChainNames(WAGMI_CHAINS), []);
 
 	useEffect(() => {
@@ -156,6 +160,8 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 		if (!isAddress(recipient)) return "Enter a valid recipient wallet.";
 		if (fromBalance < amount) return `No ZCHF available on ${fromChain.name}.`;
 		if (isBridge && fromChainId === toChainId) return "Choose a different destination chain to bridge.";
+		if (isBridge && ccipFeeState.isLoading) return "Loading bridge fee.";
+		if (isBridge && !ccipFeeState.isReady) return ccipFeeState.error ?? "Bridge fee is not ready yet.";
 		return null;
 	};
 
@@ -252,14 +258,14 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 					)}
 
 					{useMainnetAction ? (
-						<TransferActionMainnet recipientChain={recipientChain} recipient={recipient as Address} ccipFee={ccipFee} addReference={refToggle} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
+						<TransferActionMainnet recipientChain={recipientChain} recipient={recipient as Address} ccipFee={ccipFeeState.fee} addReference={refToggle} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
 					) : (
-						<TransferActionSidechain recipientChain={recipientChain} addReference={refToggle} ccipFee={ccipFee} recipient={recipient as Address} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
+						<TransferActionSidechain recipientChain={recipientChain} addReference={refToggle} ccipFee={ccipFeeState.fee} recipient={recipient as Address} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
 					)}
 				</div>
 			</AppCard>
 
-			<TransferDetailsCard mode={previewTitleMode} amount={amount} senderAddress={address} recipientAddress={recipient as Address} fromChain={fromChain} toChain={toChain} ccipFee={ccipFee} isSubmitted={isLoaded} lastTxHash={lastTxHash} disabledReason={disabledReason} />
+			<TransferDetailsCard mode={previewTitleMode} amount={amount} senderAddress={address} recipientAddress={recipient as Address} fromChain={fromChain} toChain={toChain} ccipFee={ccipFeeState.fee} isSubmitted={isLoaded} lastTxHash={lastTxHash} disabledReason={disabledReason} />
 		</section>
 	);
 }
