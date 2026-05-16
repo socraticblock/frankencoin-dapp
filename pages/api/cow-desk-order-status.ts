@@ -1,22 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getCowChainSlug } from "../../utils/cowDeskOrder";
-
-const COW_ORDER_UID_RE = /^0x[a-fA-F0-9]{112}$/;
-const COW_API_TIMEOUT_MS = 10_000;
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		return await fetch(url, { ...init, signal: controller.signal });
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-function withOptionalDetails(error: string, details: unknown) {
-	return process.env.NODE_ENV === "production" ? { error } : { error, details };
-}
+import { fetchWithTimeout, isAbortError, isCowOrderUid, withOptionalDetails } from "../../utils/apiSecurity";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 	res.setHeader("Cache-Control", "no-store");
@@ -32,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const cowChain = getCowChainSlug(chainId);
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk order tracking." });
-	if (!COW_ORDER_UID_RE.test(orderUid)) return res.status(400).json({ error: "Invalid CoW order id." });
+	if (!isCowOrderUid(orderUid)) return res.status(400).json({ error: "Invalid CoW order id." });
 
 	try {
 		const [orderResponse, statusResponse] = await Promise.all([
@@ -56,8 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 			statusError: statusResponse.ok ? null : getCowError(status),
 		});
 	} catch (error) {
-		const aborted = error instanceof Error && error.name === "AbortError";
-		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW order status request timed out. Try again." : "Order status request failed." });
+		res.status(isAbortError(error) ? 504 : 500).json({ error: isAbortError(error) ? "CoW order status request timed out. Try again." : "Order status request failed." });
 	}
 }
 
