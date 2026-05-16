@@ -89,12 +89,9 @@ export function isDeskExecutionRoute(chainId: number, mode?: DeskSwapMode, count
 	return Boolean(getDeskRoute(mode, chainId as ChainId, counterAssetId));
 }
 
-export function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
-	return isDeskExecutionRoute(chainId, mode, counterAssetId);
-}
-
-export function getDeskExecutionLabel({ sellSymbol, buySymbol }: { sellSymbol: string; buySymbol: string }) {
-	return `Approve ${sellSymbol} to be sold for ${buySymbol}`;
+export function validateDeskOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
+	if (!input.mode || !input.counterAssetId || !isDeskExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
+	return getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId);
 }
 
 export function buildDeskOrderToSign({
@@ -153,15 +150,6 @@ export function buildDeskOrderSubmission({
 		from,
 		quoteId: quote.id,
 	};
-}
-
-export function validateDeskOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
-	if (!input.mode || !input.counterAssetId || !isDeskExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
-	return getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId);
-}
-
-export function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
-	return validateDeskOrderRoute(input);
 }
 
 export async function submitDeskOrder(input: DeskOrderSubmitRequest): Promise<DeskOrderSubmitResponse> {
