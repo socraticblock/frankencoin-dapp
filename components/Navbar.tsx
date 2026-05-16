@@ -88,12 +88,22 @@ export function NavItems({ items }: { items: NavItem[] }) {
 	);
 }
 
+function MobileNavSection({ title, items }: { title?: string; items: NavItem[] }) {
+	return (
+		<section className="grid gap-2">
+			{title ? <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">{title}</p> : null}
+			<menu className="grid grid-cols-1 gap-1">
+				<NavItems items={items} />
+			</menu>
+		</section>
+	);
+}
+
 export default function Navbar() {
 	const [isNavBarOpen, setIsNavBarOpen] = useState(false);
 	const [isHidden, setIsHidden] = useState(false);
 	const lastScrollY = useRef(0);
 	const { theme, toggleTheme } = useThemeMode();
-	const mobileItems = [...MAIN_ITEMS.slice(0, 1), ...ZCHF_ITEMS, ...MAIN_ITEMS.slice(1), ...ADVANCED_ITEMS];
 
 	useEffect(() => {
 		const handleScroll = () => {
@@ -143,13 +153,18 @@ export default function Navbar() {
 			</div>
 
 			<div className={`md:hidden fixed inset-0 z-20 h-screen w-full bg-black/70 backdrop-blur-sm transition-opacity ${isNavBarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setIsNavBarOpen(false)} />
-			<div className={`md:hidden fixed top-0 right-0 z-30 h-screen w-64 overflow-y-auto transition-transform duration-200 ${isNavBarOpen ? "translate-x-0" : "translate-x-full"}`}>
-				<div className="min-h-full w-full bg-menu-back backdrop-blur px-[16px] pt-[20px] relative">
+			<div className={`md:hidden fixed top-0 right-0 z-30 h-screen w-72 max-w-[86vw] overflow-y-auto transition-transform duration-200 ${isNavBarOpen ? "translate-x-0" : "translate-x-full"}`}>
+				<div className="min-h-full w-full bg-menu-back backdrop-blur px-[16px] pt-[20px] pb-6 relative">
 					<button className="absolute top-0 right-0 p-6" onClick={() => setIsNavBarOpen(false)}>
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 					</button>
-					<div className="mt-12 mb-3"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
-					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}><NavItems items={mobileItems} /></menu>
+					<div className="mt-12 mb-5"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+					<div className="grid gap-5" onClick={() => setIsNavBarOpen(false)}>
+						<MobileNavSection items={[MAIN_ITEMS[0]]} />
+						<MobileNavSection title="ZCHF" items={ZCHF_ITEMS} />
+						<MobileNavSection title="Protocol" items={MAIN_ITEMS.slice(1)} />
+						<MobileNavSection title="Advanced" items={ADVANCED_ITEMS} />
+					</div>
 				</div>
 			</div>
 		</>
