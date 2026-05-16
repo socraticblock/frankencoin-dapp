@@ -14,7 +14,7 @@ import {
 	buildDeskOrderSubmission,
 	buildDeskOrderToSign,
 	getCowOrderDomain,
-	isBaseUsdcToZchfExecutionRoute,
+	isDeskExecutionRoute,
 	requestDeskOrderStatus,
 	submitDeskOrder,
 } from "../../utils/cowDeskOrder";
@@ -194,6 +194,10 @@ function isOrderExpiredOrCancelled(value: any) {
 	return status === "expired" || status === "cancelled" || status === "canceled";
 }
 
+function isOrderTerminal(value: any) {
+	return isOrderComplete(value) || isOrderExpiredOrCancelled(value);
+}
+
 function getFriendlyError(error: unknown, fallback: string) {
 	console.error(error);
 	const message = error instanceof Error ? error.message : String(error ?? "");
@@ -310,7 +314,7 @@ export default function DeskSwapForm() {
 	const [isCheckingOrderStatus, setIsCheckingOrderStatus] = useState(false);
 	const route = useMemo(() => getDeskRoute(mode, chainId, counterAssetId), [chainId, counterAssetId, mode]);
 	const sellAsset = route?.sellAsset ?? null;
-	const isExecutionRoute = Boolean(route && isBaseUsdcToZchfExecutionRoute(chainId, mode, counterAssetId));
+	const isExecutionRoute = Boolean(route && isDeskExecutionRoute(chainId, mode, counterAssetId));
 	const selectedChain = getDeskChain(chainId);
 	const allowedChains = getAllowedDeskChainsForMode(mode);
 	const selectedCounterAsset = route?.counterAsset ?? counterAssets.find((asset) => asset.id === counterAssetId) ?? null;
@@ -495,7 +499,7 @@ export default function DeskSwapForm() {
 		if (isQuoteLoading) return { actionTitle: "Checking route…", actionDescription: "Looking for a live CoW quote." };
 		if (quoteError) return { actionTitle: "Try again", actionDescription: "Refresh the quote or try another amount." };
 		if (!estimatedReceive) return { actionTitle: "Checking route…", actionDescription: "Looking for a live CoW quote." };
-		if (!isExecutionRoute) return { actionTitle: "Quote only for this route", actionDescription: "Base USDC ↔ ZCHF can trade now. Other routes are quote-only for the moment." };
+		if (!isExecutionRoute) return { actionTitle: "Quote only for this route", actionDescription: "This route is not enabled for execution yet." };
 		if (isQuoteExpired) return { actionTitle: "Refresh quote", actionDescription: "This quote is no longer active." };
 		if (isOrderCompleted) return { actionTitle: "Trade completed", actionDescription: `You can find your ${route.buyAsset.symbol} in your wallet.` };
 		if (isOrderExpired) return { actionTitle: "Refresh quote", actionDescription: "This quote or order is no longer active." };
@@ -699,16 +703,23 @@ export default function DeskSwapForm() {
 	}, [isApprovalConfirmed, refetchAllowance]);
 
 	useEffect(() => {
-		if (!submittedOrderUid) return;
+		if (!submittedOrderUid || (orderStatus && isOrderTerminal(orderStatus))) return;
 
 		let cancelled = false;
+		let interval: number | null = null;
 		const orderUid = submittedOrderUid;
 
 		async function poll() {
 			try {
 				setIsCheckingOrderStatus(true);
 				const result = await requestDeskOrderStatus(chainId, orderUid);
-				if (!cancelled) setOrderStatus(result);
+				if (!cancelled) {
+					setOrderStatus(result);
+					if (isOrderTerminal(result) && interval) {
+						window.clearInterval(interval);
+						interval = null;
+					}
+				}
 			} catch (error) {
 				if (!cancelled) {
 					setExecutionError(getFriendlyError(error, "Could not refresh order status."));
@@ -719,13 +730,13 @@ export default function DeskSwapForm() {
 		}
 
 		poll();
-		const interval = window.setInterval(poll, 10_000);
+		interval = window.setInterval(poll, 10_000);
 
 		return () => {
 			cancelled = true;
-			window.clearInterval(interval);
+			if (interval) window.clearInterval(interval);
 		};
-	}, [chainId, submittedOrderUid]);
+	}, [chainId, orderStatus, submittedOrderUid]);
 
 	useEffect(() => {
 		setQuote(null);
@@ -972,7 +983,7 @@ export default function DeskSwapForm() {
 									<p className="mt-1">
 										{isExecutionRoute
 											? quoteFoundExecutionCopy
-											: "This route is quote-only for now. We are enabling Base USDC ↔ ZCHF first, then expanding carefully."}
+											: "This route is quote-only for now. Execution is not enabled for this route."}
 									</p>
 									{quoteExpirationLabel ? <p className="mt-1">{quoteExpirationLabel}</p> : null}
 									{isQuoteExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Quote expired. Refresh the quote and try again.</p> : null}
