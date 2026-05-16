@@ -79,7 +79,6 @@ export function getCowOrderDomain(chainId: number): TypedDataDomain {
 
 export function getCowChainSlug(chainId: number) {
 	if (chainId === 1) return "mainnet";
-	if (chainId === 100) return "gnosis";
 	if (chainId === 8453) return "base";
 	return null;
 }
