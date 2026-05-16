@@ -1,7 +1,7 @@
 import { ChainId } from "@frankencoin/zchf";
 import { TransferReferenceQuery } from "@frankencoin/api";
 import { AppKitNetwork } from "@reown/appkit/networks";
-import { isAddress, parseUnits } from "viem";
+import { isAddress, parseUnits, zeroAddress } from "viem";
 import { arbitrum, avalanche, base, gnosis, mainnet, optimism, polygon, sonic } from "viem/chains";
 import { getChainByChainSelector, normalizeAddress } from "@utils";
 
@@ -18,6 +18,7 @@ export const ZCHF_BALANCE_CHAIN_IDS: readonly ChainId[] = [
 ];
 
 export const MIN_ZCHF_FUNDED_THRESHOLD = parseUnits("0.1", 18);
+export const TRANSFER_REFERENCE_MAX_LENGTH = 120;
 
 export function orderedZchfBalanceChainNames(chains: readonly AppKitNetwork[]): string[] {
 	const byId = new Map(chains.map((c) => [c.id, c.name]));
@@ -31,6 +32,29 @@ export function transferIsBridge(item: TransferReferenceQuery): boolean {
 
 export function transferDirection(item: TransferReferenceQuery, connectedAddress: string): "sent" | "received" {
 	return normalizeAddress(item.from) === normalizeAddress(connectedAddress) ? "sent" : "received";
+}
+
+export function sanitizeTransferReference(value: string): string {
+	return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, TRANSFER_REFERENCE_MAX_LENGTH);
+}
+
+export function getTransferReferenceError(value: string): string | null {
+	if (value.length > TRANSFER_REFERENCE_MAX_LENGTH) return `Reference must be ${TRANSFER_REFERENCE_MAX_LENGTH} characters or less.`;
+	if (/[\x00-\x1F\x7F]/.test(value)) return "Reference cannot contain control characters.";
+	return null;
+}
+
+export function getRecipientSafetyError(recipient: string): string | null {
+	if (!recipient) return null;
+	if (!isAddress(recipient)) return "Invalid recipient address";
+	if (recipient.toLowerCase() === zeroAddress) return "Zero address cannot receive ZCHF.";
+	return null;
+}
+
+export function getRecipientSafetyNote(address: string | undefined, recipient: string): string | undefined {
+	if (!recipient || !isAddress(recipient)) return undefined;
+	if (address && recipient.toLowerCase() === address.toLowerCase()) return "Warning: this is your connected wallet.";
+	return undefined;
 }
 
 /** Helper under recipient field in Bridge mode. */
@@ -51,7 +75,6 @@ export function sortTransferHistory(
 ): TransferReferenceQuery[] {
 	const headers = TRANSFER_HISTORY_HEADERS;
 	const sortingList = [...list];
-	const normalizedConnected = connectedAddress.toLowerCase();
 
 	if (tab === headers[0]) {
 		sortingList.sort((a, b) => b.created - a.created);
