@@ -35,7 +35,6 @@ const TOKEN_LOGOS = {
 	usdt: "https://assets.coingecko.com/coins/images/325/standard/Tether.png",
 	dai: "https://assets.coingecko.com/coins/images/9956/standard/Badge_Dai.png",
 	wbtc: "https://assets.coingecko.com/coins/images/7598/standard/wrapped_bitcoin_wbtc.png",
-	cow: "https://assets.coingecko.com/coins/images/24384/standard/CoW-token_logo.png",
 	cbbtc: "https://assets.coingecko.com/coins/images/40143/standard/cbbtc.webp",
 } as const;
 
@@ -135,7 +134,6 @@ function getCounterAssets(chainId: ChainId): DeskAsset[] {
 			counter(chainId, "eth-usdt", "USDT", "Tether USD", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6, TOKEN_LOGOS.usdt, modes),
 			counter(chainId, "eth-dai", "DAI", "Dai Stablecoin", "0x6B175474E89094C44Da98b954EedeAC495271d0F", 18, TOKEN_LOGOS.dai, modes),
 			counter(chainId, "eth-wbtc", "WBTC", "Wrapped Bitcoin", "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", 8, TOKEN_LOGOS.wbtc, modes),
-			counter(chainId, "eth-cow", "COW", "CoW Protocol Token", "0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB", 18, TOKEN_LOGOS.cow, modes),
 		];
 	}
 
