@@ -9,29 +9,37 @@ import useThemeMode from "../hooks/useThemeMode";
 
 type NavItem = { to: string; name: string };
 
+type NavDropdownProps = {
+	label: string;
+	items: NavItem[];
+};
+
 const MAIN_ITEMS: NavItem[] = [
 	{ to: "/", name: "Home" },
 	{ to: "/mint", name: "Borrow" },
-	{ to: "/savings", name: "Earn" },
 	{ to: "/equity", name: "Invest" },
 	{ to: "/mypositions", name: "Portfolio" },
-	{ to: "/exchange", name: "Exchange" },
+];
+
+const ZCHF_ITEMS: NavItem[] = [
+	{ to: "/exchange", name: "Buy or Sell" },
+	{ to: "/savings", name: "Earn" },
 	{ to: "/bridge", name: "Bridge" },
 	{ to: "/transfer", name: "Transfer" },
 ];
 
-const MORE_ITEMS: NavItem[] = [
+const ADVANCED_ITEMS: NavItem[] = [
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
 	{ to: "/report", name: "Accounting Report" },
 	{ to: "/stablecoin-bridge", name: "Stablecoin Bridge" },
 ];
 
-function MoreDropdown() {
+function NavDropdown({ label, items }: NavDropdownProps) {
 	const [open, setOpen] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
 	const router = useRouter();
-	const isActive = MORE_ITEMS.some((item) => router.pathname.includes(item.to));
+	const isActive = items.some((item) => router.pathname === item.to || router.pathname.startsWith(`${item.to}/`));
 
 	useEffect(() => {
 		function handleClickOutside(e: MouseEvent) {
@@ -44,19 +52,20 @@ function MoreDropdown() {
 	return (
 		<div ref={ref} className="relative">
 			<button
+				type="button"
 				onClick={() => setOpen((v) => !v)}
 				className={`flex items-center gap-1 md:btn md:btn-nav md:py-2 font-medium hover:bg-menu-hover hover:text-menu-text rounded-lg px-3 ${
 					isActive ? "text-menu-textactive bg-menu-active font-semibold" : "text-menu-text"
 				}`}
 			>
-				Advanced
+				{label}
 				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}>
 					<path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
 				</svg>
 			</button>
 			{open && (
-				<div className="absolute top-full right-0 t-0 mt-1 px-2 grid gap-1 rounded-lg bg-menu-back border border-menu-separator shadow-md py-1 z-50">
-					{MORE_ITEMS.map((item) => (
+				<div className="absolute top-full right-0 mt-1 grid min-w-[180px] gap-1 rounded-lg border border-menu-separator bg-menu-back px-2 py-1 shadow-md z-50">
+					{items.map((item) => (
 						<div key={item.to} onClick={() => setOpen(false)}>
 							<NavButton to={item.to} name={item.name} />
 						</div>
@@ -84,7 +93,7 @@ export default function Navbar() {
 	const [isHidden, setIsHidden] = useState(false);
 	const lastScrollY = useRef(0);
 	const { theme, toggleTheme } = useThemeMode();
-	const allItems = [...MAIN_ITEMS, ...MORE_ITEMS];
+	const mobileItems = [...MAIN_ITEMS.slice(0, 1), ...ZCHF_ITEMS, ...MAIN_ITEMS.slice(1), ...ADVANCED_ITEMS];
 
 	useEffect(() => {
 		const handleScroll = () => {
@@ -113,10 +122,12 @@ export default function Navbar() {
 
 					<div className="relative z-10 flex min-w-0 justify-center">
 						<ul className="hidden md:flex flex-wrap justify-center gap-1 lg:gap-2">
-							{MAIN_ITEMS.map((item) => (
+							<li><NavButton to="/" name="Home" /></li>
+							<li><NavDropdown label="ZCHF" items={ZCHF_ITEMS} /></li>
+							{MAIN_ITEMS.slice(1).map((item) => (
 								<li key={item.to}><NavButton to={item.to} name={item.name} /></li>
 							))}
-							<li><MoreDropdown /></li>
+							<li><NavDropdown label="Advanced" items={ADVANCED_ITEMS} /></li>
 						</ul>
 						<div className="md:hidden"><WalletConnect /></div>
 					</div>
@@ -138,7 +149,7 @@ export default function Navbar() {
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 					</button>
 					<div className="mt-12 mb-3"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
-					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}><NavItems items={allItems} /></menu>
+					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}><NavItems items={mobileItems} /></menu>
 				</div>
 			</div>
 		</>
