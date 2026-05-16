@@ -1,0 +1,93 @@
+name: Enable all desk route execution patch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/enable-all-desk-routes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enable all DeskSwapForm execution routes
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          function patchFile(path, patches) {
+            let text = fs.readFileSync(path, 'utf8');
+            for (const [from, to] of patches) {
+              if (!text.includes(from)) {
+                throw new Error(`Missing expected text in ${path}:\n${from}`);
+              }
+              text = text.replace(from, to);
+            }
+            fs.writeFileSync(path, text);
+          }
+
+          patchFile('utils/cowDeskOrder.ts', [
+            [
+              'export function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {\n\treturn chainId === 8453 && counterAssetId === "base-usdc" && (mode === "get-zchf" || mode === "sell-zchf");\n}\n',
+              'export function isDeskExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {\n\tif (!mode || !counterAssetId || !getCowChainSlug(chainId)) return false;\n\treturn Boolean(getDeskRoute(mode, chainId as ChainId, counterAssetId));\n}\n\nexport function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {\n\treturn isDeskExecutionRoute(chainId, mode, counterAssetId);\n}\n'
+            ],
+            [
+              'export function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {\n\tif (!isBaseUsdcToZchfExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;\n\treturn getDeskRoute(input.mode ?? "get-zchf", input.chainId as ChainId, input.counterAssetId ?? "");\n}\n',
+              'export function validateDeskOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {\n\tif (!input.mode || !input.counterAssetId || !isDeskExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;\n\treturn getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId);\n}\n\nexport function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {\n\treturn validateDeskOrderRoute(input);\n}\n'
+            ]
+          ]);
+
+          patchFile('pages/api/cow-desk-order.ts', [
+            [
+              'import { getCowChainSlug, validateBaseUsdcZchfOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";',
+              'import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } from "../../utils/cowDeskOrder";'
+            ],
+            [
+              'const route = validateBaseUsdcZchfOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });',
+              'const route = validateDeskOrderRoute({ chainId, mode: body.mode, counterAssetId: body.counterAssetId });'
+            ],
+            [
+              'if (!route) return res.status(400).json({ error: "Only Base USDC ↔ ZCHF execution is enabled right now." });',
+              'if (!route) return res.status(400).json({ error: "This ZCHF Desk route is not enabled for order submission." });'
+            ]
+          ]);
+
+          patchFile('components/PageExchange/DeskSwapForm.tsx', [
+            [
+              '\tisBaseUsdcToZchfExecutionRoute,\n',
+              '\tisDeskExecutionRoute,\n'
+            ],
+            [
+              'const isExecutionRoute = Boolean(route && isBaseUsdcToZchfExecutionRoute(chainId, mode, counterAssetId));',
+              'const isExecutionRoute = Boolean(route && isDeskExecutionRoute(chainId, mode, counterAssetId));'
+            ],
+            [
+              'if (!isExecutionRoute) return { actionTitle: "Quote only for this route", actionDescription: "Base USDC ↔ ZCHF can trade now. Other routes are quote-only for the moment." };',
+              'if (!isExecutionRoute) return { actionTitle: "Quote only for this route", actionDescription: "This route is not enabled for execution yet." };'
+            ],
+            [
+              'isExecutionRoute\n\t\t\t\t\t\t\t? quoteFoundExecutionCopy\n\t\t\t\t\t\t\t: "This route is quote-only for now. We are enabling Base USDC ↔ ZCHF first, then expanding carefully."',
+              'isExecutionRoute\n\t\t\t\t\t\t\t? quoteFoundExecutionCopy\n\t\t\t\t\t\t\t: "This route is quote-only for now. Execution is not enabled for this route."'
+            ]
+          ]);
+
+          fs.rmSync('.github/workflows/enable-all-desk-routes.yml', { force: true });
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add utils/cowDeskOrder.ts pages/api/cow-desk-order.ts components/PageExchange/DeskSwapForm.tsx .github/workflows/enable-all-desk-routes.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Enable all desk swap execution routes"
+            git push
+          fi
