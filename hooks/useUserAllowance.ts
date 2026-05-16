@@ -11,27 +11,25 @@ export type SpenderChain = {
 
 export const useUserAllowance = (spenderChain: SpenderChain[], account?: Address) => {
 	const { address } = useConnection();
+	const owner = account || address || zeroAddress;
 
-	if (!account) account = address || zeroAddress;
-
-	// Fetch all blockchain stats in one web3 call using multicall
-	const { data, isError, isLoading } = useReadContracts({
+	const { data } = useReadContracts({
 		contracts: spenderChain.map((spender) => ({
 			address:
-				spender.chainId == mainnet.id
+				spender.chainId === mainnet.id
 					? ADDRESS[spender.chainId as ChainIdMain].frankencoin
 					: ADDRESS[spender.chainId as ChainIdSide].ccipBridgedFrankencoin,
 			chainId: spender.chainId,
-			abi: spender.chainId == mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
-			functionName: "balanceOf",
-			args: [account],
+			abi: spender.chainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
+			functionName: "allowance",
+			args: [owner, spender.spender],
 		})),
+		query: { enabled: owner !== zeroAddress },
 	});
 
 	return spenderChain.map(({ spender, chainId }, idx) => ({
 		spender,
 		chainId,
-		// @ts-ignore
-		allowance: data ? decodeBigIntCall(data[idx]) : BigInt(0), // Type instantiation is excessively deep and possibly infinite
+		allowance: data ? decodeBigIntCall(data[idx]) : 0n,
 	}));
 };
