@@ -7,7 +7,9 @@ import { useRouter } from "next/router";
 import ThemeToggle from "./ThemeToggle";
 import useThemeMode from "../hooks/useThemeMode";
 
-const MAIN_ITEMS = [
+type NavItem = { to: string; name: string };
+
+const MAIN_ITEMS: NavItem[] = [
 	{ to: "/", name: "Home" },
 	{ to: "/mint", name: "Borrow" },
 	{ to: "/savings", name: "Earn" },
@@ -18,7 +20,7 @@ const MAIN_ITEMS = [
 	{ to: "/transfer", name: "Transfer" },
 ];
 
-const MORE_ITEMS = [
+const MORE_ITEMS: NavItem[] = [
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
 	{ to: "/report", name: "Accounting Report" },
@@ -65,7 +67,7 @@ function MoreDropdown() {
 	);
 }
 
-export function NavItems({ items }: { items: typeof MAIN_ITEMS }) {
+export function NavItems({ items }: { items: NavItem[] }) {
 	return (
 		<>
 			{items.map((item) => (
