@@ -23,13 +23,16 @@ export const useUserAllowance = (spenderChain: SpenderChain[], account?: Address
 			abi: spender.chainId === mainnet.id ? FrankencoinABI : BridgedFrankencoinABI,
 			functionName: "allowance",
 			args: [owner, spender.spender],
-		})),
+		})) as any,
 		query: { enabled: owner !== zeroAddress },
 	});
 
-	return spenderChain.map(({ spender, chainId }, idx) => ({
-		spender,
-		chainId,
-		allowance: data ? decodeBigIntCall(data[idx]) : 0n,
-	}));
+	return spenderChain.map(({ spender, chainId }, idx) => {
+		const result = data?.[idx];
+		return {
+			spender,
+			chainId,
+			allowance: result ? decodeBigIntCall(result) : 0n,
+		};
+	});
 };
