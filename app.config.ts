@@ -32,7 +32,9 @@ const DEV_FALLBACKS = {
 function requirePublicEnv(name: "NEXT_PUBLIC_WAGMI_ID" | "NEXT_PUBLIC_RPC_KEY", devFallback: string): string {
 	const value = process.env[name]?.trim();
 	if (value) return value;
-	if (process.env.NODE_ENV === "production") {
+	// Next sets NODE_ENV=production during `next build`; allow compile without secrets on CI/Vercel.
+	const isProductionBuild = process.env.NEXT_PHASE === "phase-production-build";
+	if (process.env.NODE_ENV === "production" && !isProductionBuild) {
 		throw new Error(`Missing required environment variable: ${name}`);
 	}
 	return devFallback;
