@@ -84,8 +84,13 @@ export function getCowChainSlug(chainId: number) {
 	return null;
 }
 
+export function isDeskExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
+	if (!mode || !counterAssetId || !getCowChainSlug(chainId)) return false;
+	return Boolean(getDeskRoute(mode, chainId as ChainId, counterAssetId));
+}
+
 export function isBaseUsdcToZchfExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
-	return chainId === 8453 && counterAssetId === "base-usdc" && (mode === "get-zchf" || mode === "sell-zchf");
+	return isDeskExecutionRoute(chainId, mode, counterAssetId);
 }
 
 export function getDeskExecutionLabel({ sellSymbol, buySymbol }: { sellSymbol: string; buySymbol: string }) {
@@ -150,9 +155,13 @@ export function buildDeskOrderSubmission({
 	};
 }
 
+export function validateDeskOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
+	if (!input.mode || !input.counterAssetId || !isDeskExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
+	return getDeskRoute(input.mode, input.chainId as ChainId, input.counterAssetId);
+}
+
 export function validateBaseUsdcZchfOrderRoute(input: { chainId: number; mode?: DeskSwapMode; counterAssetId?: string }) {
-	if (!isBaseUsdcToZchfExecutionRoute(input.chainId, input.mode, input.counterAssetId)) return null;
-	return getDeskRoute(input.mode ?? "get-zchf", input.chainId as ChainId, input.counterAssetId ?? "");
+	return validateDeskOrderRoute(input);
 }
 
 export async function submitDeskOrder(input: DeskOrderSubmitRequest): Promise<DeskOrderSubmitResponse> {
