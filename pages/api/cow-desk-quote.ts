@@ -1,14 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { isAddress } from "viem";
 import type { ChainId } from "@frankencoin/zchf";
-import { COW_EMPTY_APP_DATA, COW_EMPTY_APP_DATA_HASH } from "../../utils/cowDeskOrder";
+import { COW_EMPTY_APP_DATA, COW_EMPTY_APP_DATA_HASH, getCowChainSlug } from "../../utils/cowDeskOrder";
 import { getDeskRoute, type DeskSwapMode } from "../../utils/exchangeAssets";
-
-const COW_CHAIN_BY_ID: Record<number, string> = {
-	1: "mainnet",
-	100: "gnosis",
-	8453: "base",
-};
 
 type QuoteBody = {
 	chainId?: number;
@@ -33,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	const sellAmountBeforeFee = body.sellAmountBeforeFee;
 	const from = body.from;
 	const receiver = body.receiver || from;
-	const cowChain = COW_CHAIN_BY_ID[chainId];
+	const cowChain = getCowChainSlug(chainId);
 
 	if (!cowChain) return res.status(400).json({ error: "This chain is not enabled for ZCHF Desk quotes." });
 	if (!mode || !counterAssetId) return res.status(400).json({ error: "Missing route selection." });
@@ -42,6 +36,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	}
 	if (!from || !receiver || !isAddress(from) || !isAddress(receiver)) {
 		return res.status(400).json({ error: "Connect a valid wallet before requesting a quote." });
+	}
+	if (receiver.toLowerCase() !== from.toLowerCase()) {
+		return res.status(400).json({ error: "Receiver must match the connected wallet." });
 	}
 
 	const route = getDeskRoute(mode, chainId, counterAssetId);
