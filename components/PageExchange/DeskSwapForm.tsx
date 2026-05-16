@@ -1,5 +1,4 @@
 import AppNotice from "@components/AppNotice";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { needsEthereumUsdtResetApproval } from "./deskSwapApproval";
 import { useAccount, useChainId, useReadContract, useSignTypedData, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
@@ -183,7 +182,7 @@ function TokenSelectCard({ asset, assets, label, onChange }: { asset: DeskAsset 
 					<select value={asset?.id ?? ""} onChange={(event) => onChange(event.target.value)} className="w-full bg-transparent text-base font-semibold leading-5 text-text-primary outline-none">
 						{assets.map((option) => (
 							<option key={option.id} value={option.id}>
-								{option.recommended ? `${option.symbol} - suggested` : option.symbol}
+								{option.symbol}
 							</option>
 						))}
 					</select>
@@ -328,12 +327,12 @@ export default function DeskSwapForm() {
 		if (isAllowanceLoading) return { actionTitle: "Checking permission", actionDescription: "Checking whether CoW Protocol can use this token for the trade." };
 		if (isApprovalWalletPending) return { actionTitle: "Confirm in wallet", actionDescription: "Your wallet will ask you to approve token permission." };
 		if (isApprovalConfirming) return { actionTitle: `Approving ${route.sellAsset.symbol} permission…`, actionDescription: `Waiting for confirmation on ${selectedChain?.label ?? "the selected chain"}.` };
-		if (isSignaturePending) return { actionTitle: "Sign in wallet", actionDescription: "This signs the CoW order and will execute your trade on-chain." };
+		if (isSignaturePending) return { actionTitle: "Sign CoW order", actionDescription: "You are signing an off-chain CoW order. CoW solvers settle it on-chain if it can be filled before expiry." };
 		if (isSubmittingOrder) return { actionTitle: "Submitting order…", actionDescription: "Sending your signed order to CoW Protocol." };
 		if (submittedOrderUid) return isCheckingOrderStatus ? { actionTitle: "Checking settlement…", actionDescription: "Refreshing the latest CoW order status." } : { actionTitle: "Waiting for CoW solvers to settle the trade.", actionDescription: "" };
 		if (!hasEnoughAllowance) return { actionTitle: `Allow CoW Protocol to use up to ${totalSold ?? formattedSellAmount ?? sellAmountPreview}`, actionDescription: "This does not trade yet." };
-		if (totalSold && minimumReceive) return { actionTitle: `Sell ${totalSold} for at least ${minimumReceive}`, actionDescription: "" };
-		return { actionTitle: "Confirm trade", actionDescription: "You will confirm this in your wallet." };
+		if (totalSold && minimumReceive) return { actionTitle: "Sign CoW order", actionDescription: `Sell ${totalSold} for at least ${minimumReceive}.` };
+		return { actionTitle: "Sign CoW order", actionDescription: "CoW solvers settle it on-chain if it can be filled before expiry." };
 	})();
 
 	useEffect(() => {
@@ -526,17 +525,10 @@ export default function DeskSwapForm() {
 
 	return (
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
-			<div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-				<div>
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Crypto swap quote</p>
-					<h2 className="mt-1 text-xl font-semibold text-text-primary">Swap crypto and ZCHF</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">Use supported wallet crypto to buy ZCHF, or sell ZCHF back to crypto. Quotes are powered by CoW Protocol.</p>
-				</div>
-				<div className="rounded-xl border border-[#e0d4bd] bg-card-content-secondary/80 p-3 text-sm text-text-secondary dark:border-menu-separator dark:bg-card-content-secondary">
-					<p className="font-semibold text-text-primary">Looking for FPS or WFPS?</p>
-					<p className="mt-1 max-w-sm text-xs leading-5">Use Invest to mint, redeem, wrap, or unwrap Frankencoin Pool Shares.</p>
-					<Link href="/equity" className="mt-2 inline-flex text-xs font-semibold text-text-primary underline decoration-[#c4a75f] underline-offset-4">Open Invest</Link>
-				</div>
+			<div>
+				<p className="text-xs uppercase tracking-wider text-text-secondary">Crypto swap quote</p>
+				<h2 className="mt-1 text-xl font-semibold text-text-primary">Swap crypto and ZCHF</h2>
+				<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">Use supported wallet crypto to buy ZCHF, or sell ZCHF back to crypto. Quotes are powered by CoW Protocol.</p>
 			</div>
 
 			<div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -555,10 +547,9 @@ export default function DeskSwapForm() {
 					<span className="text-xs uppercase tracking-wider text-text-secondary">Network</span>
 					<select value={chainId} onChange={(event) => onChainChange(event.target.value)} className="mt-2 min-h-[42px] w-full rounded-lg border border-[#e0d4bd] bg-card-content-primary px-3 text-sm font-semibold text-text-primary outline-none transition hover:border-[#c4a75f] focus:border-[#c4a75f] dark:border-menu-separator">
 						{allowedChains.map((chain) => (
-							<option key={chain.chainId} value={chain.chainId}>{chain.recommended ? `${chain.label} - recommended` : `${chain.label} - higher gas`}</option>
+							<option key={chain.chainId} value={chain.chainId}>{chain.label}</option>
 						))}
 					</select>
-					<p className="mt-2 text-xs leading-5 text-text-secondary">{selectedChain?.note}</p>
 				</label>
 			</div>
 
@@ -604,7 +595,7 @@ export default function DeskSwapForm() {
 						))}
 
 						<div className="border-t border-[#e0d4bd] pt-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							{amountValidation ? <p className="font-medium text-amber-700 dark:text-amber-200">{amountValidation}</p> : hasInsufficientBalance ? <p className="font-medium text-amber-700 dark:text-amber-200">This route may be available, but your wallet balance is too low.</p> : isWaitingForBalance ? <p>Loading wallet balance before checking the route…</p> : isBalanceUnavailable ? <p className="font-medium text-amber-700 dark:text-amber-200">Wallet balance is unavailable right now. Reconnect your wallet or try again in a moment.</p> : isQuoteLoading ? <p>Checking route…</p> : quoteError ? <p className="font-medium text-amber-700 dark:text-amber-200">{quoteError}</p> : estimatedReceive ? <div><p className="font-semibold text-text-primary">Quote found</p><p className="mt-1">This route can execute now. First allow CoW Protocol to use {route?.sellAsset.symbol}, then confirm the trade in your wallet.</p>{quoteExpirationLabel ? <p className="mt-1">{quoteExpirationLabel}</p> : null}{isQuoteExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Quote expired. Refresh the quote and try again.</p> : null}</div> : <p>{quoteState.message}</p>}
+							{amountValidation ? <p className="font-medium text-amber-700 dark:text-amber-200">{amountValidation}</p> : hasInsufficientBalance ? <p className="font-medium text-amber-700 dark:text-amber-200">This route may be available, but your wallet balance is too low.</p> : isWaitingForBalance ? <p>Loading wallet balance before checking the route…</p> : isBalanceUnavailable ? <p className="font-medium text-amber-700 dark:text-amber-200">Wallet balance is unavailable right now. Reconnect your wallet or try again in a moment.</p> : isQuoteLoading ? <p>Checking route…</p> : quoteError ? <p className="font-medium text-amber-700 dark:text-amber-200">{quoteError}</p> : estimatedReceive ? <div><p className="font-semibold text-text-primary">Quote found</p><p className="mt-1">First allow CoW Protocol to use {route?.sellAsset.symbol}, then sign an off-chain CoW order.</p>{quoteExpirationLabel ? <p className="mt-1">{quoteExpirationLabel}</p> : null}{isQuoteExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Quote expired. Refresh the quote and try again.</p> : null}</div> : <p>{quoteState.message}</p>}
 						</div>
 					</div>
 
