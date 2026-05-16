@@ -29,15 +29,9 @@ const DEV_FALLBACKS = {
 	rpc: "dhaKbi2HDlKYW1JaSHm1i_hGkE2gnA5t",
 } as const;
 
-function requirePublicEnv(name: "NEXT_PUBLIC_WAGMI_ID" | "NEXT_PUBLIC_RPC_KEY", devFallback: string): string {
+function publicEnvOrFallback(name: "NEXT_PUBLIC_WAGMI_ID" | "NEXT_PUBLIC_RPC_KEY", fallback: string): string {
 	const value = process.env[name]?.trim();
-	if (value) return value;
-	// Next sets NODE_ENV=production during `next build`; allow compile without secrets on CI/Vercel.
-	const isProductionBuild = process.env.NEXT_PHASE === "phase-production-build";
-	if (process.env.NODE_ENV === "production" && !isProductionBuild) {
-		throw new Error(`Missing required environment variable: ${name}`);
-	}
-	return devFallback;
+	return value || fallback;
 }
 
 const normalizeUrl = (url: string): string => url.replace(/\/+$/, "");
@@ -83,8 +77,8 @@ export const CONFIG: ConfigEnv = {
 	ponder: normalizeUrl(process.env.NEXT_PUBLIC_PONDER_URL || CANONICAL_PONDER_URL),
 	canonicalPonder: normalizeUrl(process.env.NEXT_PUBLIC_CANONICAL_PONDER_URL || CANONICAL_PONDER_URL),
 	morphoGraph: process.env.NEXT_PUBLIC_MORPHOGRAPH_URL || "https://blue-api.morpho.org/graphql",
-	wagmiId: requirePublicEnv("NEXT_PUBLIC_WAGMI_ID", DEV_FALLBACKS.wagmiId),
-	rpc: requirePublicEnv("NEXT_PUBLIC_RPC_KEY", DEV_FALLBACKS.rpc),
+	wagmiId: publicEnvOrFallback("NEXT_PUBLIC_WAGMI_ID", DEV_FALLBACKS.wagmiId),
+	rpc: publicEnvOrFallback("NEXT_PUBLIC_RPC_KEY", DEV_FALLBACKS.rpc),
 };
 
 if (process.env.NODE_ENV !== "production" && CONFIG.verbose) {
