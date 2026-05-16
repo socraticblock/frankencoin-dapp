@@ -99,16 +99,6 @@ export function getAllowedDeskChainsForMode(_mode: DeskSwapMode) {
 	return DESK_SWAP_CHAINS;
 }
 
-/** @deprecated WFPS is handled on the Invest page, not Exchange. */
-export function isWfpsMode(_mode: DeskSwapMode) {
-	return false;
-}
-
-/** @deprecated WFPS is handled on the Invest page, not Exchange. */
-export function isWfpsConfigured() {
-	return false;
-}
-
 function getFrankencoinAssets(chainId: ChainId): DeskAsset[] {
 	const zchfAddress = getCowZchfAddress(chainId);
 	if (!zchfAddress) return [];
