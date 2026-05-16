@@ -77,14 +77,14 @@ export function getCowOrderDomain(chainId: number): TypedDataDomain {
 	};
 }
 
-export function getCowChainSlug(chainId: number) {
+export function getDeskCowChainSlug(chainId: number) {
 	if (chainId === 1) return "mainnet";
 	if (chainId === 8453) return "base";
 	return null;
 }
 
 export function isDeskExecutionRoute(chainId: number, mode?: DeskSwapMode, counterAssetId?: string) {
-	if (!mode || !counterAssetId || !getCowChainSlug(chainId)) return false;
+	if (!mode || !counterAssetId || !getDeskCowChainSlug(chainId)) return false;
 	return Boolean(getDeskRoute(mode, chainId as ChainId, counterAssetId));
 }
 
