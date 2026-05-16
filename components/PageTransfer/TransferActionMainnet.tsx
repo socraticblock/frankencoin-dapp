@@ -6,13 +6,14 @@ import { formatCurrency, shortenAddress } from "@utils";
 import { renderErrorTxToast, TxToast } from "@components/TxToast";
 import { useConnection } from "wagmi";
 import AppButton from "@components/AppButton";
-import { Address, formatUnits, Hash } from "viem";
+import { Address, formatUnits, Hash, isAddress } from "viem";
 import { ADDRESS, ChainIdSide, FrankencoinABI, TransferReferenceABI } from "@frankencoin/zchf";
 import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
 import { track } from "@hooks";
 import { mainnet } from "viem/chains";
 import { useUserAllowance } from "../../hooks/useUserAllowance";
 import { AppKitNetwork } from "@reown/appkit/networks";
+import { getRecipientSafetyError, getTransferReferenceError } from "./transferShared";
 
 interface Props {
 	recipient: Address;
@@ -50,9 +51,17 @@ export default function TransferActionMainnet({
 	const needsReferenceContract = !isSameChain || addReference;
 	const needsApproval = needsReferenceContract && allowance < amount;
 
+	const validateBeforeWrite = () => {
+		if (!address) return "Connect your wallet.";
+		if (amount <= 0n) return "Enter an amount.";
+		if (!isAddress(recipient)) return "Enter a valid recipient wallet.";
+		return getRecipientSafetyError(recipient) ?? getTransferReferenceError(reference);
+	};
+
 	const handleApprove = async (e: any) => {
 		e.preventDefault();
-		if (!address || amount <= 0n) return;
+		const validationError = validateBeforeWrite();
+		if (validationError) return toast.error(validationError);
 
 		try {
 			setApproving(true);
@@ -66,27 +75,14 @@ export default function TransferActionMainnet({
 			});
 
 			const toastContent = [
-				{
-					title: "Amount:",
-					value: `${formatCurrency(formatUnits(amount, 18))} ZCHF`,
-				},
-				{
-					title: "Spender: ",
-					value: shortenAddress(ADDRESS[mainnet.id].transferReference),
-				},
-				{
-					title: "Transaction:",
-					hash: approveWriteHash,
-				},
+				{ title: "Amount:", value: `${formatCurrency(formatUnits(amount, 18))} ZCHF` },
+				{ title: "Spender: ", value: shortenAddress(ADDRESS[mainnet.id].transferReference) },
+				{ title: "Transaction:", hash: approveWriteHash },
 			];
 
 			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: approveWriteHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Approving exact ZCHF amount`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title={`Successfully approved exact ZCHF amount`} rows={toastContent} />,
-				},
+				pending: { render: <TxToast title={`Approving exact ZCHF amount`} rows={toastContent} /> },
+				success: { render: <TxToast title={`Successfully approved exact ZCHF amount`} rows={toastContent} /> },
 			});
 		} catch (error) {
 			toast.error(renderErrorTxToast(error));
@@ -97,7 +93,8 @@ export default function TransferActionMainnet({
 
 	const handleOnClick = async function (e: any) {
 		e.preventDefault();
-		if (!address) return;
+		const validationError = validateBeforeWrite();
+		if (validationError) return toast.error(validationError);
 
 		try {
 			setAction(true);
@@ -121,47 +118,30 @@ export default function TransferActionMainnet({
 					args: [recipient, amount],
 				});
 			} else {
+				if (ccipFee <= 0n) {
+					toast.error("Bridge fee is not ready. Try again.");
+					return;
+				}
 				writeHash = await writeContract(WAGMI_CONFIG, {
 					address: ADDRESS[mainnet.id].transferReference,
 					chainId: mainnet.id,
 					abi: TransferReferenceABI,
 					functionName: "crossTransfer",
-					args: [
-						BigInt(ADDRESS[recipientChain.id as ChainIdSide].chainSelector),
-						recipient,
-						amount,
-						addReference ? reference : "",
-					],
+					args: [BigInt(ADDRESS[recipientChain.id as ChainIdSide].chainSelector), recipient, amount, addReference ? reference : ""],
 					value: (ccipFee * 12n) / 10n,
 				});
 			}
 
 			const toastContent = [
-				{
-					title: `Recipient: `,
-					value: shortenAddress(recipient),
-				},
-				{
-					title: `Reference: `,
-					value: reference,
-				},
-				{
-					title: `Transfer: `,
-					value: `${formatCurrency(formatUnits(amount, 18))} ZCHF`,
-				},
-				{
-					title: "Transaction: ",
-					hash: writeHash,
-				},
+				{ title: `Recipient: `, value: shortenAddress(recipient) },
+				{ title: `Reference: `, value: reference },
+				{ title: `Transfer: `, value: `${formatCurrency(formatUnits(amount, 18))} ZCHF` },
+				{ title: "Transaction: ", hash: writeHash },
 			];
 
 			await toast.promise(waitForTransactionReceipt(WAGMI_CONFIG, { hash: writeHash, confirmations: 1 }), {
-				pending: {
-					render: <TxToast title={`Transfer pending...`} rows={toastContent} />,
-				},
-				success: {
-					render: <TxToast title="Transfer successful" rows={toastContent} />,
-				},
+				pending: { render: <TxToast title={`Transfer pending...`} rows={toastContent} /> },
+				success: { render: <TxToast title="Transfer successful" rows={toastContent} /> },
 			});
 
 			track("zchf_transferred", { amount: formatUnits(amount, 18), chain: recipientChain.name, crossChain: !isSameChain });
