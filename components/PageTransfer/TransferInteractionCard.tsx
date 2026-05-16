@@ -26,33 +26,34 @@ import {
 } from "./transferShared";
 
 type TransferMode = "transfer" | "bridge";
+type Props = { initialMode?: TransferMode; lockedMode?: TransferMode };
 
 const MODE_TAB_ACTIVE = "border-button-default bg-card-content-primary text-text-primary";
 const MODE_TAB_INACTIVE = "border-menu-separator text-text-secondary hover:text-text-primary";
 
+function fallbackDestination(source: ChainId): ChainId {
+	return (WAGMI_CHAINS.find((chain) => chain.id !== source)?.id ?? source) as ChainId;
+}
+
 function ModeTabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${active ? MODE_TAB_ACTIVE : MODE_TAB_INACTIVE}`}
-		>
+		<button type="button" onClick={onClick} className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${active ? MODE_TAB_ACTIVE : MODE_TAB_INACTIVE}`}>
 			{children}
 		</button>
 	);
 }
 
-export default function TransferInteractionCard() {
+export default function TransferInteractionCard({ initialMode = "transfer", lockedMode }: Props) {
 	const router = useRouter();
 	const connectedChainId = useChainId() as ChainId;
 	const { address, isConnected } = useConnection();
 	const appKitNetwork = useAppKitNetwork();
-	const isMainnetChain = connectedChainId === mainnet.id;
+	const startMode = lockedMode ?? initialMode;
 	const chainBalances = useZchfChainBalances(address as Address | undefined);
 
-	const [mode, setMode] = useState<TransferMode>("transfer");
+	const [mode, setMode] = useState<TransferMode>(startMode);
 	const [fromChainId, setFromChainId] = useState<ChainId>(connectedChainId);
-	const [toChainId, setToChainId] = useState<ChainId>(connectedChainId);
+	const [toChainId, setToChainId] = useState<ChainId>(() => (startMode === "bridge" ? fallbackDestination(connectedChainId) : connectedChainId));
 	const [recipient, setRecipient] = useState<string>((router.query.recipient as string) ?? "");
 	const [recipientChain, setRecipientChain] = useState<SupportedChain>(WAGMI_CHAIN);
 
@@ -67,9 +68,17 @@ export default function TransferInteractionCard() {
 	const balanceChainNames = useMemo(() => orderedZchfBalanceChainNames(WAGMI_CHAINS), []);
 
 	useEffect(() => {
+		if (!lockedMode) return;
+		setMode(lockedMode);
+		if (lockedMode === "transfer") setToChainId(fromChainId);
+		if (lockedMode === "bridge" && toChainId === fromChainId) setToChainId(fallbackDestination(fromChainId));
+	}, [fromChainId, lockedMode, toChainId]);
+
+	useEffect(() => {
 		setFromChainId(connectedChainId);
 		if (mode === "transfer") setToChainId(connectedChainId);
-	}, [connectedChainId, mode]);
+		if (mode === "bridge" && toChainId === connectedChainId) setToChainId(fallbackDestination(connectedChainId));
+	}, [connectedChainId, mode, toChainId]);
 
 	useEffect(() => {
 		if (mode === "transfer") setToChainId(fromChainId);
@@ -110,36 +119,37 @@ export default function TransferInteractionCard() {
 	const onChangeFromChain = (value: string) => {
 		const target = WAGMI_CHAINS.find((c) => c.name === value) as AppKitNetwork | undefined;
 		if (!target) return;
-		setFromChainId(target.id as ChainId);
-		if (mode === "transfer") setToChainId(target.id as ChainId);
+		const nextFrom = target.id as ChainId;
+		setFromChainId(nextFrom);
+		if (mode === "transfer") setToChainId(nextFrom);
+		if (mode === "bridge" && toChainId === nextFrom) setToChainId(fallbackDestination(nextFrom));
 		switchToNetwork(target);
 	};
 
 	const onChangeToChain = (value: string) => {
 		const target = WAGMI_CHAINS.find((c) => c.name === value);
 		if (!target) return;
+		if (isBridge && target.id === fromChainId) return;
 		setToChainId(target.id as ChainId);
-		const nextMode = target.id === fromChainId ? "transfer" : "bridge";
-		setMode(nextMode);
-		if (nextMode === "bridge" && !recipient && address) setRecipient(address);
+		if (!lockedMode) setMode(target.id === fromChainId ? "transfer" : "bridge");
+		if (target.id !== fromChainId && !recipient && address) setRecipient(address);
 	};
 
 	const setTransferMode = () => {
+		if (lockedMode) return;
 		setMode("transfer");
 		setToChainId(fromChainId);
 	};
 
 	const setBridgeMode = () => {
+		if (lockedMode) return;
 		setMode("bridge");
-		if (toChainId === fromChainId) {
-			const next = WAGMI_CHAINS.find((c) => c.id !== fromChainId);
-			if (next) setToChainId(next.id as ChainId);
-		}
+		if (toChainId === fromChainId) setToChainId(fallbackDestination(fromChainId));
 		if (address && !recipient) setRecipient(address);
 	};
 
 	const getTransferDisabledReason = () => {
-		if (!address) return "Connect your wallet to transfer or bridge ZCHF.";
+		if (!address) return isBridge ? "Connect your wallet to bridge ZCHF." : "Connect your wallet to transfer ZCHF.";
 		if (wrongChain) return `Switch your wallet to ${fromChain.name}.`;
 		if (!amount || amount <= 0n) return "Enter an amount.";
 		if (!recipient) return "Enter a recipient wallet.";
@@ -155,35 +165,36 @@ export default function TransferInteractionCard() {
 	const detailsTitle = isBridge ? "Bridge details" : "Transfer details";
 	const previewTitleMode = isBridge ? "bridge" : "transfer";
 	const amountLabel = isBridge ? `Amount to bridge to ${toChain.name}` : "Amount";
+	const chainSelectNames = useMemo(() => WAGMI_CHAINS.map((c) => c.name), []);
+	const destinationChainNames = useMemo(() => WAGMI_CHAINS.filter((c) => c.id !== fromChainId).map((c) => c.name), [fromChainId]);
+	const useMainnetAction = fromChainId === mainnet.id;
 
 	const handleUseChainAsSource = (chainItemId: ChainId) => {
 		const target = WAGMI_CHAINS.find((c) => c.id === chainItemId) as AppKitNetwork | undefined;
 		setFromChainId(chainItemId);
 		if (mode === "transfer") setToChainId(chainItemId);
-		if (mode === "bridge" && toChainId === chainItemId) {
-			const fallback = WAGMI_CHAINS.find((c) => c.id !== chainItemId);
-			if (fallback) setToChainId(fallback.id as ChainId);
-		}
+		if (mode === "bridge" && toChainId === chainItemId) setToChainId(fallbackDestination(chainItemId));
 		if (target) switchToNetwork(target);
 	};
-
-	const chainSelectNames = useMemo(() => WAGMI_CHAINS.map((c) => c.name), []);
 
 	return (
 		<section className="grid grid-cols-1 gap-4 mx-auto lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
 			<AppCard>
 				<div className="space-y-4">
-					<div className="grid grid-cols-2 gap-2">
-						<ModeTabButton active={mode === "transfer"} onClick={setTransferMode}>
-							Transfer
-						</ModeTabButton>
-						<ModeTabButton active={mode === "bridge"} onClick={setBridgeMode}>
-							Bridge
-						</ModeTabButton>
-					</div>
-					<p className="text-sm text-text-secondary">
-						{isBridge ? "Move ZCHF from one chain to another using CCIP." : "Send ZCHF to another wallet on the same chain."}
-					</p>
+					{lockedMode ? (
+						<div className="rounded-lg border border-menu-separator bg-card-content-primary px-3 py-2">
+							<p className="text-sm font-semibold text-text-primary">{isBridge ? "Bridge ZCHF" : "Transfer ZCHF"}</p>
+							<p className="mt-1 text-sm text-text-secondary">{isBridge ? "Move ZCHF from one chain to another using CCIP." : "Send ZCHF to another wallet on the same chain."}</p>
+						</div>
+					) : (
+						<>
+							<div className="grid grid-cols-2 gap-2">
+								<ModeTabButton active={mode === "transfer"} onClick={setTransferMode}>Transfer</ModeTabButton>
+								<ModeTabButton active={mode === "bridge"} onClick={setBridgeMode}>Bridge</ModeTabButton>
+							</div>
+							<p className="text-sm text-text-secondary">{isBridge ? "Move ZCHF from one chain to another using CCIP." : "Send ZCHF to another wallet on the same chain."}</p>
+						</>
+					)}
 
 					<div className="rounded-lg border border-menu-separator p-3">
 						<p className="text-sm font-semibold text-text-primary">Your ZCHF balances</p>
@@ -196,39 +207,21 @@ export default function TransferInteractionCard() {
 								displayBalanceRows.map((entry) => {
 									const isSource = entry.chainId === fromChainId;
 									return (
-										<div
-											key={`zchf-balance-${entry.chainId}`}
-											className="flex items-center justify-between rounded-md bg-card-content-primary px-3 py-2"
-										>
+										<div key={`zchf-balance-${entry.chainId}`} className="flex items-center justify-between rounded-md bg-card-content-primary px-3 py-2">
 											<div className="flex items-center gap-2">
 												<ChainLogo chain={entry.chainName.toLowerCase()} size={4} />
 												<span className="text-sm text-text-primary">{entry.chainName}</span>
 											</div>
 											<div className="flex items-center gap-3">
-												<span className="text-sm text-text-primary">
-													{entry.isLoading ? "Loading..." : `${formatCurrency(formatUnits(entry.balance, 18), 2, 2)} ZCHF`}
-												</span>
-												<AppButtonSecondary
-													width="w-auto"
-													size="small"
-													disabled={isSource}
-													onClick={() => handleUseChainAsSource(entry.chainId)}
-												>
-													{isSource ? "Selected" : "Select"}
-												</AppButtonSecondary>
+												<span className="text-sm text-text-primary">{entry.isLoading ? "Loading..." : `${formatCurrency(formatUnits(entry.balance, 18), 2, 2)} ZCHF`}</span>
+												<AppButtonSecondary width="w-auto" size="small" disabled={isSource} onClick={() => handleUseChainAsSource(entry.chainId)}>{isSource ? "Selected" : "Select"}</AppButtonSecondary>
 											</div>
 										</div>
 									);
 								})
 							)}
 						</div>
-						<button
-							type="button"
-							className="mt-2 text-sm text-text-secondary underline underline-offset-2"
-							onClick={() => setShowAllChains((prev) => !prev)}
-						>
-							{showAllChains ? "Show only funded chains" : "Show all chains"}
-						</button>
+						<button type="button" className="mt-2 text-sm text-text-secondary underline underline-offset-2" onClick={() => setShowAllChains((prev) => !prev)}>{showAllChains ? "Show only funded chains" : "Show all chains"}</button>
 					</div>
 
 					<div className="mt-4 text-lg font-bold text-center">{detailsTitle}</div>
@@ -241,99 +234,32 @@ export default function TransferInteractionCard() {
 						{isBridge ? (
 							<div>
 								<p className="mb-1 text-sm text-text-secondary">To chain</p>
-								<ChainBySelect chains={chainSelectNames} chain={toChain.name} chainOnChange={onChangeToChain} />
+								<ChainBySelect chains={destinationChainNames} chain={toChain.name} chainOnChange={onChangeToChain} />
 							</div>
 						) : null}
 					</div>
 
 					<AddressInputChain label="From wallet" disabled={true} value={address} chain={fromChain.name} onChangeChain={onChangeFromChain} />
 
-					<AddressInput
-						label="Recipient wallet"
-						placeholder="0x1a2b3c..."
-						value={recipient}
-						onChange={setRecipient}
-						own={mode === "bridge" ? address : undefined}
-						ownLabel={mode === "bridge" ? "Use connected wallet" : "Own"}
-						error={errorRecipient()}
-						isTextLeft={true}
-						note={isBridge ? bridgeRecipientNote(address, recipient) : undefined}
-					/>
+					<AddressInput label="Recipient wallet" placeholder="0x1a2b3c..." value={recipient} onChange={setRecipient} own={mode === "bridge" ? address : undefined} ownLabel={mode === "bridge" ? "Use connected wallet" : "Own"} error={errorRecipient()} isTextLeft={true} note={isBridge ? bridgeRecipientNote(address, recipient) : undefined} />
 
-					<TokenInput
-						symbol="ZCHF"
-						label={amountLabel}
-						chain={fromChain.name}
-						value={amount.toString()}
-						digit={18}
-						onChange={onChangeAmount}
-						max={fromBalance}
-						reset={0n}
-						limit={fromBalance}
-						limitDigit={18}
-						limitLabel={`Available on ${fromChain.name}:`}
-						limitCurrency="ZCHF"
-						error={errorAmount()}
-					/>
+					<TokenInput symbol="ZCHF" label={amountLabel} chain={fromChain.name} value={amount.toString()} digit={18} onChange={onChangeAmount} max={fromBalance} reset={0n} limit={fromBalance} limitDigit={18} limitLabel={`Available on ${fromChain.name}:`} limitCurrency="ZCHF" error={errorAmount()} />
 
 					{refToggle ? (
-						<AddressInput
-							label="Reference / note optional"
-							placeholder="Invoice 123"
-							value={reference}
-							onChange={setReference}
-							isTextLeft={true}
-							reset=""
-							note="Optional note for your transfer history."
-						/>
+						<AddressInput label="Reference / note optional" placeholder="Invoice 123" value={reference} onChange={setReference} isTextLeft={true} reset="" note="Optional note for your transfer history." />
 					) : (
-						<button type="button" className="text-sm text-text-secondary underline underline-offset-2" onClick={() => setRefToggle(true)}>
-							Add reference / note optional
-						</button>
+						<button type="button" className="text-sm text-text-secondary underline underline-offset-2" onClick={() => setRefToggle(true)}>Add reference / note optional</button>
 					)}
 
-					{isMainnetChain ? (
-						<TransferActionMainnet
-							recipientChain={recipientChain}
-							recipient={recipient as Address}
-							ccipFee={ccipFee}
-							addReference={refToggle}
-							reference={reference}
-							amount={amount}
-							disabled={isDisabled}
-							buttonLabel={buttonLabel}
-							onSubmitted={setLastTxHash}
-							setLoaded={setLoaded}
-						/>
+					{useMainnetAction ? (
+						<TransferActionMainnet recipientChain={recipientChain} recipient={recipient as Address} ccipFee={ccipFee} addReference={refToggle} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
 					) : (
-						<TransferActionSidechain
-							recipientChain={recipientChain}
-							addReference={refToggle}
-							ccipFee={ccipFee}
-							recipient={recipient as Address}
-							reference={reference}
-							amount={amount}
-							disabled={isDisabled}
-							buttonLabel={buttonLabel}
-							onSubmitted={setLastTxHash}
-							setLoaded={setLoaded}
-						/>
+						<TransferActionSidechain recipientChain={recipientChain} addReference={refToggle} ccipFee={ccipFee} recipient={recipient as Address} reference={reference} amount={amount} disabled={isDisabled} buttonLabel={buttonLabel} onSubmitted={setLastTxHash} setLoaded={setLoaded} />
 					)}
 				</div>
 			</AppCard>
 
-			<TransferDetailsCard
-				mode={previewTitleMode}
-				amount={amount}
-				senderAddress={address}
-				recipientAddress={recipient as Address}
-				fromChain={fromChain}
-				toChain={toChain}
-				ccipFee={ccipFee}
-				isSubmitted={isLoaded}
-				lastTxHash={lastTxHash}
-				disabledReason={disabledReason}
-			/>
+			<TransferDetailsCard mode={previewTitleMode} amount={amount} senderAddress={address} recipientAddress={recipient as Address} fromChain={fromChain} toChain={toChain} ccipFee={ccipFee} isSubmitted={isLoaded} lastTxHash={lastTxHash} disabledReason={disabledReason} />
 		</section>
 	);
 }
