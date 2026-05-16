@@ -6,6 +6,16 @@ import { mainnet } from "viem/chains";
 import { readContract } from "wagmi/actions";
 import { WAGMI_CONFIG } from "../app.config";
 
+export type TransferCcipFeeState = {
+	fee: bigint;
+	isLoading: boolean;
+	isReady: boolean;
+	error: string | null;
+};
+
+const READY_ZERO_FEE: TransferCcipFeeState = { fee: 0n, isLoading: false, isReady: true, error: null };
+const WAITING_FOR_INPUT: TransferCcipFeeState = { fee: 0n, isLoading: false, isReady: false, error: null };
+
 async function readCcipFeeWei(params: {
 	fromChainId: ChainId;
 	targetChainId: ChainId;
@@ -36,28 +46,31 @@ async function readCcipFeeWei(params: {
 }
 
 /**
- * CCIP fee for cross-chain ZCHF moves. Returns 0 when same-chain or inputs invalid.
+ * CCIP fee for cross-chain ZCHF moves.
+ * Same-chain transfers are ready with zero CCIP fee. Cross-chain bridge actions
+ * are only ready after a successful fee quote.
  */
 export function useTransferCcipFee(params: {
 	fromChainId: ChainId;
 	toChainId: ChainId;
 	recipient: string;
 	amount: bigint;
-}): bigint {
+}): TransferCcipFeeState {
 	const { fromChainId, toChainId, recipient, amount } = params;
-	const [ccipFee, setCcipFee] = useState<bigint>(0n);
+	const [state, setState] = useState<TransferCcipFeeState>(READY_ZERO_FEE);
 
 	useEffect(() => {
 		if (fromChainId === toChainId) {
-			setCcipFee(0n);
+			setState(READY_ZERO_FEE);
 			return;
 		}
-		if (!isAddress(recipient)) {
-			setCcipFee(0n);
+		if (!isAddress(recipient) || amount <= 0n) {
+			setState(WAITING_FOR_INPUT);
 			return;
 		}
 
 		let cancelled = false;
+		setState({ fee: 0n, isLoading: true, isReady: false, error: null });
 
 		void (async () => {
 			try {
@@ -67,9 +80,9 @@ export function useTransferCcipFee(params: {
 					recipient: recipient as Address,
 					amount,
 				});
-				if (!cancelled) setCcipFee(fee);
+				if (!cancelled) setState({ fee, isLoading: false, isReady: true, error: null });
 			} catch {
-				if (!cancelled) setCcipFee(0n);
+				if (!cancelled) setState({ fee: 0n, isLoading: false, isReady: false, error: "Bridge fee is unavailable. Try again or choose another route." });
 			}
 		})();
 
@@ -78,5 +91,5 @@ export function useTransferCcipFee(params: {
 		};
 	}, [amount, fromChainId, recipient, toChainId]);
 
-	return ccipFee;
+	return state;
 }
