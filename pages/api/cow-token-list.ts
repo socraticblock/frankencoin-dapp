@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { base, gnosis, mainnet } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 import { getCowDeskZchfTokenListEntries } from "../../utils/cowswap";
 
 const TOKENS = [
-	...getCowDeskZchfTokenListEntries(),
+	...getCowDeskZchfTokenListEntries([base.id, mainnet.id]),
 	{
 		chainId: mainnet.id,
 		address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -35,14 +35,6 @@ const TOKENS = [
 		symbol: "USDC",
 		decimals: 6,
 		logoURI: "https://assets.coingecko.com/coins/images/6319/standard/usdc.png",
-	},
-	{
-		chainId: gnosis.id,
-		address: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d",
-		name: "Wrapped XDAI",
-		symbol: "WXDAI",
-		decimals: 18,
-		logoURI: "https://assets.coingecko.com/coins/images/11062/standard/Identity-Primary-DarkBG.png",
 	},
 ];
 
