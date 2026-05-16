@@ -4,8 +4,25 @@ import { getCowChainSlug, validateDeskOrderRoute, type DeskOrderSubmitRequest } 
 
 const ZERO_FEE = "0";
 const MAX_ORDER_VALIDITY_SECONDS = 10 * 60;
+const COW_API_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = COW_API_TIMEOUT_MS) {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetch(url, { ...init, signal: controller.signal });
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function withOptionalDetails(error: string, details: unknown) {
+	return process.env.NODE_ENV === "production" ? { error } : { error, details };
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+	res.setHeader("Cache-Control", "no-store");
+
 	if (req.method !== "POST") {
 		res.setHeader("Allow", "POST");
 		res.status(405).json({ error: "Method not allowed" });
@@ -37,25 +54,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 	if (!/^\d+$/.test(order.buyAmount) || BigInt(order.buyAmount) <= 0n) return res.status(400).json({ error: "Invalid buy amount." });
 	if (!Number.isInteger(order.validTo) || order.validTo <= now) return res.status(400).json({ error: "Quote has expired. Refresh the quote and try again." });
 	if (order.validTo > now + MAX_ORDER_VALIDITY_SECONDS) return res.status(400).json({ error: "Quote expiry is too far in the future. Refresh the quote and try again." });
-	if (typeof order.signature !== "string" || !order.signature.startsWith("0x")) return res.status(400).json({ error: "Missing signature." });
+	if (typeof order.signature !== "string" || !/^0x[a-fA-F0-9]+$/.test(order.signature)) return res.status(400).json({ error: "Missing or invalid signature." });
 
 	try {
-		const response = await fetch(`https://api.cow.fi/${cowChain}/api/v1/orders`, {
+		const response = await fetchWithTimeout(`https://api.cow.fi/${cowChain}/api/v1/orders`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json", Accept: "application/json" },
 			body: JSON.stringify(order),
 		});
 		const data = await response.json().catch(() => null);
-		if (!response.ok) {
-			return res.status(response.status).json({
-				error: getCowError(data),
-				details: data,
-			});
-		}
-		res.setHeader("Cache-Control", "no-store");
+		if (!response.ok) return res.status(response.status).json(withOptionalDetails(getCowError(data), data));
 		res.status(200).json({ orderUid: typeof data === "string" ? data : data?.uid ?? data?.orderUid, order: data });
 	} catch (error) {
-		res.status(500).json({ error: error instanceof Error ? error.message : "Order submission failed." });
+		const aborted = error instanceof Error && error.name === "AbortError";
+		res.status(aborted ? 504 : 500).json({ error: aborted ? "CoW order submission timed out. Try again." : "Order submission failed." });
 	}
 }
 
