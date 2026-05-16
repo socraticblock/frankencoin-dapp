@@ -139,6 +139,15 @@ function formatTokenAmount(value: bigint | string, decimals: number, maxFraction
 	return formatDisplayDecimal(formatUnits(raw, decimals), maxFractionDigits);
 }
 
+function shortenIdentifier(value: string, head = 8, tail = 6) {
+	if (value.length <= head + tail + 3) return value;
+	return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function getCowExplorerUrl(orderUid: string) {
+	return `https://explorer.cow.fi/search/${orderUid}`;
+}
+
 function getApproximateRate({
 	sellAmountBeforeFee,
 	buyAmount,
@@ -191,8 +200,8 @@ function getFriendlyError(error: unknown, fallback: string) {
 	const lower = message.toLowerCase();
 
 	if (lower.includes("user rejected") || lower.includes("user denied") || lower.includes("rejected by user")) {
-		if (lower.includes("sign") || lower.includes("signature") || lower.includes("typed")) return "Signature rejected in wallet.";
-		return "Approval rejected in wallet.";
+		if (lower.includes("sign") || lower.includes("signature") || lower.includes("typed")) return "Trade confirmation was cancelled. No trade was submitted.";
+		return "Token permission was cancelled. You can try again when ready.";
 	}
 	if (lower.includes("eip-712") || lower.includes("typed data") || lower.includes("1271")) {
 		return "This wallet could not sign the CoW order with EIP-712. Smart-contract wallet support will be added separately.";
@@ -723,7 +732,10 @@ export default function DeskSwapForm() {
 		setQuoteError(null);
 		setIsQuoteLoading(false);
 
-		if (!canRequestQuote || !address || !route || !sellAmountBeforeFee) return;
+		if (!canRequestQuote || !address || !route || !sellAmountBeforeFee) {
+			setIsRefreshingAfterApproval(false);
+			return;
+		}
 
 		let cancelled = false;
 		const timeout = window.setTimeout(async () => {
@@ -979,12 +991,23 @@ export default function DeskSwapForm() {
 
 					{submittedOrderUid ? (
 						<div className="mt-4 rounded-xl border border-[#e0d4bd] bg-card-content-primary px-4 py-3 text-sm leading-6 text-text-secondary dark:border-menu-separator">
-							<p className="font-semibold text-text-primary">{isOrderCompleted ? "Trade completed" : "Order submitted"}</p>
-							<p className="mt-1 break-all">Order id: {submittedOrderUid}</p>
+							<p className="font-semibold text-text-primary">{isOrderCompleted ? "Trade completed" : "Waiting for settlement"}</p>
+							<p className="mt-1">
+								{isOrderCompleted ? `You can find your ${route?.buyAsset.symbol ?? "tokens"} in your wallet.` : "CoW solvers are working on your trade."}
+							</p>
+							<p className="mt-1" title={submittedOrderUid}>Order ID: {shortenIdentifier(submittedOrderUid)}</p>
 							<p className="mt-1">
 								Status: {isCheckingOrderStatus ? "checking..." : orderStatusLabel ?? "submitted"}
 							</p>
-							{isOrderExpired ? <p className="mt-1 font-medium text-amber-700 dark:text-amber-200">Order expired. Refresh the quote and try again.</p> : null}
+							<a
+								href={getCowExplorerUrl(submittedOrderUid)}
+								target="_blank"
+								rel="noreferrer"
+								className="mt-2 inline-flex text-sm font-semibold text-text-primary underline decoration-[#c4a75f] underline-offset-4 hover:opacity-80"
+							>
+								Open in CoW Explorer
+							</a>
+							{isOrderExpired ? <p className="mt-2 font-medium text-amber-700 dark:text-amber-200">Order expired. Refresh the quote and try again.</p> : null}
 						</div>
 					) : null}
 
