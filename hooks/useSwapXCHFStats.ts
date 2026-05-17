@@ -1,7 +1,7 @@
 import { useConnection, useReadContracts } from "wagmi";
 import { decodeBigIntCall } from "@utils";
 import { erc20Abi } from "viem";
-import { ADDRESS, StablecoinBridgeABI } from "@frankencoin/zchf";
+import { ADDRESS, StablecoinBridgeV1ABI } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 
 export const useSwapXCHFStats = () => {
@@ -67,13 +67,13 @@ export const useSwapXCHFStats = () => {
 			{
 				chainId,
 				address: bridge,
-				abi: StablecoinBridgeABI,
+				abi: StablecoinBridgeV1ABI,
 				functionName: "limit",
 			},
 			{
 				chainId,
 				address: bridge,
-				abi: StablecoinBridgeABI,
+				abi: StablecoinBridgeV1ABI,
 				functionName: "horizon",
 			},
 		],

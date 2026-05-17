@@ -8,7 +8,7 @@ import { colors } from "../../utils/constant";
 import { useEffect, useState } from "react";
 import { readContract } from "wagmi/actions";
 import { WAGMI_CONFIG } from "../../app.config";
-import { ADDRESS, StablecoinBridgeABI } from "@frankencoin/zchf";
+import { ADDRESS, StablecoinBridgeV1ABI } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
 const ApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -63,7 +63,7 @@ export default function DebtAllocation() {
 		const fetcher = async () => {
 			const vchf = await readContract(WAGMI_CONFIG, {
 				address: ADDRESS[mainnet.id].stablecoinBridgeVCHF,
-				abi: StablecoinBridgeABI,
+				abi: StablecoinBridgeV1ABI,
 				functionName: "minted",
 			});
 			setSwapBridgeVCHF(vchf);

@@ -12,7 +12,7 @@ import { formatBigInt, shortenAddress } from "@utils";
 import { TxToast, renderErrorTxToast } from "@components/TxToast";
 import { WAGMI_CONFIG } from "../app.config";
 import AppCard from "@components/AppCard";
-import { ADDRESS, FrankencoinABI, StablecoinBridgeABI } from "@frankencoin/zchf";
+import { ADDRESS, FrankencoinABI, StablecoinBridgeV1ABI } from "@frankencoin/zchf";
 import AppLink from "@components/AppLink";
 import { mainnet } from "viem/chains";
 import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
@@ -120,7 +120,7 @@ export default function StablecoinBridge() {
 			const mintWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: bridge,
 				chainId,
-				abi: StablecoinBridgeABI,
+				abi: StablecoinBridgeV1ABI,
 				functionName: "mint",
 				args: [amount],
 			});
@@ -148,7 +148,7 @@ export default function StablecoinBridge() {
 			const burnWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: bridge,
 				chainId,
-				abi: StablecoinBridgeABI,
+				abi: StablecoinBridgeV1ABI,
 				functionName: "burn",
 				args: [amount],
 			});
