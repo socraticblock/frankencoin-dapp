@@ -2,7 +2,7 @@ import AppButton from "@components/AppButton";
 
 export default function ExchangeHelperPanel() {
 	return (
-		<section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+		<section className="grid grid-cols-1 gap-4 md:grid-cols-3">
 			<div className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary">
 				<h2 className="text-lg font-semibold text-text-primary">Already have ZCHF?</h2>
 				<p className="mt-2 text-sm leading-6 text-text-secondary">Move it to another chain, send it to another wallet, or start earning with your ZCHF.</p>
@@ -23,6 +23,13 @@ export default function ExchangeHelperPanel() {
 				<p className="mt-2 text-sm leading-6 text-text-secondary">Use Invest to mint, redeem, wrap, or unwrap Frankencoin Pool Shares. Exchange only handles buying and selling ZCHF.</p>
 				<AppButton to="/equity" width="w-auto" className="mt-4 min-h-[42px] px-4">
 					Open Invest
+				</AppButton>
+			</div>
+			<div className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-5 shadow-sm dark:border-menu-separator dark:bg-card-body-primary">
+				<h2 className="text-lg font-semibold text-text-primary">Have CHFAU or VCHF?</h2>
+				<p className="mt-2 text-sm leading-6 text-text-secondary">Use Stablecoin Bridge to move supported Swiss franc stablecoins into Frankencoin ZCHF through protocol modules.</p>
+				<AppButton to="/exchange?route=convert" width="w-auto" className="mt-4 min-h-[42px] px-4">
+					Open Convert
 				</AppButton>
 			</div>
 		</section>

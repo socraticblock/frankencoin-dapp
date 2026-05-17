@@ -32,7 +32,7 @@ const ADVANCED_ITEMS: NavItem[] = [
 	{ to: "/monitoring", name: "Monitoring" },
 	{ to: "/governance", name: "Governance" },
 	{ to: "/report", name: "Accounting Report" },
-	{ to: "/stablecoin-bridge", name: "Stablecoin Bridge" },
+	{ to: "/exchange?route=convert", name: "Stablecoin Bridge" },
 ];
 
 function NavDropdown({ label, items }: NavDropdownProps) {
