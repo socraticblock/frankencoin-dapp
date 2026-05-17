@@ -77,6 +77,7 @@ export default function LandingVisualAsset({ visual, size = "icon", className = 
 					width={IMAGE_DIMENSION[size]}
 					height={IMAGE_DIMENSION[size]}
 					sizes={IMAGE_SIZES[size]}
+					unoptimized={isWatermark}
 					className={`relative h-full w-full object-contain ${imageShadow}`}
 				/>
 			</div>
