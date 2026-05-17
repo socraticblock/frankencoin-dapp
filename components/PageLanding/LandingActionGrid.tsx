@@ -22,7 +22,7 @@ export default function LandingActionGrid() {
 						className={`relative min-h-[230px] overflow-hidden rounded-xl border border-[#e4d8c4] bg-[#fffdf8] p-5 shadow-sm dark:border-[#2a3444] dark:bg-[#101826] ${landingMotion.card}`}
 						style={{ animationDelay: `${index * 70}ms` }}
 					>
-						<div className={`pointer-events-none absolute hidden md:block ${isZchf ? "-right-12 top-3 z-0 opacity-95 dark:opacity-90" : "-right-6 -top-6 opacity-30 dark:opacity-24"}`}>
+						<div className={`pointer-events-none absolute hidden md:block ${isZchf ? "-right-12 top-3 z-0 opacity-80 dark:opacity-75" : "-right-6 -top-6 opacity-30 dark:opacity-24"}`}>
 							<LandingVisualAsset visual={action.visual} size="watermark" className={isZchf ? "h-44 w-44 xl:h-48 xl:w-48" : undefined} />
 						</div>
 						{isZchf ? <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] hidden w-[72%] bg-gradient-to-r from-[#fffdf8] via-[#fffdf8]/95 to-[#fffdf8]/0 dark:from-[#101826] dark:via-[#101826]/94 dark:to-[#101826]/0 md:block" /> : null}
