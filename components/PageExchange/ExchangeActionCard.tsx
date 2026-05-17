@@ -1,5 +1,7 @@
+import type { ExchangeAction } from "./exchangeRoute";
+
 export type ExchangeActionCardData = {
-	value: "fiat" | "swap";
+	value: ExchangeAction;
 	title: string;
 	subtitle: string;
 	detail: string;
