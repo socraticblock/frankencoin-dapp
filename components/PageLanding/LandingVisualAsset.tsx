@@ -31,20 +31,35 @@ const SIZE_CLASS = {
 	watermark: "h-52 w-52",
 };
 
+const SURFACE_CLASS = {
+	hero: "shadow-[inset_0_0_28px_rgba(255,255,255,0.32),0_22px_50px_rgba(3,10,24,0.26)]",
+	card: "shadow-[inset_0_0_22px_rgba(255,255,255,0.28),0_10px_24px_rgba(3,10,24,0.16)]",
+	icon: "shadow-[inset_0_0_14px_rgba(255,255,255,0.22)]",
+	watermark: "shadow-[inset_0_0_20px_rgba(255,255,255,0.18)]",
+};
+
+const TEXT_CLASS = {
+	hero: "text-lg",
+	card: "text-[10px]",
+	icon: "text-[9px]",
+	watermark: "text-lg",
+};
+
 export default function LandingVisualAsset({ visual, size = "icon", className = "" }: Props) {
-	const isHero = size === "hero" || size === "watermark";
+	if (visual === "zchf" && size === "watermark") return null;
+
 	return (
 		<div
 			aria-hidden="true"
 			className={`relative shrink-0 ${SIZE_CLASS[size]} ${className}`}
 		>
 			<div className={`absolute inset-0 rounded-full bg-gradient-to-br ${VISUAL_TONE[visual]} opacity-90 blur-[1px]`} />
-			<div className="absolute inset-[10%] rounded-full border border-white/40 bg-[#fffaf0]/45 shadow-[inset_0_0_28px_rgba(255,255,255,0.32),0_22px_50px_rgba(3,10,24,0.26)] dark:border-[#e6c985]/35 dark:bg-[#101a2a]/70" />
+			<div className={`absolute inset-[10%] rounded-full border border-white/40 bg-[#fffaf0]/45 ${SURFACE_CLASS[size]} dark:border-[#e6c985]/35 dark:bg-[#101a2a]/70`} />
 			<div className="absolute inset-[23%] rounded-[32%] border border-[#d6bd7c]/70 bg-[#07111f]/80 shadow-[inset_0_0_22px_rgba(230,201,133,0.18)]" />
 			<div className="absolute left-[22%] right-[22%] top-[18%] h-px bg-white/35" />
 			<div className="absolute bottom-[18%] left-[20%] right-[20%] h-px bg-[#d6bd7c]/40" />
 			<div className="absolute inset-0 flex items-center justify-center">
-				<span className={`${isHero ? "text-lg" : "text-[10px]"} font-black tracking-[0.18em] text-[#fff7df] drop-shadow`}>
+				<span className={`${TEXT_CLASS[size]} font-black tracking-[0.18em] text-[#fff7df] drop-shadow`}>
 					{VISUAL_LABEL[visual]}
 				</span>
 			</div>

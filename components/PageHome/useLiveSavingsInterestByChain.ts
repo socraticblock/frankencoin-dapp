@@ -39,6 +39,12 @@ export type ChainLiveInterest = {
 	status: ChainInterestStatus;
 };
 
+type LiveSavingsInterestOptions = {
+	live?: boolean;
+	refetchInterval?: number;
+	staleTime?: number;
+};
+
 function parseSavingsTuple(result: unknown): { balance: bigint; ticks: bigint } | null {
 	if (!Array.isArray(result) || result.length < 2) return null;
 	const balance = result[0];
@@ -50,9 +56,14 @@ function parseSavingsTuple(result: unknown): { balance: bigint; ticks: bigint } 
 /**
  * Per-chain claimable interest using the same on-chain reads + `chainStatus.rate` as Earn (SavingsInteractionCard).
  */
-export function useLiveSavingsInterestByChain(account: Address | undefined, chainIds: ChainId[]): Map<ChainId, ChainLiveInterest> {
+export function useLiveSavingsInterestByChain(
+	account: Address | undefined,
+	chainIds: ChainId[],
+	options: LiveSavingsInterestOptions = {}
+): Map<ChainId, ChainLiveInterest> {
+	const { live = true, refetchInterval = 60_000, staleTime = 30_000 } = options;
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
-	const { data: blockNumber } = useBlockNumber({ watch: true });
+	const { data: blockNumber } = useBlockNumber({ watch: live });
 
 	const chainMetas = useMemo(() => {
 		const list: { chainId: ChainId; savingsAddr: Address; rate: bigint }[] = [];
@@ -103,6 +114,8 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 		contracts,
 		query: {
 			enabled: queryEnabled,
+			refetchInterval: live ? false : refetchInterval,
+			staleTime: live ? 0 : staleTime,
 		},
 	});
 
@@ -112,11 +125,11 @@ export function useLiveSavingsInterestByChain(account: Address | undefined, chai
 	}, [account]);
 
 	useEffect(() => {
-		if (!queryEnabled || blockNumber === undefined) return;
+		if (!live || !queryEnabled || blockNumber === undefined) return;
 		const prev = prevBlockRef.current;
 		prevBlockRef.current = blockNumber;
 		if (prev !== undefined && prev !== blockNumber) void refetch();
-	}, [blockNumber, queryEnabled, refetch]);
+	}, [blockNumber, live, queryEnabled, refetch]);
 
 	return useMemo(() => {
 		const map = new Map<ChainId, ChainLiveInterest>();

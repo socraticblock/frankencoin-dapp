@@ -5,8 +5,8 @@ import { landingMotion } from "./motion";
 
 export default function LandingPreviewPanel() {
 	return (
-		<aside className={`relative rounded-[1.35rem] border border-[#d6bd7c]/55 bg-[#fffaf0]/82 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.16)] backdrop-blur-xl dark:border-[#d6bd7c]/45 dark:bg-[#07111f]/90 dark:shadow-[0_28px_100px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-5 ${landingMotion.preview}`}>
-			<div className="pointer-events-none absolute inset-0 rounded-[1.35rem] bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.6),transparent_28%),radial-gradient(circle_at_80%_110%,rgba(214,189,124,0.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.16),transparent_28%),radial-gradient(circle_at_80%_110%,rgba(96,165,250,0.12),transparent_34%)]" />
+		<aside className={`relative rounded-[1.35rem] border border-[#d6bd7c]/55 bg-[#fffaf0]/88 p-3 shadow-[0_12px_36px_rgba(15,23,42,0.12)] backdrop-blur-md dark:border-[#d6bd7c]/45 dark:bg-[#07111f]/92 dark:shadow-[0_16px_48px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5 md:shadow-[0_24px_80px_rgba(15,23,42,0.16)] md:backdrop-blur-xl md:dark:shadow-[0_28px_100px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] ${landingMotion.preview}`}>
+			<div className="pointer-events-none absolute inset-0 rounded-[1.35rem] bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.42),transparent_26%)] md:bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.6),transparent_28%),radial-gradient(circle_at_80%_110%,rgba(214,189,124,0.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.12),transparent_26%)] md:dark:bg-[radial-gradient(circle_at_45%_0%,rgba(255,255,255,0.16),transparent_28%),radial-gradient(circle_at_80%_110%,rgba(96,165,250,0.12),transparent_34%)]" />
 			<div className="relative">
 				<div className="flex items-center justify-between gap-3">
 					<div className="flex items-center gap-3">

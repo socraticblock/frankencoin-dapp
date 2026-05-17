@@ -19,7 +19,7 @@ export default function LandingActionGrid() {
 					className={`relative min-h-[230px] overflow-hidden rounded-xl border border-[#e4d8c4] bg-[#fffdf8] p-5 shadow-sm dark:border-[#2a3444] dark:bg-[#101826] ${landingMotion.card}`}
 					style={{ animationDelay: `${index * 70}ms` }}
 				>
-					<div className="absolute -right-6 -top-6 opacity-30 dark:opacity-24">
+					<div className="absolute -right-6 -top-6 hidden opacity-30 dark:opacity-24 md:block">
 						<LandingVisualAsset visual={action.visual} size="watermark" />
 					</div>
 					<div className="relative flex h-full flex-col">
