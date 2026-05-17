@@ -33,6 +33,20 @@ const SIZE_CLASS = {
 
 export default function LandingVisualAsset({ visual, size = "icon", className = "" }: Props) {
 	const isHero = size === "hero" || size === "watermark";
+
+	if (visual === "zchf") {
+		return (
+			<div aria-hidden="true" className={`relative shrink-0 ${SIZE_CLASS[size]} ${className}`}>
+				<div className="absolute inset-0 rounded-full bg-[#d6bd7c]/30 blur-2xl dark:bg-[#d6bd7c]/20" />
+				<img
+					src="/visuals/frankencoin/zchf-medallion.webp"
+					alt=""
+					className="relative h-full w-full object-contain drop-shadow-[0_18px_34px_rgba(15,23,42,0.18)] dark:drop-shadow-[0_18px_34px_rgba(0,0,0,0.42)]"
+				/>
+			</div>
+		);
+	}
+
 	return (
 		<div
 			aria-hidden="true"
