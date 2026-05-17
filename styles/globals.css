@@ -301,6 +301,24 @@ input {
 	border: none;
 }
 
+select {
+	color-scheme: light;
+}
+
+select option {
+	background-color: var(--card-content-secondary);
+	color: var(--text-primary);
+}
+
+.dark select {
+	color-scheme: dark;
+}
+
+.dark select option {
+	background-color: var(--card-content-primary);
+	color: var(--text-primary);
+}
+
 [type="text"]:focus,
 input:focus-visible,
 input:focus {
