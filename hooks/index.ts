@@ -8,6 +8,7 @@ export * from "./useFPSStats";
 export * from "./useContractUrl";
 export * from "./useSwapXCHFStats";
 export * from "./useSwapVCHFStats";
+export * from "./useSwapCHFAUStats";
 
 export * from "./useLocalStorage";
 export * from "./useDelegationQuery";
