@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { LandingVisualKey } from "./landingContent";
 
 type Props = {
@@ -45,8 +46,42 @@ const TEXT_CLASS = {
 	watermark: "text-lg",
 };
 
+const IMAGE_DIMENSION = {
+	hero: 224,
+	card: 80,
+	icon: 44,
+	watermark: 208,
+};
+
+const IMAGE_SIZES = {
+	hero: "(min-width: 640px) 224px, 176px",
+	card: "80px",
+	icon: "44px",
+	watermark: "208px",
+};
+
 export default function LandingVisualAsset({ visual, size = "icon", className = "" }: Props) {
 	if (visual === "zchf" && size === "watermark") return null;
+
+	if (visual === "zchf") {
+		const imageShadow =
+			size === "icon"
+				? "drop-shadow-[0_6px_12px_rgba(15,23,42,0.12)] dark:drop-shadow-[0_8px_14px_rgba(0,0,0,0.3)]"
+				: "drop-shadow-[0_14px_26px_rgba(15,23,42,0.16)] dark:drop-shadow-[0_14px_28px_rgba(0,0,0,0.36)]";
+		return (
+			<div aria-hidden="true" className={`relative shrink-0 ${SIZE_CLASS[size]} ${className}`}>
+				<div className="absolute inset-0 rounded-full bg-[#d6bd7c]/24 blur-xl dark:bg-[#d6bd7c]/16" />
+				<Image
+					src="/visuals/frankencoin/zchf-medallion.webp"
+					alt=""
+					width={IMAGE_DIMENSION[size]}
+					height={IMAGE_DIMENSION[size]}
+					sizes={IMAGE_SIZES[size]}
+					className={`relative h-full w-full object-contain ${imageShadow}`}
+				/>
+			</div>
+		);
+	}
 
 	return (
 		<div
