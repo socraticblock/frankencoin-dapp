@@ -13,28 +13,33 @@ const TONE_CLASS = {
 export default function LandingActionGrid() {
 	return (
 		<section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-			{landingActions.map((action, index) => (
-				<article
-					key={action.title}
-					className={`relative min-h-[230px] overflow-hidden rounded-xl border border-[#e4d8c4] bg-[#fffdf8] p-5 shadow-sm dark:border-[#2a3444] dark:bg-[#101826] ${landingMotion.card}`}
-					style={{ animationDelay: `${index * 70}ms` }}
-				>
-					<div className={`absolute hidden md:block ${action.visual === "zchf" ? "-right-5 -top-5 opacity-100 dark:opacity-95" : "-right-6 -top-6 opacity-30 dark:opacity-24"}`}>
-						<LandingVisualAsset visual={action.visual} size="watermark" />
-					</div>
-					<div className="relative flex h-full flex-col">
-						{action.visual === "zchf" ? null : (
-							<div className={`inline-flex h-11 w-11 items-center justify-center rounded-full border ${TONE_CLASS[action.tone]}`}>
-								<LandingVisualAsset visual={action.visual} size="icon" className="scale-[0.62]" />
-							</div>
-						)}
-						<h2 className={`${action.visual === "zchf" ? "mt-10 md:mt-5" : "mt-5"} text-lg font-black text-[#111827] dark:text-[#f8f2e8]`}>{action.title}</h2>
-						<p className="mt-3 text-sm leading-6 text-[#566174] dark:text-[#c7d1df]">{action.copy}</p>
-						<div className="flex-1" />
-						<AppLink href={action.href} label={action.label} icon className="mt-5 inline-flex text-sm font-black text-[#0b1f3a] hover:text-[#12345a] dark:text-[#e8d08b] dark:hover:text-[#f5dea2]" />
-					</div>
-				</article>
-			))}
+			{landingActions.map((action, index) => {
+				const isZchf = action.visual === "zchf";
+
+				return (
+					<article
+						key={action.title}
+						className={`relative min-h-[230px] overflow-hidden rounded-xl border border-[#e4d8c4] bg-[#fffdf8] p-5 shadow-sm dark:border-[#2a3444] dark:bg-[#101826] ${landingMotion.card}`}
+						style={{ animationDelay: `${index * 70}ms` }}
+					>
+						<div className={`pointer-events-none absolute hidden md:block ${isZchf ? "-right-12 top-3 z-0 opacity-95 dark:opacity-90" : "-right-6 -top-6 opacity-30 dark:opacity-24"}`}>
+							<LandingVisualAsset visual={action.visual} size="watermark" className={isZchf ? "h-44 w-44 xl:h-48 xl:w-48" : undefined} />
+						</div>
+						{isZchf ? <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] hidden w-[72%] bg-gradient-to-r from-[#fffdf8] via-[#fffdf8]/95 to-[#fffdf8]/0 dark:from-[#101826] dark:via-[#101826]/94 dark:to-[#101826]/0 md:block" /> : null}
+						<div className={`relative z-10 flex h-full flex-col ${isZchf ? "md:max-w-[60%] xl:max-w-[58%]" : ""}`}>
+							{isZchf ? null : (
+								<div className={`inline-flex h-11 w-11 items-center justify-center rounded-full border ${TONE_CLASS[action.tone]}`}>
+									<LandingVisualAsset visual={action.visual} size="icon" className="scale-[0.62]" />
+								</div>
+							)}
+							<h2 className={`${isZchf ? "mt-0 md:mt-5" : "mt-5"} text-lg font-black text-[#111827] dark:text-[#f8f2e8]`}>{action.title}</h2>
+							<p className="mt-3 text-sm leading-6 text-[#566174] dark:text-[#c7d1df]">{action.copy}</p>
+							<div className="flex-1" />
+							<AppLink href={action.href} label={action.label} icon className="mt-5 inline-flex text-sm font-black text-[#0b1f3a] hover:text-[#12345a] dark:text-[#e8d08b] dark:hover:text-[#f5dea2]" />
+						</div>
+					</article>
+				);
+			})}
 		</section>
 	);
 }
