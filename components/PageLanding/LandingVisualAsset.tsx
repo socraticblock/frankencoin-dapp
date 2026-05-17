@@ -61,18 +61,18 @@ const IMAGE_SIZES = {
 };
 
 export default function LandingVisualAsset({ visual, size = "icon", className = "" }: Props) {
-	if (visual === "zchf" && size === "watermark") return null;
-
 	if (visual === "zchf") {
-		const imageShadow =
-			size === "icon"
-				? "drop-shadow-[0_6px_12px_rgba(15,23,42,0.12)] dark:drop-shadow-[0_8px_14px_rgba(0,0,0,0.3)]"
-				: "drop-shadow-[0_14px_26px_rgba(15,23,42,0.16)] dark:drop-shadow-[0_14px_28px_rgba(0,0,0,0.36)]";
+		const isWatermark = size === "watermark";
+		const imageShadow = isWatermark
+			? "drop-shadow-[0_18px_32px_rgba(15,23,42,0.14)] dark:drop-shadow-[0_18px_34px_rgba(0,0,0,0.32)]"
+			: size === "icon"
+			? "drop-shadow-[0_6px_12px_rgba(15,23,42,0.12)] dark:drop-shadow-[0_8px_14px_rgba(0,0,0,0.3)]"
+			: "drop-shadow-[0_14px_26px_rgba(15,23,42,0.16)] dark:drop-shadow-[0_14px_28px_rgba(0,0,0,0.36)]";
 		return (
 			<div aria-hidden="true" className={`relative shrink-0 ${SIZE_CLASS[size]} ${className}`}>
-				<div className="absolute inset-0 rounded-full bg-[#d6bd7c]/24 blur-xl dark:bg-[#d6bd7c]/16" />
+				<div className="absolute inset-0 rounded-full bg-[#d6bd7c]/18 blur-xl dark:bg-[#d6bd7c]/12" />
 				<Image
-					src="/visuals/frankencoin/zchf-medallion.webp"
+					src={isWatermark ? "/visuals/frankencoin/zchf-coin-card.webp" : "/visuals/frankencoin/zchf-medallion.webp"}
 					alt=""
 					width={IMAGE_DIMENSION[size]}
 					height={IMAGE_DIMENSION[size]}
