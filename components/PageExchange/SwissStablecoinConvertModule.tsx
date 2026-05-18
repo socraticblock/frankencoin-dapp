@@ -26,21 +26,8 @@ type ConvertAssetConfig = {
 };
 
 const CONVERT_ASSETS: ConvertAssetConfig[] = [
-	{
-		id: "vchf",
-		symbol: "VCHF",
-		name: "VNX Swiss Franc",
-		decimals: 18,
-		enabled: true,
-	},
-	{
-		id: "chfau",
-		symbol: "CHFAU",
-		name: "AllUnity Swiss Franc Stablecoin",
-		decimals: 6,
-		enabled: false,
-		comingSoon: true,
-	},
+	{ id: "vchf", symbol: "VCHF", name: "VNX Swiss Franc", decimals: 18, enabled: true },
+	{ id: "chfau", symbol: "CHFAU", name: "AllUnity Swiss Franc Stablecoin", decimals: 6, enabled: false, comingSoon: true },
 ];
 
 function minBigInt(...values: bigint[]) {
@@ -70,15 +57,16 @@ function StatRow({ label, value }: { label: string; value: string }) {
 	);
 }
 
-function AssetButton({
-	asset,
-	active,
-	onClick,
-}: {
-	asset: ConvertAssetConfig;
-	active: boolean;
-	onClick: () => void;
-}) {
+function Pill({ label, active, amber }: { label: string; active?: boolean; amber?: boolean }) {
+	const color = active
+		? "bg-white/15 text-white"
+		: amber
+		? "bg-amber-500/15 text-amber-700 dark:text-amber-200"
+		: "bg-card-content-secondary text-text-secondary";
+	return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${color}`}>{label}</span>;
+}
+
+function AssetButton({ asset, active, onClick }: { asset: ConvertAssetConfig; active: boolean; onClick: () => void }) {
 	return (
 		<button
 			type="button"
@@ -94,13 +82,26 @@ function AssetButton({
 		>
 			<div className="flex items-center justify-between gap-3">
 				<span className="font-semibold">{asset.symbol}</span>
-				{asset.comingSoon ? (
-					<span className={`rounded-full px-2 py-1 text-xs font-semibold ${active ? "bg-white/15 text-white" : "bg-amber-500/15 text-amber-700 dark:text-amber-200"}`}>
-						Under review
-					</span>
-				) : null}
+				{asset.comingSoon ? <Pill label="Under review in Desk" active={active} amber={!active} /> : null}
 			</div>
 			<p className={`mt-1 text-sm ${active ? "text-white/80" : "text-text-secondary"}`}>{asset.name}</p>
+		</button>
+	);
+}
+
+function DirectionButton({ active, badge, label, onClick }: { active: boolean; badge: string; label: string; onClick: () => void }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`rounded-xl border px-4 py-3 text-left transition ${
+				active ? "border-[#c4a75f] bg-button-default text-white" : "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
+			}`}
+		>
+			<div className="flex items-center justify-between gap-3">
+				<span className="text-sm font-semibold">{label}</span>
+				<Pill label={badge} active={active} />
+			</div>
 		</button>
 	);
 }
@@ -108,6 +109,7 @@ function AssetButton({
 export default function SwissStablecoinConvertModule() {
 	const [selectedAssetId, setSelectedAssetId] = useState<ConvertAssetId>("vchf");
 	const [direction, setDirection] = useState<ConvertDirection>("stablecoin-to-zchf");
+	const [userSelectedDirection, setUserSelectedDirection] = useState(false);
 	const [amount, setAmount] = useState(0n);
 	const [isMinter, setMinter] = useState<bigint>(0n);
 	const [isApproving, setApproving] = useState(false);
@@ -137,11 +139,12 @@ export default function SwissStablecoinConvertModule() {
 	const hasAllowance = !isStablecoinToZchf || stats.otherUserAllowance >= amount;
 	const moduleExpired = stats.bridgeHorizon > 0n && stats.bridgeHorizon * 1000n < BigInt(Date.now());
 	const isDisabledAsset = !selectedAsset.enabled;
+	const horizonDate = formatDate(stats.bridgeHorizon);
 
 	const statusLabel = !activeMinter ? "Not active" : moduleExpired ? (isStablecoinToZchf ? "Expired for minting" : "Redeem only") : "Active";
 	const statusHelper =
 		moduleExpired && !isStablecoinToZchf
-			? "This module no longer mints new ZCHF, but ZCHF can still be converted back while module backing is available."
+			? `This module no longer accepts new ${selectedAsset.symbol}-to-ZCHF conversions, but ZCHF can still be converted back to ${selectedAsset.symbol} while module backing is available.`
 			: "";
 	const capacityLabel = isStablecoinToZchf ? "Available to convert" : "Available to redeem";
 	const capacityValue = `${formatBigInt(moduleCapacity, fromDecimals, 6)} ${fromSymbol}`;
@@ -149,8 +152,12 @@ export default function SwissStablecoinConvertModule() {
 	const backingValue = isStablecoinToZchf
 		? `${formatBigInt(availableMintZchf, 18, 6)} ZCHF`
 		: `${formatBigInt(convertAmountDecimals(moduleCapacity, 18, selectedAsset.decimals), selectedAsset.decimals, 6)} ${selectedAsset.symbol}`;
+	const horizonLabel = moduleExpired ? "Minting ended" : "Minting open until";
+	const forwardBadge = moduleExpired ? "Closed" : "Open";
+	const reverseBadge = moduleExpired ? "Available" : "Redeem";
+
 	const amountError = useMemo(() => {
-		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is under review.`;
+		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is under review in Desk.`;
 		if (amount === 0n) return "";
 		if (amount > fromBalance) return `Not enough ${fromSymbol} in your wallet.`;
 		if (amount > moduleCapacity) return isStablecoinToZchf ? "Not enough module capacity. Try a smaller amount." : "Not enough module backing. Try a smaller amount.";
@@ -160,9 +167,23 @@ export default function SwissStablecoinConvertModule() {
 	}, [activeMinter, amount, fromBalance, fromSymbol, isDisabledAsset, isStablecoinToZchf, moduleCapacity, moduleExpired, selectedAsset.symbol]);
 
 	useEffect(() => {
+		setUserSelectedDirection(false);
 		setAmount(0n);
 		setMinter(0n);
-	}, [selectedAssetId, direction]);
+	}, [selectedAssetId]);
+
+	useEffect(() => {
+		if (stats.bridgeHorizon === 0n || userSelectedDirection) return;
+		const expired = stats.bridgeHorizon * 1000n < BigInt(Date.now());
+		setDirection(expired ? "zchf-to-stablecoin" : "stablecoin-to-zchf");
+		setAmount(0n);
+		setMinter(0n);
+	}, [selectedAssetId, stats.bridgeHorizon, userSelectedDirection]);
+
+	useEffect(() => {
+		setAmount(0n);
+		setMinter(0n);
+	}, [direction]);
 
 	useEffect(() => {
 		const fetcher = async () => {
@@ -179,6 +200,11 @@ export default function SwissStablecoinConvertModule() {
 
 		fetcher();
 	}, [isMinter, stats.bridgeAddress, stats.chainId, stats.frankencoinAddress]);
+
+	const selectDirection = (nextDirection: ConvertDirection) => {
+		setUserSelectedDirection(true);
+		setDirection(nextDirection);
+	};
 
 	const handleApprove = async () => {
 		try {
@@ -246,7 +272,7 @@ export default function SwissStablecoinConvertModule() {
 		<section className="rounded-2xl border border-[#e8dcc8] bg-[#fffdf9] p-4 shadow-sm dark:border-menu-separator dark:bg-card-body-primary md:p-6">
 			<div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
 				<div>
-					<p className="text-xs uppercase tracking-wider text-text-secondary">Crypto convert quote</p>
+					<p className="text-xs uppercase tracking-wider text-text-secondary">Stablecoin Bridge</p>
 					<h2 className="mt-1 text-xl font-semibold text-text-primary">Convert Swiss stablecoins and ZCHF</h2>
 					<p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
 						Convert supported Swiss franc stablecoins into or out of Frankencoin through protocol modules.
@@ -254,6 +280,15 @@ export default function SwissStablecoinConvertModule() {
 				</div>
 				<AppLink className="text-sm font-semibold text-button-default hover:text-button-hover" label="View module contract" href={moduleUrl} external={true} />
 			</div>
+
+			{moduleExpired ? (
+				<div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
+					<p className="font-semibold">{selectedAsset.symbol} bridge is redeem-only</p>
+					<p className="mt-1 text-sm leading-6">
+						New {selectedAsset.symbol} to ZCHF conversions ended on {horizonDate}. You can still convert ZCHF back to {selectedAsset.symbol} while module backing is available.
+					</p>
+				</div>
+			) : null}
 
 			<div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr),minmax(320px,420px)]">
 				<div className="space-y-4">
@@ -264,33 +299,16 @@ export default function SwissStablecoinConvertModule() {
 								<AssetButton key={asset.id} asset={asset} active={selectedAssetId === asset.id} onClick={() => asset.enabled && setSelectedAssetId(asset.id)} />
 							))}
 						</div>
+						<p className="mt-3 rounded-xl border border-menu-separator bg-card-content-primary px-3 py-2 text-sm leading-6 text-text-secondary">
+							CHFAU support is prepared but disabled here until wallet tests confirm 6-decimal amount handling, Max, approval, minting, and redeem behavior.
+						</p>
 					</div>
 
 					<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary p-4 dark:border-menu-separator">
 						<p className="text-sm font-medium text-text-secondary">Direction</p>
 						<div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-							<button
-								type="button"
-								onClick={() => setDirection("stablecoin-to-zchf")}
-								className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-									isStablecoinToZchf
-										? "border-[#c4a75f] bg-button-default text-white"
-										: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
-								}`}
-							>
-								{selectedAsset.symbol} to ZCHF
-							</button>
-							<button
-								type="button"
-								onClick={() => setDirection("zchf-to-stablecoin")}
-								className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-									!isStablecoinToZchf
-										? "border-[#c4a75f] bg-button-default text-white"
-										: "border-[#e0d4bd] bg-card-content-primary text-text-primary hover:border-[#c4a75f] dark:border-menu-separator"
-								}`}
-							>
-								ZCHF to {selectedAsset.symbol}
-							</button>
+							<DirectionButton active={isStablecoinToZchf} badge={forwardBadge} label={`Convert ${selectedAsset.symbol} to ZCHF`} onClick={() => selectDirection("stablecoin-to-zchf")} />
+							<DirectionButton active={!isStablecoinToZchf} badge={reverseBadge} label={`Redeem ZCHF to ${selectedAsset.symbol}`} onClick={() => selectDirection("zchf-to-stablecoin")} />
 						</div>
 					</div>
 
@@ -319,7 +337,7 @@ export default function SwissStablecoinConvertModule() {
 						<StatRow label="Rate" value={`1 ${selectedAsset.symbol} = 1 ZCHF`} />
 						<StatRow label={capacityLabel} value={capacityValue} />
 						<StatRow label={backingLabel} value={backingValue} />
-						<StatRow label="Expires" value={formatDate(stats.bridgeHorizon)} />
+						<StatRow label={horizonLabel} value={horizonDate} />
 						<StatRow label="Status" value={statusLabel} />
 					</div>
 					{statusHelper ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-100">{statusHelper}</p> : null}
