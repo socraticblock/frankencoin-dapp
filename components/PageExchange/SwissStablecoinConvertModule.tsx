@@ -158,8 +158,8 @@ export default function SwissStablecoinConvertModule() {
 	const amountError = useMemo(() => {
 		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is not available.`;
 		if (amount === 0n) return "";
-		if (amount > fromBalance) return `Not enough ${fromSymbol} in your wallet.`;
 		if (hasRedeemDust) return `${selectedAsset.symbol} supports ${selectedAsset.decimals} decimals. Enter a ZCHF amount with no more than ${selectedAsset.decimals} decimal places.`;
+		if (amount > fromBalance) return `Not enough ${fromSymbol} in your wallet.`;
 		if (amount > moduleCapacity) return isStablecoinToZchf ? "Not enough module capacity. Try a smaller amount." : "Not enough module backing. Try a smaller amount.";
 		if (isStablecoinToZchf && moduleExpired) return `This module no longer accepts new ${selectedAsset.symbol}-to-ZCHF conversions.`;
 		if (!activeMinter) return "Module is not active.";
