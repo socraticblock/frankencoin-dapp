@@ -22,12 +22,11 @@ type ConvertAssetConfig = {
 	name: string;
 	decimals: number;
 	enabled: boolean;
-	comingSoon?: boolean;
 };
 
 const CONVERT_ASSETS: ConvertAssetConfig[] = [
 	{ id: "vchf", symbol: "VCHF", name: "VNX Swiss Franc", decimals: 18, enabled: true },
-	{ id: "chfau", symbol: "CHFAU", name: "AllUnity Swiss Franc Stablecoin", decimals: 6, enabled: false, comingSoon: true },
+	{ id: "chfau", symbol: "CHFAU", name: "AllUnity Swiss Franc Stablecoin", decimals: 6, enabled: true },
 ];
 
 function minBigInt(...values: bigint[]) {
@@ -57,13 +56,8 @@ function StatRow({ label, value }: { label: string; value: string }) {
 	);
 }
 
-function Pill({ label, active, amber }: { label: string; active?: boolean; amber?: boolean }) {
-	const color = active
-		? "bg-white/15 text-white"
-		: amber
-		? "bg-amber-500/15 text-amber-700 dark:text-amber-200"
-		: "bg-card-content-secondary text-text-secondary";
-	return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${color}`}>{label}</span>;
+function Pill({ label, active }: { label: string; active?: boolean }) {
+	return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${active ? "bg-white/15 text-white" : "bg-card-content-secondary text-text-secondary"}`}>{label}</span>;
 }
 
 function AssetButton({ asset, active, onClick }: { asset: ConvertAssetConfig; active: boolean; onClick: () => void }) {
@@ -80,10 +74,7 @@ function AssetButton({ asset, active, onClick }: { asset: ConvertAssetConfig; ac
 					: "cursor-not-allowed border-[#e0d4bd] bg-card-content-secondary text-text-secondary opacity-80 dark:border-menu-separator"
 			}`}
 		>
-			<div className="flex items-center justify-between gap-3">
-				<span className="font-semibold">{asset.symbol}</span>
-				{asset.comingSoon ? <Pill label="Under review in Desk" active={active} amber={!active} /> : null}
-			</div>
+			<span className="font-semibold">{asset.symbol}</span>
 			<p className={`mt-1 text-sm ${active ? "text-white/80" : "text-text-secondary"}`}>{asset.name}</p>
 		</button>
 	);
@@ -157,7 +148,7 @@ export default function SwissStablecoinConvertModule() {
 	const reverseBadge = moduleExpired ? "Available" : "Redeem";
 
 	const amountError = useMemo(() => {
-		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is under review in Desk.`;
+		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is not available.`;
 		if (amount === 0n) return "";
 		if (amount > fromBalance) return `Not enough ${fromSymbol} in your wallet.`;
 		if (amount > moduleCapacity) return isStablecoinToZchf ? "Not enough module capacity. Try a smaller amount." : "Not enough module backing. Try a smaller amount.";
@@ -299,9 +290,6 @@ export default function SwissStablecoinConvertModule() {
 								<AssetButton key={asset.id} asset={asset} active={selectedAssetId === asset.id} onClick={() => asset.enabled && setSelectedAssetId(asset.id)} />
 							))}
 						</div>
-						<p className="mt-3 rounded-xl border border-menu-separator bg-card-content-primary px-3 py-2 text-sm leading-6 text-text-secondary">
-							CHFAU support is prepared but disabled here until wallet tests confirm 6-decimal amount handling, Max, approval, minting, and redeem behavior.
-						</p>
 					</div>
 
 					<div className="rounded-2xl border border-[#e0d4bd] bg-card-content-secondary p-4 dark:border-menu-separator">
