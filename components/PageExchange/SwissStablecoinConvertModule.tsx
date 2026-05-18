@@ -40,6 +40,11 @@ function convertAmountDecimals(amount: bigint, fromDecimals: number, toDecimals:
 	return amount;
 }
 
+function roundDownToUnit(amount: bigint, unit: bigint) {
+	if (unit <= 1n) return amount;
+	return amount - (amount % unit);
+}
+
 function formatDate(seconds: bigint) {
 	if (seconds === 0n) return "Unavailable";
 	const date = new Date(Number(seconds * 1000n));
@@ -125,8 +130,11 @@ export default function SwissStablecoinConvertModule() {
 	const moduleBalanceAsZchf = convertAmountDecimals(stats.otherBridgeBal, selectedAsset.decimals, 18);
 	const availableReturnZchf = minBigInt(stats.bridgeMinted, moduleBalanceAsZchf);
 	const fromBalance = isStablecoinToZchf ? stats.otherUserBal : stats.zchfUserBal;
-	const moduleCapacity = isStablecoinToZchf ? availableMintFromToken : availableReturnZchf;
-	const maxAmount = minBigInt(fromBalance, moduleCapacity);
+	const redeemUnit = !isStablecoinToZchf && selectedAsset.decimals < 18 ? 10n ** BigInt(18 - selectedAsset.decimals) : 1n;
+	const rawModuleCapacity = isStablecoinToZchf ? availableMintFromToken : availableReturnZchf;
+	const moduleCapacity = roundDownToUnit(rawModuleCapacity, redeemUnit);
+	const maxAmount = roundDownToUnit(minBigInt(fromBalance, moduleCapacity), redeemUnit);
+	const hasRedeemDust = amount > 0n && redeemUnit > 1n && amount % redeemUnit !== 0n;
 	const hasAllowance = !isStablecoinToZchf || stats.otherUserAllowance >= amount;
 	const moduleExpired = stats.bridgeHorizon > 0n && stats.bridgeHorizon * 1000n < BigInt(Date.now());
 	const isDisabledAsset = !selectedAsset.enabled;
@@ -151,11 +159,12 @@ export default function SwissStablecoinConvertModule() {
 		if (isDisabledAsset) return `${selectedAsset.symbol} conversion is not available.`;
 		if (amount === 0n) return "";
 		if (amount > fromBalance) return `Not enough ${fromSymbol} in your wallet.`;
+		if (hasRedeemDust) return `${selectedAsset.symbol} supports ${selectedAsset.decimals} decimals. Enter a ZCHF amount with no more than ${selectedAsset.decimals} decimal places.`;
 		if (amount > moduleCapacity) return isStablecoinToZchf ? "Not enough module capacity. Try a smaller amount." : "Not enough module backing. Try a smaller amount.";
 		if (isStablecoinToZchf && moduleExpired) return `This module no longer accepts new ${selectedAsset.symbol}-to-ZCHF conversions.`;
 		if (!activeMinter) return "Module is not active.";
 		return "";
-	}, [activeMinter, amount, fromBalance, fromSymbol, isDisabledAsset, isStablecoinToZchf, moduleCapacity, moduleExpired, selectedAsset.symbol]);
+	}, [activeMinter, amount, fromBalance, fromSymbol, hasRedeemDust, isDisabledAsset, isStablecoinToZchf, moduleCapacity, moduleExpired, selectedAsset.decimals, selectedAsset.symbol]);
 
 	useEffect(() => {
 		setUserSelectedDirection(false);
