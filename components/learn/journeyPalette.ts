@@ -1,0 +1,11 @@
+export const BRASS = "#b08a4a";
+export const DARK_BRASS = "#5e4524";
+export const SLATE = "#17212f";
+export const IVORY = "#fbf7ef";
+export const SOFT_IVORY = "#f4efe6";
+export const MUTED = "#667085";
+export const MUTED_BLUE = "#9bb7c7";
+export const AMBER = "#c98a2e";
+export const STONE = "#d9d2c5";
+export const WOOD = "#c8b9a4";
+export const FADED = "#c5ccd4";
