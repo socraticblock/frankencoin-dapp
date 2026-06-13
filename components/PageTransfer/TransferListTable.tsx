@@ -34,11 +34,10 @@ export default function TransferListTable() {
 		if (sender.length == 0 && recipient.length == 0) {
 			const fetcher = async () => {
 				const data = await FRANKENCOIN_API_CLIENT.get<ApiTransferReferenceList>(`/transfer/reference/list`);
-				const normalizedList = normalizeTransferList(data.data);
 				if (reference.length == 0) {
-					setFetchedList(normalizedList);
+					setFetchedList(data.data.list);
 				} else {
-					setFetchedList(normalizedList.filter((i) => i.reference == reference));
+					setFetchedList(data.data.list.filter((i) => i.reference == reference));
 				}
 			};
 
@@ -66,7 +65,7 @@ export default function TransferListTable() {
 				}
 			);
 
-			setFetchedList(normalizeTransferList(data.data));
+			setFetchedList(data.data);
 		};
 
 		fetcher();
@@ -172,7 +171,7 @@ type SortFunctionParams = {
 
 function sortFunction(params: SortFunctionParams): TransferReferenceQuery[] {
 	const { list, headers, tab, reverse } = params;
-	let sortingList = Array.isArray(list) ? [...list] : []; // make it writeable
+	let sortingList = [...list]; // make it writeable
 
 	if (tab === headers[0]) {
 		// Date
@@ -191,12 +190,4 @@ function sortFunction(params: SortFunctionParams): TransferReferenceQuery[] {
 		sortingList.sort((a, b) => (b.amount > a.amount ? 1 : -1));
 	}
 	return reverse ? sortingList.reverse() : sortingList;
-}
-
-function normalizeTransferList(response: unknown): TransferReferenceQuery[] {
-	if (Array.isArray(response)) return response as TransferReferenceQuery[];
-	if (response && typeof response === "object" && "list" in response && Array.isArray((response as { list?: unknown }).list)) {
-		return (response as { list: TransferReferenceQuery[] }).list;
-	}
-	return [];
 }

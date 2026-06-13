@@ -1,18 +1,19 @@
 import Link from "next/link";
 import WalletConnect from "./WalletConnect";
 import NavButton from "./NavButton";
+import ThemeToggle from "./ThemeToggle";
+import useThemeMode from "../hooks/useThemeMode";
 import { CONFIG } from "../app.config";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { useConnection } from "wagmi";
-import ThemeToggle from "./ThemeToggle";
-import useThemeMode from "../hooks/useThemeMode";
+import { track } from "../hooks/useAnalytics";
 
 const MAIN_ITEMS = [
 	{ to: "/mint", name: "Borrow" },
+	{ to: "/mypositions", name: "My Positions" },
 	{ to: "/savings", name: "Earn" },
 	{ to: "/equity", name: "Invest" },
-	{ to: "/mypositions", name: "Portfolio" },
 ];
 
 const MORE_ITEMS = [
@@ -44,7 +45,7 @@ function MoreDropdown() {
 					isActive ? "text-menu-textactive bg-menu-active font-semibold" : "text-menu-text"
 				}`}
 			>
-				Advanced
+				More
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
@@ -101,7 +102,7 @@ export default function Navbar() {
 				<header className="grid grid-cols-[1fr,auto,1fr] items-center md:py-4 py-3 px-4 w-full">
 					{/* Left: logo */}
 					<div className="flex items-center md:pl-4">
-						<Link href={CONFIG.landing} data-umami-event="nav_home">
+						<Link href={CONFIG.landing} onClick={() => track("nav_home")}>
 							<picture>
 								<img className="h-9 transition" src="/coin/zchf.png" alt="Logo" />
 							</picture>
@@ -127,7 +128,7 @@ export default function Navbar() {
 
 					{/* Right: desktop wallet / mobile hamburger */}
 					<div className="flex justify-end items-center gap-2">
-						<div className="hidden md:flex">
+						<div className="hidden md:flex items-center gap-2 pr-2">
 							<ThemeToggle theme={theme} onToggle={toggleTheme} />
 						</div>
 						<div className="hidden md:flex">
@@ -166,10 +167,7 @@ export default function Navbar() {
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
 						</svg>
 					</button>
-					<div className="mt-12 mb-3">
-						<ThemeToggle theme={theme} onToggle={toggleTheme} />
-					</div>
-					<menu className="grid grid-cols-1 gap-2" onClick={() => setIsNavBarOpen(false)}>
+					<menu className="grid grid-cols-1 gap-2 mt-12" onClick={() => setIsNavBarOpen(false)}>
 						<NavItems items={allItems} />
 					</menu>
 				</div>

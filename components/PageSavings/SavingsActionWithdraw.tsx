@@ -88,7 +88,7 @@ export default function SavingsActionWithdraw({
 	return (
 		<GuardSupportedChain chain={chain}>
 			<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-				Withdraw ZCHF
+				Adjust
 			</AppButton>
 		</GuardSupportedChain>
 	);

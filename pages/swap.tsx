@@ -1,24 +1,21 @@
 import Head from "next/head";
 import TokenInput from "@components/Input/TokenInput";
 import { useEffect, useState } from "react";
-import { useContractUrl, useSwapVCHFStats } from "@hooks";
+import { useContractUrl, useSwapVCHFStats, useSwapCHFAUStats } from "@hooks";
+import { useRouter } from "next/router";
 import { erc20Abi, maxUint256 } from "viem";
 import AppButton from "@components/AppButton";
-import { useChainId } from "wagmi";
 import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { formatBigInt, shortenAddress } from "@utils";
 import { TxToast, renderErrorTxToast } from "@components/TxToast";
-import GuardToAllowedChainBtn from "@components/Guards/GuardToAllowedChainBtn";
 import { WAGMI_CONFIG } from "../app.config";
 import AppCard from "@components/AppCard";
-import { ADDRESS, FrankencoinABI, StablecoinBridgeABI } from "@frankencoin/zchf";
+import { FrankencoinABI } from "@frankencoin/zchf";
 import AppLink from "@components/AppLink";
-import { mainnet } from "viem/chains";
 import GuardSupportedChain from "@components/Guards/GuardSupportedChain";
-import { track } from "@hooks";
 
 export default function Swap() {
 	const [amount, setAmount] = useState(0n);
@@ -30,24 +27,47 @@ export default function Swap() {
 	const [isBurning, setBurning] = useState(false);
 	const [isMinter, setMinter] = useState<bigint>(0n);
 
-	const chainId = mainnet.id;
-	const swapStats = useSwapVCHFStats();
+	const router = useRouter();
+	const vchfStats = useSwapVCHFStats();
+	const chfauStats = useSwapCHFAUStats();
+	const swapStats = (router.query.token as string)?.toUpperCase() === "VCHF" ? vchfStats : chfauStats;
 
-	const other = ADDRESS[chainId].vchfToken;
-	const bridge = ADDRESS[chainId].stablecoinBridgeVCHF;
+	const { chain, chainId, otherAddress: other, bridgeAddress: bridge, frankencoinAddress, bridgeAbi, otherDecimals } = swapStats;
 	const bridgeUrl = useContractUrl(bridge);
+
+	const fromDecimals = direction ? otherDecimals : 18;
+	const toDecimals = direction ? 18 : otherDecimals;
+	const decimalDiff = toDecimals - fromDecimals;
+	const toAmount =
+		decimalDiff > 0
+			? amount * BigInt(10) ** BigInt(decimalDiff)
+			: decimalDiff < 0
+			? amount / BigInt(10) ** BigInt(-decimalDiff)
+			: amount;
+
+	// Reset state when switching bridges; init direction to burn if already expired
+	useEffect(() => {
+		setAmount(0n);
+		setMinter(0n);
+	}, [bridge]);
+
+	useEffect(() => {
+		if (swapStats.bridgeHorizon === 0n) return;
+		const expired = swapStats.bridgeHorizon * 1000n < BigInt(Date.now());
+		setDirection(!expired);
+	}, [swapStats.bridgeHorizon, bridge]);
 
 	const activeMinter = isMinter > 0 && isMinter * 1000n <= Date.now();
 	const fromBalance = direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
-	const toBalance = !direction ? swapStats.otherUserBal : swapStats.zchfUserBal;
 	const fromSymbol = direction ? swapStats.otherSymbol : "ZCHF";
 	const toSymbol = !direction ? swapStats.otherSymbol : "ZCHF";
-	const swapLimit = direction ? swapStats.bridgeLimit - swapStats.otherBridgeBal : swapStats.otherBridgeBal;
+	const swapLimit = direction ? swapStats.bridgeLimit - swapStats.bridgeMinted : swapStats.bridgeMinted; // (18 digits)
+	const swapLimitCorrected = (swapLimit * 10n ** BigInt(fromDecimals)) / 10n ** 18n;
 
 	useEffect(() => {
 		const fetcher = async () => {
 			const active = await readContract(WAGMI_CONFIG, {
-				address: ADDRESS[chainId].frankencoin,
+				address: frankencoinAddress,
 				chainId,
 				abi: FrankencoinABI,
 				functionName: "minters",
@@ -81,14 +101,14 @@ export default function Swap() {
 	}, [activeMinter, swapStats, direction]);
 
 	useEffect(() => {
-		if (amount > fromBalance) {
-			setError(`Not enough ${fromSymbol} in your wallet.`);
-		} else if (amount > swapLimit) {
+		if (amount > swapLimitCorrected) {
 			setError(`Not enough ${toSymbol} available to swap.`);
+		} else if (amount > fromBalance) {
+			setError(`Not enough ${fromSymbol} in your wallet.`);
 		} else {
 			setError("");
 		}
-	}, [amount, direction, fromBalance, fromSymbol, swapLimit, toSymbol]);
+	}, [amount, direction, fromBalance, fromSymbol, swapLimitCorrected, toSymbol]);
 
 	const handleApprove = async () => {
 		try {
@@ -136,7 +156,7 @@ export default function Swap() {
 			const mintWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: bridge,
 				chainId,
-				abi: StablecoinBridgeABI,
+				abi: bridgeAbi,
 				functionName: "mint",
 				args: [amount],
 			});
@@ -144,11 +164,11 @@ export default function Swap() {
 			const toastContent = [
 				{
 					title: `${fromSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + fromSymbol,
+					value: formatBigInt(amount, fromDecimals) + " " + fromSymbol,
 				},
 				{
 					title: `${toSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + toSymbol,
+					value: formatBigInt(toAmount, toDecimals) + " " + toSymbol,
 				},
 				{
 					title: "Transaction:",
@@ -177,7 +197,7 @@ export default function Swap() {
 			const burnWriteHash = await writeContract(WAGMI_CONFIG, {
 				address: bridge,
 				chainId,
-				abi: StablecoinBridgeABI,
+				abi: bridgeAbi,
 				functionName: "burn",
 				args: [amount],
 			});
@@ -185,11 +205,11 @@ export default function Swap() {
 			const toastContent = [
 				{
 					title: `${fromSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + fromSymbol,
+					value: formatBigInt(amount, fromDecimals) + " " + fromSymbol,
 				},
 				{
 					title: `${toSymbol} Amount: `,
-					value: formatBigInt(amount) + " " + toSymbol,
+					value: formatBigInt(toAmount, toDecimals) + " " + toSymbol,
 				},
 				{
 					title: "Transaction:",
@@ -213,6 +233,7 @@ export default function Swap() {
 	};
 
 	const onChangeDirection = () => {
+		setAmount(toAmount);
 		setDirection(!direction);
 	};
 
@@ -235,16 +256,18 @@ export default function Swap() {
 						<div className="mt-8">
 							The <AppLink className="" label="swap module" href={bridgeUrl} external={true} /> enables 1:1 conversion between
 							other Swiss Franc stablecoins and back, up to certain limits. Currently,{" "}
-							<AppLink className="" label="VNX Swiss Franc (VCHF)" href="https://vnx.li/vchf/" external={true} /> is
+							<AppLink className="" label={swapStats.otherLabel} href={swapStats.otherInfoUrl} external={true} /> is
 							supported.
 						</div>
 
 						<div className="mt-8">
 							<TokenInput
-								max={fromBalance}
+								max={fromBalance < swapLimitCorrected ? fromBalance : swapLimitCorrected}
 								reset={0n}
+								digit={fromDecimals}
 								symbol={fromSymbol}
 								limit={fromBalance}
+								limitDigit={fromDecimals}
 								limitLabel="Balance"
 								placeholder={"Swap Amount"}
 								onChange={onChangeAmount}
@@ -261,9 +284,11 @@ export default function Swap() {
 
 						<TokenInput
 							symbol={toSymbol}
+							digit={toDecimals}
+							limitDigit={18}
 							limit={swapLimit}
 							limitLabel="Available"
-							value={amount.toString()}
+							value={toAmount.toString()}
 							note={`1 ${fromSymbol} = 1 ${toSymbol}`}
 							label="Receive"
 							disabled={true}
@@ -271,7 +296,7 @@ export default function Swap() {
 						/>
 
 						<div className="mx-auto mt-8 w-full flex-col">
-							<GuardSupportedChain chain={mainnet}>
+							<GuardSupportedChain chain={chain}>
 								{direction ? (
 									amount > swapStats.otherUserAllowance ? (
 										<AppButton

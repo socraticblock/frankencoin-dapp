@@ -1107,10 +1107,10 @@
   dependencies:
     prop-types "^15.8.1"
 
-"@frankencoin/api@^0.3.15":
-  version "0.3.15"
-  resolved "https://registry.yarnpkg.com/@frankencoin/api/-/api-0.3.15.tgz#6c568a5912c18dfe5daaaab7801ef2e2ca8fe9e2"
-  integrity sha512-MCzp/uVHI0YCIqfEXGorao+Fwtk6Brpo/8vzouhPuNmxV8DI/sgvdWfaaqcGPnG4CK4LBksE3qQciUn7vPrIXA==
+"@frankencoin/api@^0.3.16":
+  version "0.3.16"
+  resolved "https://registry.yarnpkg.com/@frankencoin/api/-/api-0.3.16.tgz#efcb59296726cab2ed899d743c191b92638eab24"
+  integrity sha512-2IbqchkuhsLeVzeDIdmOWNOjiczjMMR7mEQvo6TdFYBuMOCV+tuKhsWZg9fHFCNQDyv784TToWyNZaJ9j9AfnA==
   dependencies:
     "@apollo/client" "^3.10.5"
     "@aws-sdk/client-s3" "^3.620.0"
@@ -1135,10 +1135,18 @@
     rxjs "^7.8.1"
     viem "^2.31.7"
 
-"@frankencoin/zchf@^0.3.19", "@frankencoin/zchf@^0.3.21":
+"@frankencoin/zchf@^0.3.19":
   version "0.3.21"
   resolved "https://registry.yarnpkg.com/@frankencoin/zchf/-/zchf-0.3.21.tgz#22efc655a51d9bc1f0356996b3a8233e11fdcaf0"
   integrity sha512-U7FSpL2EUjF7PP+1B6q1QZK7uDifblBQERatmAOGp2M9Sbk1U3aQR7fXJQ7F/KV0I79o+dJZpyvwgzBu9MAUhQ==
+  dependencies:
+    ts-node "^10.9.1"
+    typescript "^5.2.2"
+
+"@frankencoin/zchf@^0.3.23":
+  version "0.3.23"
+  resolved "https://registry.yarnpkg.com/@frankencoin/zchf/-/zchf-0.3.23.tgz#d062fb088e9389ea99f992e6d0ef860690f36bac"
+  integrity sha512-OztX7A2v+/kOw1ACjB6nLKybrqiNN05a5Z2kC+y7qANUa7WXW3YRhk3ELF3JcBHNbMTIzvaJyn7thM8u4ZowNg==
   dependencies:
     ts-node "^10.9.1"
     typescript "^5.2.2"

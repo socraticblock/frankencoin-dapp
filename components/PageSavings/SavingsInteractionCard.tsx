@@ -20,7 +20,6 @@ import { useRouter } from "next/router";
 import AppLink from "@components/AppLink";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
-import AppChainBadge from "@components/AppChainBadge";
 
 export default function SavingsInteractionCard() {
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
@@ -53,7 +52,7 @@ export default function SavingsInteractionCard() {
 		chainId == 1 ? ADDRESS[chainId as ChainIdMain].savingsReferral : ADDRESS[chainId as ChainIdSide].ccipBridgedSavings
 	);
 
-	const chainStatus = status?.[chainId]?.[savingsAdresse];
+	const state = status[chainId][savingsAdresse];
 
 	const { data } = useBlockNumber({ watch: true });
 	const { address } = useConnection();
@@ -68,6 +67,8 @@ export default function SavingsInteractionCard() {
 	const fromSymbol = "ZCHF";
 	const change: bigint = amount - (userSavingsBalance + userSavingsInterest);
 	const direction: boolean = amount >= userSavingsBalance + userSavingsInterest;
+	const claimable: boolean = userSavingsInterest > 0n;
+
 	// ---------------------------------------------------------------------------
 
 	useEffect(() => {
@@ -85,7 +86,6 @@ export default function SavingsInteractionCard() {
 
 	useEffect(() => {
 		if (!isAddress(account)) return;
-		if (!chainStatus) return;
 
 		const fetchAsync = async function () {
 			const _balance = await readContract(WAGMI_CONFIG, {
@@ -115,8 +115,7 @@ export default function SavingsInteractionCard() {
 			});
 			setCurrentTicks(_current);
 
-			const safeRate = BigInt(chainStatus.rate || 0);
-			const _locktime = safeRate > 0n && _userTicks >= _current ? (_userTicks - _current) / safeRate : 0n;
+			const _locktime = _userTicks >= _current ? (_userTicks - _current) / BigInt(state.rate) : 0n;
 			setUserSavingsLocktime(_locktime);
 
 			const _tickDiff = _current - _userTicks;
@@ -145,7 +144,7 @@ export default function SavingsInteractionCard() {
 		};
 
 		fetchAsync();
-	}, [data, account, isLoaded, frankencoinAddress, savingsAdresse, chainStatus, chainId]);
+	}, [data, account, isLoaded, frankencoinAddress, savingsAdresse, state, chainId]);
 
 	useEffect(() => {
 		setLoaded(false);
@@ -181,16 +180,8 @@ export default function SavingsInteractionCard() {
 
 	return (
 		<section className="grid grid-cols-1 md:grid-cols-2 gap-4 mx-auto">
-			{!chainStatus ? (
-				<AppCard>
-					<div className="text-text-secondary">Savings data is loading for this chain. Please wait a moment.</div>
-				</AppCard>
-			) : null}
 			<AppCard>
-				<div className="flex items-center justify-between gap-3">
-					<div className="text-lg font-bold">{!onbehalfToggle ? "Earn with ZCHF" : "Save for another address"}</div>
-					<AppChainBadge label={`Saving on ${chain.name}`} />
-				</div>
+				<div className="text-lg font-bold text-center">{!onbehalfToggle ? "Adjustment" : "Save on behalf"}</div>
 
 				<div className="mt-8">
 					<TokenInputChain

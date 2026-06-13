@@ -91,7 +91,7 @@ export default function SavingsActionInterest({
 	return (
 		<GuardSupportedChain chain={chain}>
 			<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-				Collect to wallet
+				Adjust
 			</AppButton>
 		</GuardSupportedChain>
 	);

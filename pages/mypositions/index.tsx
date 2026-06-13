@@ -18,11 +18,6 @@ import ReportsPositionsYearlyTable from "@components/PageReports/ReportsPosition
 import { OwnerPositionDebt, OwnerPositionFees, OwnerPositionValueLocked } from "../report";
 import { FRANKENCOIN_API_CLIENT } from "../../app.config";
 import { ApiOwnerDebt, ApiOwnerValueLocked } from "@frankencoin/api";
-import AppPageHeader from "@components/AppPageHeader";
-import AppEmptyState from "@components/AppEmptyState";
-import MyPositionsTotalsCard from "@components/PageMypositions/MyPositionsTotalsCard";
-import { useSelector } from "react-redux";
-import { RootState } from "../../redux/redux.store";
 
 export default function Positions() {
 	const { address } = useConnection();
@@ -36,8 +31,6 @@ export default function Positions() {
 	const [ownerPositionFees, setOwnerPositionFees] = useState<OwnerPositionFees[]>([]);
 	const [ownerPositionDebt, setOwnerPositionDebt] = useState<OwnerPositionDebt[]>([]);
 	const [ownerPositionValueLocked, setOwnerPositionValueLocked] = useState<OwnerPositionValueLocked[]>([]);
-	const challenges = useSelector((state: RootState) => state.challenges.list.list);
-	const bids = useSelector((state: RootState) => state.bids.list.list);
 
 	useEffect(() => {
 		store.dispatch(fetchPositionsList());
@@ -100,14 +93,8 @@ export default function Positions() {
 				<title>Frankencoin - My Positions</title>
 			</Head>
 
-			<AppPageHeader
-				title="Portfolio"
-				description="Your command center for borrowing positions, yearly summaries, and advanced activity."
-			/>
-			<MyPositionsTotalsCard />
-
 			{/* Section Positions */}
-			<AppTitle title="Borrowing Positions">
+			<AppTitle title="Owned Positions">
 				<DisplayWarningMessage overwrite={overwrite} />
 			</AppTitle>
 
@@ -130,27 +117,18 @@ export default function Positions() {
 			/>
 
 			{/* Section Challenges */}
-			<AppTitle title="Advanced activity: Challenges">
+			<AppTitle title="Initiated Challenges">
 				<DisplayWarningMessage overwrite={overwrite} />
 			</AppTitle>
-			{challenges.length === 0 ? (
-				<AppEmptyState
-					title="No initiated challenges."
-					description="Challenges appear here when you participate in protocol defense."
-				/>
-			) : (
-				<MyPositionsChallengesTable />
-			)}
+
+			<MyPositionsChallengesTable />
 
 			{/* Section Bids */}
-			<AppTitle title="Advanced activity: Bids">
+			<AppTitle title="Your Bids">
 				<DisplayWarningMessage overwrite={overwrite} />
 			</AppTitle>
-			{bids.length === 0 ? (
-				<AppEmptyState title="No bids found." description="Bids appear here when you participate in auctions or challenge resolution." />
-			) : (
-				<MyPositionsBidsTable />
-			)}
+
+			<MyPositionsBidsTable />
 		</>
 	);
 }

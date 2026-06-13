@@ -69,6 +69,10 @@ export default function DetectedAcrossChainsPanel({ rows, currentChainId, fpsKno
 					{showAll ? "Hide chains" : "Show all chains"}
 				</button>
 			</div>
+			<div className="mt-3 rounded-lg border border-menu-separator bg-layout-footer px-3 py-2 text-xs text-text-secondary">
+				<span className="font-semibold text-text-primary">Bridge routing: hub-and-spoke.</span>{" "}
+				All chains connect to Ethereum mainnet. Direct lanes between side chains (except Gnosis↔Base) are being removed; bridge to/from mainnet.
+			</div>
 			{suggestion ? (
 				<div className="mt-3 rounded-lg border border-card-content-highlight/40 bg-layout-footer px-3 py-2">
 					<div className="flex flex-wrap items-center justify-between gap-2">

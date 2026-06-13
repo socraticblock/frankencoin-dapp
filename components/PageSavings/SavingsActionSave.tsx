@@ -80,7 +80,7 @@ export default function SavingsActionSave({ savingsModule, amount, interest, dis
 	return (
 		<GuardSupportedChain chain={chain}>
 			<AppButton className="h-10" disabled={isHidden || disabled} isLoading={isAction} onClick={(e) => handleOnClick(e)}>
-				Deposit ZCHF
+				Adjust
 			</AppButton>
 		</GuardSupportedChain>
 	);

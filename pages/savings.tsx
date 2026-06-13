@@ -18,8 +18,6 @@ import { formatCurrency, getChainByName, normalizeAddress } from "@utils";
 import { useAppKitNetwork } from "@reown/appkit/react";
 import { ADDRESS, ChainId } from "@frankencoin/zchf";
 import { mainnet } from "viem/chains";
-import AppPageHeader from "@components/AppPageHeader";
-import AppNotice from "@components/AppNotice";
 
 export default function SavingsPage() {
 	const { status } = useSelector((state: RootState) => state.savings.savingsInfo);
@@ -70,15 +68,12 @@ export default function SavingsPage() {
 				<title>Frankencoin - Earn</title>
 			</Head>
 
-			<AppPageHeader
-				title="Earn with ZCHF"
-				description="Deposit ZCHF into the savings module to earn protocol interest. Withdraw or collect interest anytime on supported chains."
-			>
-				<AppNotice
-					variant="neutral"
-					message={`Already more than ${Math.floor(totalBalance / 1000000)} million ZCHF saved across supported chains.`}
-				/>
-			</AppPageHeader>
+			<AppTitle title={`Earn`}>
+				<div className={`text-text-secondary`}>
+					Earn interest on your Frankencoins - supported on all eight chains. Already more than {" "}
+					{Math.floor(totalBalance / 1000000)} million ZCHF saved.
+				</div>
+			</AppTitle>
 
 			<AppHeroSteps
 				steps={[

@@ -8,6 +8,7 @@ import { fetchPricesList } from "../redux/slices/prices.slice";
 import { useIsConnectedToCorrectChain } from "../hooks/useWalletConnectStats";
 import { useServiceStatus } from "../hooks/useServiceStatus";
 import { CONFIG } from "../app.config";
+import LoadingScreen from "./LoadingScreen";
 import { fetchChallengesList } from "../redux/slices/challenges.slice";
 import { fetchBidsList } from "../redux/slices/bids.slice";
 import { fetchEcosystem } from "../redux/slices/ecosystem.slice";
@@ -142,5 +143,25 @@ export default function BockUpdater({ children }: { children?: React.ReactElemen
 		}
 	}, [address, latestAddress]);
 
-	return <>{children}</>;
+	// --------------------------------------------------------------------------------
+	// Loading Guard
+	if (initialized) {
+		return <>{children}</>;
+	} else {
+		return (
+			<LoadingScreen
+				breakerMs={initBreakerMS}
+				loading={[
+					...serviceStatus,
+					{ id: "ecosystem", title: "Ecosystem", isLoaded: loadedEcosystem },
+					{ id: "positions", title: "Positions", isLoaded: loadedPositions },
+					{ id: "prices", title: "Prices", isLoaded: loadedPrices },
+					{ id: "challenges", title: "Challenges", isLoaded: loadedChallenges },
+					{ id: "bids", title: "Bids", isLoaded: loadedBids },
+					{ id: "leadrate", title: "Leadrate", isLoaded: loadedLeadrate },
+					{ id: "savings", title: "Savings", isLoaded: loadedSavings },
+				]}
+			/>
+		);
+	}
 }

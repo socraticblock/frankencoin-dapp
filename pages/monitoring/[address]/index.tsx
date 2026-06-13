@@ -30,10 +30,8 @@ export default function PositionDetail() {
 	const challengesPositions = useSelector((state: RootState) => state.challenges.positions);
 	const prices = useSelector((state: RootState) => state.prices.coingecko);
 
-	const isReady = router.isReady && typeof address === "string" && address.length > 0;
-	const normalizedAddress = isReady ? normalizeAddress(address) : zeroAddress;
-	const position = positions.find((p) => normalizeAddress(p.position) === normalizedAddress);
-	const challengesActive = (challengesPositions.map[normalizedAddress] || []).filter((c) => c.status === "Active");
+	const position = positions.find((p) => normalizeAddress(p.position) === normalizeAddress(address));
+	const challengesActive = (challengesPositions.map[normalizeAddress(address)] || []).filter((c) => c.status === "Active");
 
 	const positionExplorerUrl = useContractUrl(String(address));
 	const myPosLink = `/mypositions?address=${position?.owner || zeroAddress}`;
@@ -60,7 +58,7 @@ export default function PositionDetail() {
 		fetchAsync();
 	}, [position, chainId]);
 
-	if (!isReady || !position) return null;
+	if (!position) return null;
 
 	const isSubjectToCooldown = () => {
 		const now = BigInt(Math.floor(Date.now() / 1000));
@@ -116,7 +114,7 @@ export default function PositionDetail() {
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<AppCard>
 						<div className="gap-2">
-							<div className="text-base font-bold mb-1">Mint Details</div>
+							<div className="text-base font-bold mb-1">Usage</div>
 							<StatRow label="Minted">{formatCurrency(formatUnits(BigInt(position.minted), 18))} ZCHF</StatRow>
 							<StatRow label="Retained Reserve">{formatCurrency(formatUnits(reserve, 18))} ZCHF</StatRow>
 							<StatRow label="Available for Clones">
@@ -128,7 +126,7 @@ export default function PositionDetail() {
 
 					<AppCard>
 						<div className="gap-2">
-							<div className="text-base font-bold mb-1">Collateral Details</div>
+							<div className="text-base font-bold mb-1">Collateral</div>
 							<StatRow label="Balance">
 								{formatCurrency(formatUnits(BigInt(position.collateralBalance), position.collateralDecimals))}{" "}
 								{position.collateralSymbol}
