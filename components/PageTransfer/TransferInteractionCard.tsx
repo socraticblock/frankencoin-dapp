@@ -8,13 +8,13 @@ import { WAGMI_CHAIN, WAGMI_CHAINS } from "../../app.config";
 import { ChainId, SupportedChain } from "@frankencoin/zchf";
 import { useRouter } from "next/router";
 import AddressInputChain from "@components/Input/AddressInputChain";
-import { mainnet } from "viem/chains";
+import { base, gnosis, mainnet } from "viem/chains";
 import TransferActionMainnet from "./TransferActionMainnet";
 import TransferActionSidechain from "./TransferActionSidechain";
 import TransferDetailsCard from "./TransferDetailsCard";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { useAppKitNetwork } from "@reown/appkit/react";
-import { formatCurrency, getChain } from "@utils";
+import { formatCurrency, getChain, getAvailableRecipientChainIds, isHubAndSpokeAllowed } from "@utils";
 import { useTransferCcipFee, useZchfChainBalances } from "@hooks";
 import AppButtonSecondary from "@components/AppButtonSecondary";
 import ChainLogo from "@components/ChainLogo";
@@ -182,9 +182,18 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 	const transferChainNames = useMemo(() => orderedChainNamesForIds(WAGMI_CHAINS, TRANSFER_SUPPORTED_CHAIN_IDS), []);
 	const bridgeFromChainNames = useMemo(() => orderedChainNamesForIds(WAGMI_CHAINS, BRIDGE_SUPPORTED_CHAIN_IDS), []);
 	const chainSelectNames = useMemo(() => (isBridge ? bridgeFromChainNames : transferChainNames), [bridgeFromChainNames, isBridge, transferChainNames]);
+	// Hub-and-spoke routing: side chains connect to Ethereum only, except the
+	// Gnosis↔Base direct lane (per the Frankencoin governance announcement).
+	const allowedDestinationIds = useMemo(
+		() => getAvailableRecipientChainIds(fromChainId, BRIDGE_SUPPORTED_CHAIN_IDS as number[]),
+		[fromChainId]
+	);
 	const destinationChainNames = useMemo(
-		() => bridgeFromChainNames.filter((name) => WAGMI_CHAINS.find((c) => c.name === name)?.id !== fromChainId),
-		[bridgeFromChainNames, fromChainId]
+		() =>
+			orderedChainNamesForIds(WAGMI_CHAINS, allowedDestinationIds as ChainId[]).filter(
+				(name) => WAGMI_CHAINS.find((c) => c.name === name)?.id !== fromChainId
+			),
+		[allowedDestinationIds, fromChainId]
 	);
 	const useMainnetAction = fromChainId === mainnet.id;
 
@@ -259,6 +268,15 @@ export default function TransferInteractionCard({ initialMode = "transfer", lock
 					</div>
 
 					<AddressInputChain label="From wallet" disabled={true} value={address} chain={fromChain.name} onChangeChain={onChangeFromChain} />
+
+					{isBridge && fromChainId !== mainnet.id ? (
+						<div className="text-xs text-text-secondary px-1">
+							Hub-and-spoke routing: bridges from {fromChain.name} route via Ethereum mainnet.
+							{fromChainId === base.id || fromChainId === gnosis.id
+								? " The Gnosis↔Base direct lane is preserved."
+								: " Direct side-chain routes are no longer supported."}
+						</div>
+					) : null}
 
 					<AddressInput label="Recipient wallet" placeholder="0x1a2b3c..." value={recipient} onChange={setRecipient} own={mode === "bridge" ? address : undefined} ownLabel={mode === "bridge" ? "Use connected wallet" : "Own"} error={errorRecipient()} isTextLeft={true} note={(isBridge ? bridgeRecipientNote(address, recipient) : undefined) ?? getRecipientSafetyNote(address, recipient)} />
 

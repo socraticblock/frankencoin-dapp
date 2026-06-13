@@ -19,6 +19,8 @@
 		"test:ankr-rpc:local": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test.mjs",
 		"test:ankr-rpc:local:all": "node --env-file=scripts/ankr-local.env scripts/ankr-indexing-rpc-test-all.mjs",
 		"prettier-watch": "onchange \"**/*\" -- prettier --write --ignore-unknown {{changed}}",
+		"verify:routing": "tsx scripts/verify-hub-routing.ts",
+		"verify:all": "yarn verify:routing && yarn build",
 		"deploy": "gh-pages -d build"
 	},
 	"dependencies": {
@@ -29,7 +31,7 @@
 		"@fortawesome/free-brands-svg-icons": "^6.4.2",
 		"@fortawesome/free-solid-svg-icons": "^6.4.2",
 		"@fortawesome/react-fontawesome": "^0.2.0",
-		"@frankencoin/api": "^0.3.15",
+		"@frankencoin/api": "^0.3.16",
 		"@frankencoin/zchf": "^0.3.23",
 		"@gsap/react": "^2.1.2",
 		"@react-three/drei": "9",
@@ -80,6 +82,7 @@
 		"prettier": "^2.8.1",
 		"tailwindcss": "^3.3.3",
 		"ts-loader": "^9.5.1",
+		"tsx": "^4.22.4",
 		"typescript": "^5.7.3"
 	},
 	"resolutions": {

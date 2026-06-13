@@ -19,6 +19,7 @@ interface Props {
 	autoFocus?: boolean;
 	disabled?: boolean;
 	note?: string;
+	availableChains?: string[];
 }
 
 export default function AddressInputChain({
@@ -38,6 +39,7 @@ export default function AddressInputChain({
 	autoFocus,
 	disabled,
 	note,
+	availableChains,
 }: Props) {
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -77,7 +79,7 @@ export default function AddressInputChain({
 
 					<div className="md:col-span-2">
 						<ChainBySelect
-							chains={WAGMI_CHAINS.map((c) => c.name)}
+							chains={availableChains ?? WAGMI_CHAINS.map((c) => c.name)}
 							chain={chain}
 							chainOnChange={onChangeChain}
 							invertColors={disabled}
